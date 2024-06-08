@@ -1,9 +1,15 @@
 from pathlib import Path
 from dataclasses import dataclass
-from transformers import PreTrainedModel, LlamaForCausalLM, GemmaForCausalLM, StableLmForCausalLM
+from transformers import (
+    PreTrainedModel,
+    LlamaForCausalLM,
+    GemmaForCausalLM,
+    StableLmForCausalLM,
+)
 from typing import Type, Optional, Any, List, Tuple
 import datetime as dt
 import math
+
 
 @dataclass
 class CompetitionParameters:
@@ -21,6 +27,7 @@ class CompetitionParameters:
     reward_percentage: float
     # Competition id
     competition_id: str
+
 
 # ---------------------------------
 # Project Constants.
@@ -44,7 +51,8 @@ SUBNET_START_BLOCK = 2225782
 CORTEX_WANDB_PROJECT = "cortex-t/multi-modality"
 CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
-CORTEX_WANDB_MAX_AGE = dt.timedelta(days=1)
+CORTEX_MAX_AGE = dt.timedelta(days=1)
+CORTEX_MIN_SCORE = 0.85
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo
@@ -57,7 +65,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         kwargs={},
         tokenizer="NousResearch/Meta-Llama-3-8B-Instruct",
         reward_percentage=0.6,
-        competition_id="l3"
+        competition_id="l3",
     ),
     CompetitionParameters(
         max_model_parameter_size=2 * 1024 * 1024 * 1024,
@@ -65,14 +73,17 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         kwargs={},
         tokenizer="stabilityai/stablelm-2-zephyr-1_6b",
         reward_percentage=0.4,
-        competition_id="s1"
-    )
+        competition_id="s1",
+    ),
 ]
 ORIGINAL_COMPETITION_ID = "m1"
 
 
 assert math.isclose(sum(x.reward_percentage for x in COMPETITION_SCHEDULE), 1.0)
-assert all(len(x.competition_id) > 0 and len(x.competition_id) <= 2 for x in COMPETITION_SCHEDULE)
+assert all(
+    len(x.competition_id) > 0 and len(x.competition_id) <= 2
+    for x in COMPETITION_SCHEDULE
+)
 
 # ---------------------------------
 # Miner/Validator Model parameters.

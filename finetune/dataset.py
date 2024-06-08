@@ -231,6 +231,7 @@ class CortexSubsetLoader(IterableDataset):
         cortex_project=constants.CORTEX_WANDB_PROJECT,
         cortex_type=constants.CORTEX_WANDB_TYPE,
         max_run_age: typing.Optional[dt.timedelta] = None,
+        min_score: typing.Optional[float] = None,
     ):
         api = wandb.Api(timeout=100)
 
@@ -290,12 +291,24 @@ class CortexSubsetLoader(IterableDataset):
 
                             for uid in range(constants.CORTEX_MAX_UIDS):
                                 try:
+                                    # If not found these get caught in the KeyError catch below.
                                     prompt: typing.Optional[str] = sample[
                                         f"prompts.{uid}"
                                     ]
                                     response: typing.Optional[str] = sample[
                                         f"responses.{uid}"
                                     ]
+                                    # Skip any uids below min_score if specified.
+                                    if min_score:
+                                        score: typing.Optional[float] = sample[
+                                            f"scores.{uid}"
+                                        ]
+                                        if (
+                                            not isinstance(score, float)
+                                            or score < min_score
+                                        ):
+                                            break
+
                                     if isinstance(prompt, str) and isinstance(
                                         response, str
                                     ):
