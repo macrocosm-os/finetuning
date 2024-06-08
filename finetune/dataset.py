@@ -274,6 +274,7 @@ class CortexSubsetLoader(IterableDataset):
                     while True:
                         try:
                             sample = next(history_scan)
+
                             # Skip any samples older than max_run_age.
                             if (
                                 max_run_age
@@ -282,6 +283,11 @@ class CortexSubsetLoader(IterableDataset):
                                 > max_run_age
                             ):
                                 break
+
+                            # Skip any samples that are not text based.
+                            if "modality" not in sample or sample["modality"] != "text":
+                                break
+
                             for uid in range(constants.CORTEX_MAX_UIDS):
                                 try:
                                     prompt: typing.Optional[str] = sample[
