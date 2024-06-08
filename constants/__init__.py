@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from transformers import PreTrainedModel, LlamaForCausalLM, GemmaForCausalLM, StableLmForCausalLM
 from typing import Type, Optional, Any, List, Tuple
+import datetime as dt
 import math
 
 @dataclass
@@ -43,6 +44,7 @@ SUBNET_START_BLOCK = 2225782
 CORTEX_WANDB_PROJECT = "cortex-t/multi-modality"
 CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
+CORTEX_WANDB_MAX_AGE = dt.timedelta(days=1)
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo

@@ -15,18 +15,20 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+import datetime as dt
+import time
 import typing
-import torch
+
 import bittensor as bt
+import numpy as np
+import torch
 import wandb
 from torch.utils.data import IterableDataset
-from wandb.apis.public.history import HistoryScan
-from transformers import PreTrainedTokenizerBase
-import constants
-import time
-import numpy as np
-import math
 from tqdm import tqdm
+from transformers import PreTrainedTokenizerBase
+from wandb.apis.public.history import HistoryScan
+
+import constants
 
 UNWANTED_PHRASES = [
     "text-based AI language model",
@@ -83,7 +85,7 @@ UNWANTED_PHRASES = [
     "I'm afraid I cannot create",
     "I cannot assist",
     "I'm sorry,",
-    "I'm an AI" ,
+    "I'm an AI",
     "I am an AI",
     "my purpose",
     "entertainment purposes",
@@ -202,8 +204,8 @@ UNWANTED_PHRASES = [
     "not within the scope",
     "not able to provide",
     "cannot provide any information",
-    "I don't have beliefs"
-    "I don't have personal"
+    "I don't have beliefs",
+    "I don't have personal",
     "gpt",
     "gpT",
     "gPt",
@@ -212,22 +214,29 @@ UNWANTED_PHRASES = [
     "GpT",
     "GPt",
     "GPT",
-    "gpt"
 ]
 
+
 class CortexSubsetLoader(IterableDataset):
-    def __init__(self, latest=True, random_seed: typing.Optional[int] = None,
-                 max_samples=300, steps: typing.Optional[int]=1, progress=False,
-                 retry_limit=10, page_size=100, running: typing.Optional[bool]=False,
-                 cortex_project=constants.CORTEX_WANDB_PROJECT,
-                 cortex_type=constants.CORTEX_WANDB_TYPE):
+    def __init__(
+        self,
+        latest=True,
+        random_seed: typing.Optional[int] = None,
+        max_samples=300,
+        steps: typing.Optional[int] = 1,
+        progress=False,
+        retry_limit=10,
+        page_size=100,
+        running: typing.Optional[bool] = False,
+        cortex_project=constants.CORTEX_WANDB_PROJECT,
+        cortex_type=constants.CORTEX_WANDB_TYPE,
+        max_run_age: typing.Optional[dt.timedelta] = None,
+    ):
         api = wandb.Api(timeout=100)
 
-        filters = [
-            { "config.type": cortex_type }
-        ]
+        filters = [{"config.type": cortex_type}]
         if running:
-            filters.append( {"state": "running"} )
+            filters.append({"state": "running"})
         runs = api.runs(cortex_project, filters={"$and": filters})
 
         retry_delay = 5  # Seconds to wait between retries
@@ -245,7 +254,9 @@ class CortexSubsetLoader(IterableDataset):
                 self.buffer: typing.List[typing.Tuple[str, str]] = []
                 self.selected_runs: typing.List[int] = []
 
-                for run_index in tqdm(run_order, desc="Run", leave=False, disable=not progress):
+                for run_index in tqdm(
+                    run_order, desc="Run", leave=False, disable=not progress
+                ):
                     run = runs[run_index]
                     self.selected_runs.append(run_index)
 
@@ -257,19 +268,37 @@ class CortexSubsetLoader(IterableDataset):
                         last_step = 0
                     max_step = last_step + 1
                     min_step = max(0, max_step - steps) if steps is not None else 0
-                    history_scan = HistoryScan(run.client, run, min_step, max_step, page_size=page_size)
+                    history_scan = HistoryScan(
+                        run.client, run, min_step, max_step, page_size=page_size
+                    )
                     while True:
                         try:
                             sample = next(history_scan)
+                            # Skip any samples older than max_run_age.
+                            if (
+                                max_run_age
+                                and dt.datetime.now()
+                                - dt.datetime.fromtimestamp(sample["_timestamp"])
+                                > max_run_age
+                            ):
+                                break
                             for uid in range(constants.CORTEX_MAX_UIDS):
                                 try:
-                                    prompt: typing.Optional[str] = sample[f"prompts.{uid}"]
-                                    response: typing.Optional[str]  = sample[f"responses.{uid}"]
-                                    if isinstance(prompt, str) and isinstance(response, str):
+                                    prompt: typing.Optional[str] = sample[
+                                        f"prompts.{uid}"
+                                    ]
+                                    response: typing.Optional[str] = sample[
+                                        f"responses.{uid}"
+                                    ]
+                                    if isinstance(prompt, str) and isinstance(
+                                        response, str
+                                    ):
                                         prompt = prompt.strip()
                                         response = response.strip()
                                         if len(prompt) > 0 and len(response) > 0:
-                                            if not any(x in response for x in UNWANTED_PHRASES):
+                                            if not any(
+                                                x in response for x in UNWANTED_PHRASES
+                                            ):
                                                 self.buffer.append((prompt, response))
                                                 if len(self.buffer) == max_samples:
                                                     return
@@ -277,9 +306,11 @@ class CortexSubsetLoader(IterableDataset):
                                     pass
                         except StopIteration:
                             break
-                bt.logging.warning(f"Did not collect {max_samples}, only got {len(self.buffer)}")
+                bt.logging.warning(
+                    f"Did not collect {max_samples}, only got {len(self.buffer)}"
+                )
                 return
-            except:
+            except Exception:
                 attempt += 1
                 bt.logging.warning(
                     f"Failed to fetch data, retrying. Attempt {attempt}/{retry_limit}"
@@ -292,19 +323,25 @@ class CortexSubsetLoader(IterableDataset):
                     )
                     raise
 
-    def tokenize(self, tokenizer: PreTrainedTokenizerBase) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    def tokenize(
+        self, tokenizer: PreTrainedTokenizerBase
+    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
         batches = []
         for prompt, response in self:
             conversation = [
                 {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
+                {"role": "assistant", "content": response},
             ]
             prompt_ids = tokenizer.apply_chat_template(
-                [conversation[0]], truncation=True, max_length=constants.sequence_length,
-                add_generation_prompt=True
+                [conversation[0]],
+                truncation=True,
+                max_length=constants.sequence_length,
+                add_generation_prompt=True,
             )
             ids = tokenizer.apply_chat_template(
-                conversation, truncation=True, max_length=constants.sequence_length,
+                conversation,
+                truncation=True,
+                max_length=constants.sequence_length,
             )
             batches.append((torch.stack([torch.tensor(ids)]), len(prompt_ids)))
         return batches
