@@ -1,6 +1,5 @@
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
-# Copyright © 2023 const
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -28,10 +27,12 @@ from model.storage.model_metadata_store import ModelMetadataStore
 from model.storage.remote_model_store import RemoteModelStore
 from model.utils import get_hash_of_two_strings
 import bittensor as bt
-from transformers import PreTrainedModel, PreTrainedTokenizerBase, AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+    AutoTokenizer,
+)
 from huggingface_hub import update_repo_visibility
-import finetune as ft
-from safetensors.torch import load_model
 
 from utilities import utils
 
@@ -69,16 +70,16 @@ class Actions:
     ):
         subtensor = subtensor or bt.subtensor(config)
         remote_model_store = HuggingFaceModelStore()
-        chain_model_store = ChainModelMetadataStore(
-            subtensor, config.netuid, wallet
-        )
+        chain_model_store = ChainModelMetadataStore(subtensor, config.netuid, wallet)
         repo_namespace, repo_name = utils.validate_hf_repo_id(config.hf_repo_id)
 
         return Actions(
             wallet, repo_namespace, repo_name, chain_model_store, remote_model_store
         )
 
-    def save(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, model_dir: str):
+    def save(
+        self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, model_dir: str
+    ):
         """Saves a model to the provided directory"""
         if not os.path.exists(model_dir):
             os.makedirs(model_dir, exist_ok=True)
@@ -89,21 +90,20 @@ class Actions:
             safe_serialization=True,
         )
 
-        tokenizer.save_pretrained(
-            save_directory=model_dir
-        )
+        tokenizer.save_pretrained(save_directory=model_dir)
 
-    def load_local_model(self, model_dir: str, model_parameters: CompetitionParameters) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
+    def load_local_model(
+        self, model_dir: str, model_parameters: CompetitionParameters
+    ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
         """Loads a model from a directory."""
         model = model_parameters.architecture.from_pretrained(
             pretrained_model_name_or_path=model_dir,
             local_files_only=True,
             use_safetensors=True,
-            **model_parameters.kwargs
+            **model_parameters.kwargs,
         )
         tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=model_dir,
-            local_files_only=True
+            pretrained_model_name_or_path=model_dir, local_files_only=True
         )
         return model, tokenizer
 
@@ -122,9 +122,13 @@ class Actions:
         if not model_metadata:
             raise ValueError(f"No model metadata found for miner {uid}")
 
-        parameters = ModelUpdater.get_competition_parameters(model_metadata.id.competition_id)
+        parameters = ModelUpdater.get_competition_parameters(
+            model_metadata.id.competition_id
+        )
         if parameters is None:
-            raise RuntimeError(f"Could not get competition parameters for {model_metadata.id.competition_id}")
+            raise RuntimeError(
+                f"Could not get competition parameters for {model_metadata.id.competition_id}"
+            )
 
         model: Model = await self.remote_model_store.download_model(
             model_metadata.id, download_dir, parameters
@@ -132,48 +136,58 @@ class Actions:
         return model.pt_model, model.tokenizer
 
     async def push(
-        self, 
-        model: PreTrainedModel, 
-        tokenizer: PreTrainedTokenizerBase, 
-        competition_parameters: CompetitionParameters, 
-        retry_delay_secs: int = 60, 
-        use_hotkey_in_hash: bool = True
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        competition_parameters: CompetitionParameters,
+        retry_delay_secs: int = 60,
     ):
         """Pushes the model to Hugging Face and publishes it on the chain for evaluation by validators."""
-        bt.logging.info(f"Pushing model for competition {competition_parameters.competition_id}")
+        bt.logging.info(
+            f"Pushing model for competition {competition_parameters.competition_id}"
+        )
 
         # First upload the model to HuggingFace.
-        model_id = ModelId(namespace=self.hf_repo_namespace, name=self.hf_repo_name, competition_id=competition_parameters.competition_id)
+        model_id = ModelId(
+            namespace=self.hf_repo_namespace,
+            name=self.hf_repo_name,
+            competition_id=competition_parameters.competition_id,
+        )
         model_id = await self.remote_model_store.upload_model(
             Model(id=model_id, pt_model=model, tokenizer=tokenizer),
-            competition_parameters
+            competition_parameters,
         )
 
         bt.logging.success("Uploaded model to hugging face.")
 
-        # If using hotkey in the hash then adjust the hash.
-        if use_hotkey_in_hash:
-            bt.logging.info(
-                f"Hashing miner hotkey {self.wallet.hotkey.ss58_address} into the hash before uploading."
-            )
-            new_hash = get_hash_of_two_strings(model_id.hash, self.wallet.hotkey.ss58_address)
-            model_id = model_id.copy(update={"hash": new_hash})
+        # Compute the secure hash.
+        secure_hash = get_hash_of_two_strings(
+            model_id.hash, self.wallet.hotkey.ss58_address
+        )
+        model_id = model_id.copy(update={"secure_hash": secure_hash})
 
         bt.logging.success(f"Now committing to the chain with model_id: {model_id}")
+        repo_id = model_id.namespace + "/" + model_id.name
+        
         # We can only commit to the chain every 20 minutes, so run this in a loop, until
         # successful.
         while True:
             try:
                 await self.model_metadata_store.store_model_metadata(
-                    self.wallet.hotkey.ss58_address, model_id, wait_for_inclusion=True, wait_for_finalization=False
+                    self.wallet.hotkey.ss58_address,
+                    model_id,
+                    wait_for_inclusion=True,
+                    wait_for_finalization=False,
                 )
-                bt.logging.success("Committed model to the chain. Updating model visibility.")
+                bt.logging.success(
+                    "Committed model to the chain. Updating model visibility."
+                )
 
-                update_repo_visibility(model_id.namespace + "/" + model_id.name, private=False)
+                update_repo_visibility(repo_id, private=False)
                 bt.logging.success("Model set to public")
                 break
             except Exception as e:
-                update_repo_visibility(model_id.namespace + "/" + model_id.name, private=True)
+                update_repo_visibility(repo_id, private=True)
                 bt.logging.error(f"Failed to advertise model on the chain: {e}")
                 bt.logging.error(f"Retrying in {retry_delay_secs} seconds...")
                 time.sleep(retry_delay_secs)

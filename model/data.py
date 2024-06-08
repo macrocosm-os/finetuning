@@ -1,4 +1,4 @@
-from typing import Any, ClassVar, Dict, Optional, Type
+from typing import ClassVar, Optional, Type
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from pydantic import BaseModel, Field, PositiveInt
 
@@ -11,11 +11,16 @@ SHA256_BASE_64_LENGTH = 44
 # The max length, in characters, of the competition id
 MAX_COMPETITION_ID_LENGTH = 2
 
+
 class ModelId(BaseModel):
     """Uniquely identifies a trained model"""
 
     MAX_REPO_ID_LENGTH: ClassVar[int] = (
-        MAX_METADATA_BYTES - GIT_COMMIT_LENGTH - SHA256_BASE_64_LENGTH - MAX_COMPETITION_ID_LENGTH - 4  # separators
+        MAX_METADATA_BYTES
+        - GIT_COMMIT_LENGTH
+        - SHA256_BASE_64_LENGTH
+        - MAX_COMPETITION_ID_LENGTH
+        - 4  # separators
     )
 
     namespace: str = Field(
@@ -28,14 +33,23 @@ class ModelId(BaseModel):
     commit: Optional[str] = Field(
         description="Commit of the model. May be empty if not yet committed."
     )
+    
     # Hash is filled automatically when uploading to or downloading from a remote store.
-    hash: Optional[str] = Field(description="Hash of the trained model.")
+    hash: Optional[str] = Field(
+        description="Hash of the directory of the trained model."
+    )
+
+    # The secure hash that's used for validation.
+    secure_hash: Optional[str] = Field(
+        description="Hash of the model that includes the uploaders hotkey."
+    )
+
     # Identifier for competition
     competition_id: Optional[str] = Field(description="The competition id")
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.namespace}:{self.name}:{self.commit}:{self.hash}:{self.competition_id}"
+        return f"{self.namespace}:{self.name}:{self.commit}:{self.secure_hash}:{self.competition_id}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ModelId"]:
@@ -45,8 +59,10 @@ class ModelId(BaseModel):
             namespace=tokens[0],
             name=tokens[1],
             commit=tokens[2] if tokens[2] != "None" else None,
-            hash=tokens[3] if tokens[3] != "None" else None,
-            competition_id=tokens[4] if len(tokens) >= 5 and tokens[4] != "None" else None
+            secure_hash=tokens[3] if tokens[3] != "None" else None,
+            competition_id=(
+                tokens[4] if len(tokens) >= 5 and tokens[4] != "None" else None
+            ),
         )
 
 
