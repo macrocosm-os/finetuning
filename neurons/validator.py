@@ -89,7 +89,7 @@ class Validator:
         parser.add_argument(
             "--latest_cortex_steps",
             type=int,
-            default=1,
+            default=5,
             help="Number of most recent Cortex steps to sample data from",
         )
         parser.add_argument(
@@ -588,6 +588,7 @@ class Validator:
                 max_samples=self.config.latest_cortex_samples,
                 steps=self.config.latest_cortex_steps,
                 page_size=self.config.latest_cortex_steps,
+                max_run_age=constants.CORTEX_MAX_AGE,
             )
 
         # Prepare evaluation

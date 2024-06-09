@@ -7,6 +7,7 @@ from transformers import (
     StableLmForCausalLM,
 )
 from typing import Type, Optional, Any, List, Tuple
+import datetime as dt
 import math
 
 
@@ -52,6 +53,8 @@ CORTEX_SUBNET_UID = 18
 CORTEX_WANDB_PROJECT = "cortex-t/multi-modality"
 CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
+CORTEX_MAX_AGE = dt.timedelta(days=1)
+CORTEX_MIN_SCORE = 0.85
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo
