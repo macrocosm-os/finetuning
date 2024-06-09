@@ -46,7 +46,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         tokenizer="NousResearch/Meta-Llama-3-8B-Instruct",
         reward_percentage=0.6,
         competition_id="l3",
-        competition_enum=CompetitionId.COMPTETITION_1,
+        competition_enum=CompetitionId.COMPETITION_1,
     ),
     CompetitionParameters(
         max_model_parameter_size=2 * 1024 * 1024 * 1024,
@@ -55,7 +55,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         tokenizer="stabilityai/stablelm-2-zephyr-1_6b",
         reward_percentage=0.4,
         competition_id="s1",
-        competition_enum=CompetitionId.COMPTETITION_2,
+        competition_enum=CompetitionId.COMPETITION_2,
     ),
 ]
 ORIGINAL_COMPETITION_ID = "m1"

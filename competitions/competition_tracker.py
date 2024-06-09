@@ -20,6 +20,8 @@ class CompetitionTracker:
         self.num_neurons = num_neurons
         self.alpha = alpha
 
+    # TODO: Consider a record_competition_results which then does additional processing into weights.
+
     def record_competition_weights(
         self, competition_id: CompetitionId, new_weights: torch.Tensor
     ):
@@ -31,10 +33,11 @@ class CompetitionTracker:
         """
         # Check that the weights are the appropriate length along the first dimension.
         if new_weights.size(0) != self.num_neurons:
-            self.resize(new_weights.size(0))
+            self._resize(new_weights.size(0))
 
         # Normalize the weights.
         new_weights /= new_weights.sum()
+        new_weights = new_weights.nan_to_num(0.0)
 
         # If we haven't recorded weights for this competition yet, start from scratch.
         if competition_id not in self.weights_by_competition:
@@ -45,14 +48,23 @@ class CompetitionTracker:
                 self.alpha * self.weights_by_competition[competition_id]
                 + (1 - self.alpha) * new_weights
             )
-            self.weights_by_competition[competition_id] = (
-                moving_average_weights.nan_to_num(0.0)
-            )
+            self.weights_by_competition[competition_id] = moving_average_weights
+
+    def reset_competitions(self, competition_ids: typing.Set[CompetitionId]):
+        """Resets tracked competitions to only those identified.
+
+        Args:
+            competition_ids (typing.Set[CompetitionId]): Competition ids to continue tracking.
+        """
+        # Make a list to avoid issues deleting from within the dictionary iterator.
+        for key in list(self.weights_by_competition.keys()):
+            if key not in competition_ids:
+                del self.weights_by_competition[key]
 
     def get_subnet_weights(
         self, competitions: typing.List[CompetitionParameters]
     ) -> torch.Tensor:
-        """_summary_
+        """Gets the weights that should be set on the subnet level based on all competitions.
 
         Args:
             competitions (typing.List[CompetitionParameters]): Competitions to calculate weights across.
@@ -76,6 +88,9 @@ class CompetitionTracker:
                     )
 
         # Normalize weights again in case a competition hasn't run yet.
+        # In the case that in Block X we have Competition 1 at 100%, but Block X+1 we have
+        # Competition 1 at 80% and Competition 2 at 20%, but we haven't run Competition 2 yet.
+        # This ensures we still return 1 for the winner of competition 1 instead of 0.8.
         subnet_weights /= subnet_weights.sum()
         subnet_weights = subnet_weights.nan_to_num(0.0)
 
@@ -86,7 +101,7 @@ class CompetitionTracker:
         # Return a copy to ensure outside code can't modify the scores.
         return self.weights_by_competition[competition_id].clone()
 
-    def resize(self, new_num_neurons: int) -> None:
+    def _resize(self, new_num_neurons: int) -> None:
         """Resizes the score tensor to the new number of neurons.
 
         The new size must be greater than or equal to the current size.

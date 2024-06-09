@@ -9,11 +9,8 @@ from dataclasses import dataclass
 class CompetitionId(IntEnum):
     """Unique identifiers for each competition."""
 
-    COMPTETITION_1 = 1
-    COMPTETITION_2 = 2
-    COMPTETITION_3 = 3
-    COMPTETITION_4 = 4
-    COMPTETITION_5 = 5
+    COMPETITION_1 = 1
+    COMPETITION_2 = 2
 
 
 @dataclass

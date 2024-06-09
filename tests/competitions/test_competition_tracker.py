@@ -15,7 +15,7 @@ class TestCompetitionTracker(unittest.TestCase):
         tokenizer="Xenova/gpt-4",
         reward_percentage=0.6,
         competition_id="comp_1",
-        competition_enum=CompetitionId.COMPTETITION_1,
+        competition_enum=CompetitionId.COMPETITION_1,
     )
     COMPETITION_2_PARAMETERS = CompetitionParameters(
         max_model_parameter_size=2 * 1024 * 1024 * 1024,
@@ -24,7 +24,7 @@ class TestCompetitionTracker(unittest.TestCase):
         tokenizer="Xenova/gpt-4",
         reward_percentage=0.4,
         competition_id="comp_2",
-        competition_enum=CompetitionId.COMPTETITION_2,
+        competition_enum=CompetitionId.COMPETITION_2,
     )
 
     def setUp(self):
@@ -33,144 +33,151 @@ class TestCompetitionTracker(unittest.TestCase):
         self.competition_tracker = CompetitionTracker(self.num_neurons, self.alpha)
 
     def test_record_competition_weights_new(self):
-        weights = torch.Tensor([0.1, 0.2, 0.3, 0.4])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.1, 0.2, 0.3, 0.4])
         )
 
         # Since this is a net new competition, check that weights go immediately to the new values.
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_1
+                    CompetitionId.COMPETITION_1
                 ],
-                weights,
+                torch.Tensor([0.1, 0.2, 0.3, 0.4]),
             )
         )
 
     def test_record_competition_weights_normalized(self):
-        weights = torch.Tensor([0.2, 0.4, 0.6, 0.8])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.2, 0.4, 0.6, 0.8])
         )
 
-        normalized_weights = weights / weights.sum()
+        # Check that the weights are normalized to sum to 1.
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_1
+                    CompetitionId.COMPETITION_1
                 ],
-                normalized_weights,
+                torch.Tensor([0.1, 0.2, 0.3, 0.4]),
             )
         )
 
     def test_record_competition_weights_moving_average(self):
-        initial_weights = torch.Tensor([1, 0, 0, 0])
-        new_weights = torch.Tensor([0, 0, 0, 1])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, initial_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([1, 0, 0, 0])
         )
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, new_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0, 0, 0, 1])
         )
 
-        expected_weights = torch.Tensor([0.5, 0, 0, 0.5])
+        # Check that the weights are a moving average according to the alpha of 0.5.
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_1
+                    CompetitionId.COMPETITION_1
                 ],
-                expected_weights,
+                torch.Tensor([0.5, 0, 0, 0.5]),
             )
         )
 
     def test_get_competition_weights(self):
-        expected_weights = torch.Tensor([0.1, 0.2, 0.3, 0.4])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, expected_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.1, 0.2, 0.3, 0.4])
         )
 
         weights = self.competition_tracker.get_competition_weights(
-            CompetitionId.COMPTETITION_1
+            CompetitionId.COMPETITION_1
         )
 
-        self.assertTrue(torch.equal(weights, expected_weights))
+        self.assertTrue(torch.equal(weights, torch.Tensor([0.1, 0.2, 0.3, 0.4])))
 
     def test_get_subnet_weights_one_competition(self):
-        expected_weights = torch.Tensor([0.1, 0.2, 0.3, 0.4])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, expected_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.1, 0.2, 0.3, 0.4])
         )
 
         weights = self.competition_tracker.get_subnet_weights(
             [self.COMPETITION_1_PARAMETERS]
         )
 
-        self.assertTrue(torch.equal(weights, expected_weights))
+        self.assertTrue(torch.equal(weights, torch.Tensor([0.1, 0.2, 0.3, 0.4])))
 
     def test_get_subnet_weights_two_competitions(self):
-        comp1_weights = torch.Tensor([1, 0, 0, 0])
-        comp2_weights = torch.Tensor([0, 0, 0, 1])
-
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, comp1_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([1, 1, 0, 0])
         )
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_2, comp2_weights
+            CompetitionId.COMPETITION_2, torch.Tensor([0, 0, 5, 5])
         )
 
         weights = self.competition_tracker.get_subnet_weights(
             [self.COMPETITION_1_PARAMETERS, self.COMPETITION_2_PARAMETERS]
         )
 
-        expected_weights = (
-            comp1_weights * self.COMPETITION_1_PARAMETERS.reward_percentage
-            + comp2_weights * self.COMPETITION_2_PARAMETERS.reward_percentage
-        )
-        self.assertTrue(torch.equal(weights, expected_weights))
+        # Check that the weights are both normalized and rewarded according to competition reward percent.
+        self.assertTrue(torch.equal(weights, torch.Tensor([0.3, 0.3, 0.2, 0.2])))
 
     def test_resize_one_competition(self):
-        weights = torch.Tensor([0.1, 0.2, 0.3, 0.4, 0.5])
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.1, 0.2, 0.3, 0.2, 0.2])
         )
 
+        # Check that the internal state immediately expands to 5 neurons.
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_1
+                    CompetitionId.COMPETITION_1
                 ],
-                weights,
+                torch.Tensor(
+                    [0.1, 0.2, 0.3, 0.2, 0.2],
+                ),
             )
         )
 
     def test_resize_two_competition(self):
-        comp1_weights = torch.Tensor([0.1, 0.2, 0.3, 0.4])
-        comp2_weights = torch.Tensor([0.1, 0.2, 0.3, 0.2, 0.2])
-
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_1, comp1_weights
+            CompetitionId.COMPETITION_1, torch.Tensor([0.1, 0.2, 0.3, 0.4])
         )
         self.competition_tracker.record_competition_weights(
-            CompetitionId.COMPTETITION_2, comp2_weights
+            CompetitionId.COMPETITION_2, torch.Tensor([0.1, 0.2, 0.3, 0.2, 0.2])
         )
 
-        expanded_comp1_weights = torch.Tensor([0.1, 0.2, 0.3, 0.4, 0.0])
+        # Check that the internal state of the first competition is expanded with 0s.
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_1
+                    CompetitionId.COMPETITION_1
                 ],
-                expanded_comp1_weights,
+                torch.Tensor([0.1, 0.2, 0.3, 0.4, 0.0]),
             )
         )
         self.assertTrue(
             torch.equal(
                 self.competition_tracker.weights_by_competition[
-                    CompetitionId.COMPTETITION_2
+                    CompetitionId.COMPETITION_2
                 ],
-                comp2_weights,
+                torch.Tensor([0.1, 0.2, 0.3, 0.2, 0.2]),
             )
+        )
+
+    def test_reset_competitions(self):
+        self.competition_tracker.record_competition_weights(
+            CompetitionId.COMPETITION_1, torch.Tensor([1, 0, 0, 0])
+        )
+        self.competition_tracker.record_competition_weights(
+            CompetitionId.COMPETITION_2, torch.Tensor([0, 0, 0, 1])
+        )
+
+        self.competition_tracker.reset_competitions({CompetitionId.COMPETITION_1})
+
+        # Check that the weights for competition 2 are no longer tracked.
+        self.assertTrue(
+            CompetitionId.COMPETITION_1
+            in self.competition_tracker.weights_by_competition
+        )
+        self.assertFalse(
+            CompetitionId.COMPETITION_2
+            in self.competition_tracker.weights_by_competition
         )
 
 
