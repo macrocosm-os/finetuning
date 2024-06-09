@@ -35,6 +35,7 @@ CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
 CORTEX_MAX_AGE = dt.timedelta(days=1)
 CORTEX_MIN_SCORE = 0.85
+CORTEX_MIN_STAKE = 100_000
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo

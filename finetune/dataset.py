@@ -232,13 +232,25 @@ class CortexSubsetLoader(IterableDataset):
         cortex_type=constants.CORTEX_WANDB_TYPE,
         max_run_age: typing.Optional[dt.timedelta] = None,
         min_score: typing.Optional[float] = None,
+        validator_uids: typing.Optional[typing.Set[int]] = None,
     ):
         api = wandb.Api(timeout=100)
 
-        filters = [{"config.type": cortex_type}]
+        filters_and = [{"config.type": cortex_type}]
+        filters_or = []
         if running:
-            filters.append({"state": "running"})
-        runs = api.runs(cortex_project, filters={"$and": filters})
+            filters_and.append({"state": "running"})
+        if validator_uids:
+            # 'IN' is not supported in the query language so we add a series of 'OR'.
+            for uid in validator_uids:
+                filters_or.append({"config.uid": uid})
+
+        # Compose the complete dictionary of filters for the wandb call.
+        filters = {"$and": filters_and}
+        if len(filters_or) > 0:
+            filters["$or"] = filters_or
+
+        runs = api.runs(cortex_project, filters)
 
         retry_delay = 5  # Seconds to wait between retries
         attempt = 0
