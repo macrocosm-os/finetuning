@@ -60,7 +60,7 @@ class TestUtils(unittest.TestCase):
 
         self.assertRegex(
             str(ve.exception),
-            "Hugging Face repo id must be between 3 and 41 characters",
+            "Hugging Face repo id must be between 3 and 38 characters",
         )
 
     def test_validate_hf_repo_id_incorrect_format(self):

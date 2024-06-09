@@ -1,7 +1,5 @@
 import unittest
-from model.utils import get_model_criteria, get_hash_of_two_strings
-from constants import BLOCK_7B, ALLOWED_MODEL_TYPES_1, ALLOWED_MODEL_TYPES_2
-from model.data import ModelCriteria, TokenizerIdentifier
+from model.utils import get_hash_of_two_strings
 
 
 class TestModelUtils(unittest.TestCase):
