@@ -9,6 +9,7 @@ from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
 from tests.utils import assert_model_equality
 
+
 # TODO: Fix this test suite.
 class TestMining(unittest.TestCase):
     pass

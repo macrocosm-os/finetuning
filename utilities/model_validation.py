@@ -15,12 +15,14 @@ from utilities.perf_monitor import PerfMonitor
 
 
 def load_model(model_path, parameters: constants.CompetitionParameters):
-    model_id = ModelId(namespace="namespace", name="name", competition_id=parameters.competition_id)
+    model_id = ModelId(
+        namespace="namespace", name="name", competition_id=parameters.competition_id
+    )
     pt_model = parameters.architecture.from_pretrained(
         pretrained_model_name_or_path=model_path,
         local_files_only=True,
         use_safetensors=True,
-        **parameters.kwargs
+        **parameters.kwargs,
     )
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -28,6 +30,7 @@ def load_model(model_path, parameters: constants.CompetitionParameters):
         local_files_only=True,
     )
     return Model(id=model_id, pt_model=pt_model, tokenizer=tokenizer)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -67,20 +70,22 @@ def main():
         "--competition_id",
         type=str,
         default=constants.ORIGINAL_COMPETITION_ID,
-        help="competition to validate against (use --list-competitions to get all competitions)"
+        help="competition to validate against (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
-        "--list_competitions",
-        action="store_true",
-        help="Print out all competitions"
+        "--list_competitions", action="store_true", help="Print out all competitions"
     )
     args = parser.parse_args()
     if args.list_competitions:
         print(constants.COMPETITION_SCHEDULE)
         return
-    
-    competition_parameters = ModelUpdater.get_competition_parameters(args.competition_id)
-    competition_parameters.kwargs["torch_dtype"] = torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
+
+    competition_parameters = ModelUpdater.get_competition_parameters(
+        args.competition_id
+    )
+    competition_parameters.kwargs["torch_dtype"] = (
+        torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
+    )
     competition_parameters.kwargs["attn_implementation"] = args.attn_implementation
     competition_parameters.kwargs["use_cache"] = True
 

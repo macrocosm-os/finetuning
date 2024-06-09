@@ -13,6 +13,7 @@ validator within virtual environment, run this auto-update script from the virtu
 Pm2 is required for this scrift. This script will start a pm2 process using the name provided by
 the --pm2_name argument.
 """
+
 import argparse
 import logging
 import subprocess

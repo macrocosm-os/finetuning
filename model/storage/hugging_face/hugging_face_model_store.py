@@ -20,7 +20,9 @@ class HuggingFaceModelStore(RemoteModelStore):
             raise ValueError("No Hugging Face access token found to write to the hub.")
         return os.getenv("HF_ACCESS_TOKEN")
 
-    async def upload_model(self, model: Model, competition_parameters: CompetitionParameters) -> ModelId:
+    async def upload_model(
+        self, model: Model, competition_parameters: CompetitionParameters
+    ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
         token = HuggingFaceModelStore.assert_access_token_exists()
 
@@ -43,17 +45,24 @@ class HuggingFaceModelStore(RemoteModelStore):
             name=model.id.name,
             hash=model.id.hash,
             commit=commit_info.oid,
-            competition_id=model.id.competition_id
+            competition_id=model.id.competition_id,
         )
 
         # TODO consider skipping the redownload if a hash is already provided.
         # To get the hash we need to redownload it at a local tmp directory after which it can be deleted.
         with tempfile.TemporaryDirectory() as temp_dir:
-            model_with_hash = await self.download_model(model_id_with_commit, temp_dir, competition_parameters)
+            model_with_hash = await self.download_model(
+                model_id_with_commit, temp_dir, competition_parameters
+            )
             # Return a ModelId with both the correct commit and hash.
             return model_with_hash.id
 
-    async def download_model(self, model_id: ModelId, local_path: str, model_parameters: CompetitionParameters) -> Model:
+    async def download_model(
+        self,
+        model_id: ModelId,
+        local_path: str,
+        model_parameters: CompetitionParameters,
+    ) -> Model:
         """Retrieves a trained model from Hugging Face."""
         if not model_id.commit:
             raise ValueError("No Hugging Face commit id found to read from the hub.")
@@ -78,7 +87,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             revision=model_id.commit,
             cache_dir=local_path,
             use_safetensors=True,
-            **model_parameters.kwargs
+            **model_parameters.kwargs,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -100,7 +109,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             name=model_id.name,
             commit=model_id.commit,
             hash=model_hash,
-            competition_id=model_id.competition_id
+            competition_id=model_id.competition_id,
         )
 
         return Model(id=model_id_with_hash, pt_model=model, tokenizer=tokenizer)
