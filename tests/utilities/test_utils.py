@@ -1,9 +1,12 @@
 import functools
 import time
 import unittest
+from unittest import mock
 
-from utilities.utils import run_in_subprocess, run_in_thread
+import torch
+
 from utilities import utils
+from utilities.utils import run_in_subprocess, run_in_thread
 
 
 class TestUtils(unittest.TestCase):
@@ -121,6 +124,36 @@ class TestUtils(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             result = run_in_thread(func=partial, ttl=5)
+
+    def test_get_high_stake_validators(self):
+        # Create a metagraph with 10 neurons of varying stake with the top 4 having a validator permit.
+        mock_metagraph = mock.MagicMock()
+        mock_metagraph.S = torch.tensor(
+            [0, 1, 2, 300, 4, 5, 600, 7, 8, 9], dtype=torch.float32
+        )
+        mock_metagraph.validator_permit = torch.tensor(
+            [
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                True,
+                False,
+                True,
+                True,
+            ],
+            dtype=torch.bool,
+        )
+
+        # Check 300 or above stake.
+        self.assertEqual(utils.get_high_stake_validators(mock_metagraph, 300), {3, 6})
+
+        # Check 0 or above stake gets only those with permits.
+        self.assertEqual(
+            utils.get_high_stake_validators(mock_metagraph, 0), {3, 6, 8, 9}
+        )
 
 
 if __name__ == "__main__":

@@ -577,6 +577,10 @@ class Validator:
         uid_to_block = defaultdict(lambda: math.inf)
 
         # Pull the latest data from Cortex
+        # Only pull from validators meeting a minimum stake threshold.
+        vali_uids = utils.get_high_stake_validators(
+            self.cortex_metagraph, constants.CORTEX_MIN_STAKE
+        )
 
         cortex_data = None
         pull_data_perf = PerfMonitor("Eval: Pull data")
@@ -589,6 +593,7 @@ class Validator:
                 steps=self.config.latest_cortex_steps,
                 page_size=self.config.latest_cortex_steps,
                 max_run_age=constants.CORTEX_MAX_AGE,
+                validator_uids=vali_uids,
             )
 
         # Prepare evaluation

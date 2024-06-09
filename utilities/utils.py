@@ -1,7 +1,7 @@
 import concurrent
 import functools
 import multiprocessing
-from typing import Any, Tuple
+from typing import Any, Set, Tuple
 import bittensor as bt
 
 from model.data import ModelId
@@ -23,6 +23,20 @@ def assert_registered(wallet: bt.wallet, metagraph: bt.metagraph) -> int:
     )
 
     return uid
+
+
+def get_high_stake_validators(metagraph: bt.metagraph, min_stake: int) -> Set[int]:
+    """Returns a set of validators at or above the specified stake threshold for the subnet"""
+    valis = set()
+
+    for uid, stake in enumerate(metagraph.S):
+        # Use vPermit to check for validators rather than vTrust because we'd rather
+        # cast a wide net in the case that vTrust is 0 due to an unhealthy state of the
+        # subnet.
+        if stake >= min_stake and metagraph.validator_permit[uid]:
+            valis.add(uid)
+
+    return valis
 
 
 def validate_hf_repo_id(repo_id: str) -> Tuple[str, str]:
