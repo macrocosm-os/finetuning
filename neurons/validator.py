@@ -196,8 +196,8 @@ class Validator:
         self.metagraph_syncer = MetagraphSyncer(
             self.subtensor,
             config={
-                constants.SUBNET_UID: 20 * 60,
-                constants.CORTEX_SUBNET_UID: 20 * 60,
+                constants.SUBNET_UID: dt.timedelta(minutes=20).total_seconds,
+                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds,
             },
         )
         # Perform an initial sync of all tracked metagraphs.
