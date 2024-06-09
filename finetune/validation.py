@@ -107,7 +107,7 @@ def compute_losses(
             try:
                 inputs = inputs.to(device)
                 labels = inputs.clone()
-                labels[:, :prompt_len] = -100 # Only calculate loss on response
+                labels[:, :prompt_len] = -100  # Only calculate loss on response
                 outputs = model(inputs, labels=labels)
                 loss = outputs.loss.item()  # Extract scalar loss value
                 losses.append(loss)

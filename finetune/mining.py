@@ -168,7 +168,7 @@ class Actions:
 
         bt.logging.success(f"Now committing to the chain with model_id: {model_id}")
         repo_id = model_id.namespace + "/" + model_id.name
-        
+
         # We can only commit to the chain every 20 minutes, so run this in a loop, until
         # successful.
         while True:

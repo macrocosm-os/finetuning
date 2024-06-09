@@ -71,12 +71,16 @@ class ModelTracker:
             existing_hotkeys = set(self.miner_hotkey_to_model_metadata_dict.keys())
             for hotkey in existing_hotkeys - incoming_hotkeys:
                 del self.miner_hotkey_to_model_metadata_dict[hotkey]
-                bt.logging.trace(f"Removed outdated hotkey metadata: {hotkey} from ModelTracker")
+                bt.logging.trace(
+                    f"Removed outdated hotkey metadata: {hotkey} from ModelTracker"
+                )
 
             existing_hotkeys = set(self.miner_hotkey_to_last_touched_dict.keys())
             for hotkey in existing_hotkeys - incoming_hotkeys:
                 del self.miner_hotkey_to_last_touched_dict[hotkey]
-                bt.logging.trace(f"Removed outdated hotkey timestamp: {hotkey} from ModelTracker")
+                bt.logging.trace(
+                    f"Removed outdated hotkey timestamp: {hotkey} from ModelTracker"
+                )
 
     def on_miner_model_updated(
         self,

@@ -151,12 +151,10 @@ def get_config():
         "--competition_id",
         type=str,
         default=constants.ORIGINAL_COMPETITION_ID,
-        help="competition to mine for (use --list-competitions to get all competitions)"
+        help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
-        "--list_competitions",
-        action="store_true",
-        help="Print out all competitions"
+        "--list_competitions", action="store_true", help="Print out all competitions"
     )
 
     # Include wallet and logging arguments from bittensor
@@ -171,8 +169,10 @@ def get_config():
 
 
 async def load_starting_model(
-    actions: Actions, config: bt.config, metagraph: bt.metagraph,
-    model_parameters: constants.CompetitionParameters
+    actions: Actions,
+    config: bt.config,
+    metagraph: bt.metagraph,
+    model_parameters: constants.CompetitionParameters,
 ) -> typing.Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     """Loads the model to train based on the provided config."""
 
@@ -180,7 +180,9 @@ async def load_starting_model(
     if config.load_best:
         # Get the best UID be incentive and load it.
         best_uid = ft.graph.best_uid(metagraph)
-        model, tokenizer = await actions.load_remote_model(best_uid, metagraph, config.model_dir)
+        model, tokenizer = await actions.load_remote_model(
+            best_uid, metagraph, config.model_dir
+        )
         bt.logging.success(
             f"Training with model from best uid: {best_uid}. Model={str(model)}"
         )
@@ -199,11 +201,16 @@ async def load_starting_model(
 
     # Check if we should load a model from a local directory.
     if config.load_model_dir:
-        model, tokenizer = actions.load_local_model(config.load_model_dir, model_parameters)
+        model, tokenizer = actions.load_local_model(
+            config.load_model_dir, model_parameters
+        )
         bt.logging.success(f"Training with model from disk. Model={str(model)}")
         return model, tokenizer
 
-    raise RuntimeError("No starting model specified, pass either --load_best, --load_uid, or --load_model_dir")
+    raise RuntimeError(
+        "No starting model specified, pass either --load_best, --load_uid, or --load_model_dir"
+    )
+
 
 async def main(config: bt.config):
     # Create bittensor objects.
@@ -239,14 +246,16 @@ async def main(config: bt.config):
     block = metagraph.block.item()
     model_parameters = ModelUpdater.get_competition_parameters(config.competition_id)
     if not model_parameters:
-        raise RuntimeError(
-            f"No model parameters found for block {block}"
-        )
-    model_parameters.kwargs["torch_dtype"] = torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
+        raise RuntimeError(f"No model parameters found for block {block}")
+    model_parameters.kwargs["torch_dtype"] = (
+        torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
+    )
     model_parameters.kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
-    model, tokenizer = await load_starting_model(miner_actions, config, metagraph, model_parameters)
+    model, tokenizer = await load_starting_model(
+        miner_actions, config, metagraph, model_parameters
+    )
     model = model.train()
     model = model.to(config.device)
 
@@ -369,8 +378,12 @@ async def main(config: bt.config):
                 )
 
                 # First, reload the best model from the training run.
-                model_to_upload, tokenizer_to_upload = miner_actions.load_local_model(model_dir, model_parameters)
-                await miner_actions.push(model_to_upload, tokenizer_to_upload, model_parameters)
+                model_to_upload, tokenizer_to_upload = miner_actions.load_local_model(
+                    model_dir, model_parameters
+                )
+                await miner_actions.push(
+                    model_to_upload, tokenizer_to_upload, model_parameters
+                )
             else:
                 bt.logging.success(
                     f"This training run achieved a best_avg_loss={best_avg_loss}, which did not meet the upload threshold. Not uploading to hugging face."

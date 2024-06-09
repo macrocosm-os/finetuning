@@ -1,6 +1,7 @@
 import base64
 import hashlib
 
+
 def get_hash_of_two_strings(string1: str, string2: str) -> str:
     """Hashes two strings together and returns the result."""
 

@@ -37,14 +37,15 @@ class DiskModelStore(LocalModelStore):
         )
 
         model.tokenizer.save_pretrained(
-            save_directory=save_directory,
-            revision=model.id.commit
+            save_directory=save_directory, revision=model.id.commit
         )
 
         # Return the same model id used as we do not edit the commit information.
         return model.id
 
-    def retrieve_model(self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters) -> Model:
+    def retrieve_model(
+        self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters
+    ) -> Model:
         """Retrieves a trained model locally."""
 
         pretrained_model_name_or_path = utils.get_local_model_snapshot_dir(
@@ -56,7 +57,7 @@ class DiskModelStore(LocalModelStore):
             revision=model_id.commit,
             local_files_only=True,
             use_safetensors=True,
-            **model_parameters.kwargs
+            **model_parameters.kwargs,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -68,9 +69,10 @@ class DiskModelStore(LocalModelStore):
         return Model(id=model_id, pt_model=model, tokenizer=tokenizer)
 
     def delete_unreferenced_models(
-        self, valid_models_by_hotkey: Dict[str, ModelId], 
+        self,
+        valid_models_by_hotkey: Dict[str, ModelId],
         model_touched_by_hotkey: Dict[str, datetime.datetime],
-        grace_period_seconds: int
+        grace_period_seconds: int,
     ):
         """Check across all of local storage and delete unreferenced models out of grace period."""
         # Expected directory structure is as follows.
@@ -134,11 +136,14 @@ class DiskModelStore(LocalModelStore):
                             else:
                                 last_touched = model_touched_by_hotkey.get(hotkey)
                                 if last_touched is not None:
-                                    deleted_model = utils.remove_dir_out_of_grace_by_datetime(
-                                        commit_path, grace_period_seconds, last_touched
+                                    deleted_model = (
+                                        utils.remove_dir_out_of_grace_by_datetime(
+                                            commit_path,
+                                            grace_period_seconds,
+                                            last_touched,
+                                        )
                                     )
                                     if deleted_model:
                                         bt.logging.trace(
                                             f"Removing directory for stale model at: {commit_path}."
                                         )
-

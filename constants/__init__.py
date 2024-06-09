@@ -1,11 +1,9 @@
 from pathlib import Path
 from transformers import (
-    PreTrainedModel,
     LlamaForCausalLM,
-    GemmaForCausalLM,
     StableLmForCausalLM,
 )
-from typing import Type, Optional, Any, List, Tuple
+from typing import List
 import datetime as dt
 import math
 from competitions.data import CompetitionId, CompetitionParameters

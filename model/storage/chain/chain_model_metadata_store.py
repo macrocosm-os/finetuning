@@ -25,11 +25,17 @@ class ChainModelMetadataStore(ModelMetadataStore):
         )
         self.subnet_uid = subnet_uid
 
-    async def store_model_metadata(self, hotkey: str, model_id: ModelId, wait_for_inclusion: bool = False, wait_for_finalization: bool = True):
+    async def store_model_metadata(
+        self,
+        hotkey: str,
+        model_id: ModelId,
+        wait_for_inclusion: bool = False,
+        wait_for_finalization: bool = True,
+    ):
         """Stores model metadata on this subnet for a specific wallet."""
         if self.wallet is None:
             raise ValueError("No wallet available to write to the chain.")
-        
+
         data = model_id.to_compressed_str()
 
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
@@ -101,7 +107,12 @@ async def test_store_model_metadata():
     )
 
     # Store the metadata on chain.
-    await metadata_store.store_model_metadata(hotkey=hotkey, model_id=model_id, wait_for_inclusion=True, wait_for_finalization=False)
+    await metadata_store.store_model_metadata(
+        hotkey=hotkey,
+        model_id=model_id,
+        wait_for_inclusion=True,
+        wait_for_finalization=False,
+    )
 
     print(f"Finished storing {model_id} on the chain.")
 
@@ -154,7 +165,12 @@ async def test_roundtrip_model_metadata():
     )
 
     # Store the metadata on chain.
-    await metadata_store.store_model_metadata(hotkey=hotkey, model_id=model_id, wait_for_inclusion=True, wait_for_finalization=True)
+    await metadata_store.store_model_metadata(
+        hotkey=hotkey,
+        model_id=model_id,
+        wait_for_inclusion=True,
+        wait_for_finalization=True,
+    )
 
     # Retrieve the metadata from the chain.
     model_metadata = await metadata_store.retrieve_model_metadata(hotkey)
