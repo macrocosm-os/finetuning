@@ -1,5 +1,4 @@
 from pathlib import Path
-from dataclasses import dataclass
 from transformers import (
     PreTrainedModel,
     LlamaForCausalLM,
@@ -9,24 +8,7 @@ from transformers import (
 from typing import Type, Optional, Any, List, Tuple
 import datetime as dt
 import math
-
-
-@dataclass
-class CompetitionParameters:
-    """Class defining model parameters"""
-
-    # The maximum parameter size allowed for models
-    max_model_parameter_size: int
-    # Architecture class of model
-    architecture: Type[PreTrainedModel]
-    # Any additional arguments to from_pretrained
-    kwargs: Any
-    # Fixed tokenizer
-    tokenizer: Optional[str]
-    # Reward percentage
-    reward_percentage: float
-    # Competition id
-    competition_id: str
+from competitions.data import CompetitionId, CompetitionParameters
 
 
 # ---------------------------------
@@ -59,6 +41,7 @@ CORTEX_MIN_SCORE = 0.85
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo
 MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
+# TODO: Adjust below to be done by block instead as in 9 with helpers.
 # Schedule of model architectures
 COMPETITION_SCHEDULE: List[CompetitionParameters] = [
     CompetitionParameters(
@@ -68,6 +51,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         tokenizer="NousResearch/Meta-Llama-3-8B-Instruct",
         reward_percentage=0.6,
         competition_id="l3",
+        competition_enum=CompetitionId.COMPETITION_1,
     ),
     CompetitionParameters(
         max_model_parameter_size=2 * 1024 * 1024 * 1024,
@@ -76,6 +60,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         tokenizer="stabilityai/stablelm-2-zephyr-1_6b",
         reward_percentage=0.4,
         competition_id="s1",
+        competition_enum=CompetitionId.COMPETITION_2,
     ),
 ]
 ORIGINAL_COMPETITION_ID = "m1"
@@ -94,11 +79,12 @@ assert all(
 weights_version_key = __spec_version__
 
 # validator weight moving average term
-alpha = 0.9
+alpha = 0.5
 # validator scoring exponential temperature
-temperature = 0.08
+# 0.01 gives ~96% to best model with only ~3 receiving any weights.
+temperature = 0.01
 # validator score boosting for earlier models.
-timestamp_epsilon = 0.01
+timestamp_epsilon = 0.005
 # validator eval sequence length.
 sequence_length = 2048
 
