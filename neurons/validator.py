@@ -16,40 +16,42 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from collections import defaultdict
+import argparse
+import asyncio
+import copy
 import datetime as dt
-import os
 import json
 import math
-import sys
-import time
-import torch
+import multiprocessing
+import os
 import random
-import asyncio
-import argparse
+import sys
+import threading
+import time
+import traceback
 import typing
+from collections import defaultdict
 
+import bittensor as bt
+import torch
 import wandb
+from rich.console import Console
+from rich.table import Table
+from transformers import AutoTokenizer, GenerationConfig
+
 import constants
+import finetune as ft
 from model.data import ModelMetadata
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.disk.utils import get_local_miners_dir
 from model.storage.disk.disk_model_store import DiskModelStore
+from model.storage.disk.utils import get_local_miners_dir
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-import traceback
-import threading
-import multiprocessing
-from rich.table import Table
-from rich.console import Console
-
-import bittensor as bt
-import finetune as ft
-from utilities.miner_iterator import MinerIterator
 from utilities import utils
+from utilities.metagraph_syncer import MetagraphSyncer
+from utilities.miner_iterator import MinerIterator
 from utilities.perf_monitor import PerfMonitor
-from transformers import AutoTokenizer, GenerationConfig
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
@@ -118,10 +120,7 @@ class Validator:
             help="Where to store downloaded models",
         )
         parser.add_argument(
-            "--netuid",
-            type=str,
-            default=constants.SUBNET_UID,
-            help="The subnet UID."
+            "--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID."
         )
         parser.add_argument(
             "--attn_implementation",
@@ -191,8 +190,32 @@ class Validator:
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
         self.dendrite = bt.dendrite(wallet=self.wallet)
-        self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
         torch.backends.cudnn.benchmark = True
+
+        # Setup metagraph syncer
+        self.metagraph_syncer = MetagraphSyncer(
+            self.subtensor,
+            config={
+                constants.SUBNET_UID: dt.timedelta(minutes=20).total_seconds,
+                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds,
+            },
+        )
+        # Perform an initial sync of all tracked metagraphs.
+        self.metagraph_syncer.do_initial_sync()
+        self.metagraph_syncer.start()
+
+        self.metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
+            constants.SUBNET_UID
+        )
+        self.cortex_metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
+            constants.CORTEX_SUBNET_UID
+        )
+        self.metagraph_syncer.register_listener(
+            self._on_metagraph_updated,
+            netuids=[constants.SUBNET_UID, constants.CORTEX_SUBNET_UID],
+        )
+        bt.logging.info(f"Metagraph: {self.metagraph}.")
+        bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -240,7 +263,7 @@ class Validator:
             metadata_store=self.metadata_store,
             remote_store=self.remote_store,
             local_store=self.local_store,
-            model_tracker=self.model_tracker
+            model_tracker=self.model_tracker,
         )
 
         # Sync to consensus
@@ -249,45 +272,76 @@ class Validator:
             competition_ids: typing.Dict[int, typing.Optional[str]] = {}
             for uid, hotkey in enumerate(list(self.metagraph.hotkeys)):
                 try:
-                    metadata: typing.Optional[ModelMetadata] = asyncio.run(self.metadata_store.retrieve_model_metadata(hotkey))
-                    competition_ids[uid] = (metadata.id.competition_id if metadata.id.competition_id is not None else constants.ORIGINAL_COMPETITION_ID) if metadata is not None else None
+                    metadata: typing.Optional[ModelMetadata] = asyncio.run(
+                        self.metadata_store.retrieve_model_metadata(hotkey)
+                    )
+                    competition_ids[uid] = (
+                        (
+                            metadata.id.competition_id
+                            if metadata.id.competition_id is not None
+                            else constants.ORIGINAL_COMPETITION_ID
+                        )
+                        if metadata is not None
+                        else None
+                    )
                 except:
                     competition_ids[uid] = None
 
             self.weights.copy_(self.metagraph.C)
 
             for competition in constants.COMPETITION_SCHEDULE:
-                bt.logging.trace(f"Building consensus state for competition {competition.competition_id}")
-                consensus = [x[0] for x in sorted(
-                    [(i, val.nan_to_num(0).item()) for (i, val) in enumerate(list(self.metagraph.consensus)) if competition_ids[i] == competition.competition_id],
-                    key = lambda x: x[1],
-                    reverse=True
-                )[: self.config.sample_min]]
+                bt.logging.trace(
+                    f"Building consensus state for competition {competition.competition_id}"
+                )
+                consensus = [
+                    x[0]
+                    for x in sorted(
+                        [
+                            (i, val.nan_to_num(0).item())
+                            for (i, val) in enumerate(list(self.metagraph.consensus))
+                            if competition_ids[i] == competition.competition_id
+                        ],
+                        key=lambda x: x[1],
+                        reverse=True,
+                    )[: self.config.sample_min]
+                ]
 
                 self.uids_to_eval[competition.competition_id] = set(consensus)
                 self.pending_uids_to_eval[competition.competition_id] = set()
 
-                consensus_map = {
-                    uid: self.weights[uid].item()
-                    for uid in consensus
-                }
-                bt.logging.info(f"Consensus for competition {competition.competition_id}: {consensus_map}")
+                consensus_map = {uid: self.weights[uid].item() for uid in consensus}
+                bt.logging.info(
+                    f"Consensus for competition {competition.competition_id}: {consensus_map}"
+                )
 
                 for uid in consensus:
                     hotkey = self.metagraph.hotkeys[uid]
                     try:
                         asyncio.run(self.model_updater.sync_model(hotkey))
-                        if self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey) is None:
-                            bt.logging.warning(f"Unable to get metadata for consensus UID {uid} with hotkey {hotkey}")
+                        if (
+                            self.model_tracker.get_model_metadata_for_miner_hotkey(
+                                hotkey
+                            )
+                            is None
+                        ):
+                            bt.logging.warning(
+                                f"Unable to get metadata for consensus UID {uid} with hotkey {hotkey}"
+                            )
                     except:
-                        bt.logging.warning(f"Unable to sync model for consensus UID {uid} with hotkey {hotkey}")
+                        bt.logging.warning(
+                            f"Unable to sync model for consensus UID {uid} with hotkey {hotkey}"
+                        )
 
             # only download new models since last full consensus set
             block = self.metagraph.block.item()
             tempo = self.subtensor.get_subnet_hyperparameters(self.config.netuid).tempo
-            last_consensus_block = ft.graph.nearest_tempo(constants.SUBNET_START_BLOCK, tempo, block - tempo)
+            last_consensus_block = ft.graph.nearest_tempo(
+                constants.SUBNET_START_BLOCK, tempo, block - tempo
+            )
 
-            bt.logging.debug(f"Only downloading models newer than block {last_consensus_block}")
+            bt.logging.debug(
+                f"Only downloading models newer than block {last_consensus_block}"
+            )
             self.model_updater.set_min_block(last_consensus_block)
 
         # Touch all models, starting a timer for them to be deleted if not used
@@ -298,7 +352,7 @@ class Validator:
         self.update_thread = threading.Thread(
             target=self.update_models,
             args=(self.config.update_delay_minutes,),
-            daemon=True
+            daemon=True,
         )
         self.update_thread.start()
 
@@ -306,7 +360,7 @@ class Validator:
         self.clean_thread = threading.Thread(
             target=self.clean_models,
             args=(self.config.grace_period_minutes,),
-            daemon=True
+            daemon=True,
         )
         self.clean_thread.start()
 
@@ -376,23 +430,27 @@ class Validator:
 
                 # Ensure we eval the new model on the next loop.
                 if updated:
-                    metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey)
+                    metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
+                        hotkey
+                    )
                     if metadata is not None:
                         bt.logging.trace(
                             f"Updated model for UID={next_uid}. Was new = {updated}"
                         )
                         with self.pending_uids_to_eval_lock:
-                            self.pending_uids_to_eval[metadata.id.competition_id].add(next_uid)
+                            self.pending_uids_to_eval[metadata.id.competition_id].add(
+                                next_uid
+                            )
                             bt.logging.debug(
                                 f"Found a new model for UID={next_uid} for competition {metadata.id.competition_id}. It will be evaluated on the next loop."
                             )
                     else:
-                        bt.logging.warning(f"Unable to sync model for consensus UID {next_uid} with hotkey {hotkey}")
+                        bt.logging.warning(
+                            f"Unable to sync model for consensus UID {next_uid} with hotkey {hotkey}"
+                        )
 
             except Exception as e:
-                bt.logging.error(
-                    f"Error in update loop: {e}"
-                )
+                bt.logging.error(f"Error in update loop: {e}")
 
         bt.logging.info("Exiting update models loop.")
 
@@ -409,7 +467,9 @@ class Validator:
                     hotkey: metadata.id
                     for hotkey, metadata in hotkey_to_model_metadata.items()
                 }
-                hotkey_to_model_last_touched = self.model_tracker.get_miner_hotkey_to_last_touched_dict()
+                hotkey_to_model_last_touched = (
+                    self.model_tracker.get_miner_hotkey_to_last_touched_dict()
+                )
                 hotkey_to_last_touched = {
                     hotkey: touched
                     for hotkey, touched in hotkey_to_model_last_touched.items()
@@ -455,26 +515,14 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
-    async def try_sync_metagraph(self, ttl: int):
-        def sync_metagraph(endpoint):
-            # Update self.metagraph
-            self.metagraph = bt.subtensor(endpoint).metagraph(self.config.netuid)
-            self.metagraph.save()
-            
-        process = multiprocessing.Process(
-            target=sync_metagraph, args=(self.subtensor.chain_endpoint,)
-        )
-        process.start()
-        process.join(timeout=ttl)
-        if process.is_alive():
-            process.terminate()
-            process.join()
-            bt.logging.error(f"Failed to sync metagraph after {ttl} seconds")
-            return
+    def _on_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
+        """Processes an update to the metagraph"""
+        if netuid == constants.SUBNET_UID:
+            self.metagraph = copy.deepcopy(metagraph)
+            self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
 
-        bt.logging.info("Synced metagraph")
-        self.metagraph.load()
-        self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+        elif netuid == constants.CORTEX_SUBNET_UID:
+            self.cortex_metagraph = copy.deepcopy(metagraph)
 
     async def try_run_step(self, ttl: int):
         async def _try_run_step():
@@ -498,15 +546,15 @@ class Validator:
         6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
         7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
         """
+        competition_parameters = constants.COMPETITION_SCHEDULE[
+            self.global_step % len(constants.COMPETITION_SCHEDULE)
+        ]
 
-        # Update self.metagraph
-        await self.try_sync_metagraph(ttl=60)
-
-        competition_parameters = constants.COMPETITION_SCHEDULE[self.global_step % len(constants.COMPETITION_SCHEDULE)]
-        
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
-            self.uids_to_eval[competition_parameters.competition_id].update(self.pending_uids_to_eval[competition_parameters.competition_id])
+            self.uids_to_eval[competition_parameters.competition_id].update(
+                self.pending_uids_to_eval[competition_parameters.competition_id]
+            )
             self.pending_uids_to_eval[competition_parameters.competition_id].clear()
 
         # Pull relevant uids for step. If they aren't found in the model tracker on eval they will be skipped.
@@ -534,7 +582,8 @@ class Validator:
         pull_data_perf = PerfMonitor("Eval: Pull data")
         with pull_data_perf.sample():
             cortex_data = ft.dataset.CortexSubsetLoader(
-                latest=True, running=True,
+                latest=True,
+                running=True,
                 random_seed=random.randint(0, sys.maxsize),
                 max_samples=self.config.latest_cortex_samples,
                 steps=self.config.latest_cortex_steps,
@@ -543,23 +592,33 @@ class Validator:
 
         # Prepare evaluation
 
-        competition_parameters.kwargs["torch_dtype"] = torch.bfloat16 if self.config.dtype == "bfloat16" else torch.float16
-        competition_parameters.kwargs["attn_implementation"] = self.config.attn_implementation
+        competition_parameters.kwargs["torch_dtype"] = (
+            torch.bfloat16 if self.config.dtype == "bfloat16" else torch.float16
+        )
+        competition_parameters.kwargs["attn_implementation"] = (
+            self.config.attn_implementation
+        )
         competition_parameters.kwargs["use_cache"] = True
 
         fixed_tokenizer = None
         if competition_parameters.tokenizer:
-            fixed_tokenizer = AutoTokenizer.from_pretrained(competition_parameters.tokenizer)
+            fixed_tokenizer = AutoTokenizer.from_pretrained(
+                competition_parameters.tokenizer
+            )
 
         # Compute model losses on batches.
-        bt.logging.debug(f"Computing losses on {uids} for competition {competition_parameters.competition_id}")
+        bt.logging.debug(
+            f"Computing losses on {uids} for competition {competition_parameters.competition_id}"
+        )
         losses_per_uid = {muid: None for muid in uids}
         sample_per_uid = {muid: None for muid in uids}
 
         load_model_perf = PerfMonitor("Eval: Load model")
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
 
-        uid_to_hotkey_and_model_metadata: typing.Dict[int, typing.Tuple[str, typing.Optional[ModelMetadata]]] = {}
+        uid_to_hotkey_and_model_metadata: typing.Dict[
+            int, typing.Tuple[str, typing.Optional[ModelMetadata]]
+        ] = {}
         for uid_i in uids:
             # Check that the model is in the tracker.
             hotkey = self.metagraph.hotkeys[uid_i]
@@ -568,24 +627,43 @@ class Validator:
             )
 
             if model_i_metadata != None:
-                for other_uid, (other_hotkey, other_metadata) in uid_to_hotkey_and_model_metadata.items():
-                    if other_metadata and model_i_metadata.id.hash == other_metadata.id.hash:
+                for other_uid, (
+                    other_hotkey,
+                    other_metadata,
+                ) in uid_to_hotkey_and_model_metadata.items():
+                    if (
+                        other_metadata
+                        and model_i_metadata.id.hash == other_metadata.id.hash
+                    ):
                         if model_i_metadata.block < other_metadata.block:
-                            bt.logging.debug(f"Perferring duplicate of {other_uid} with {uid_i} since it is older")
-                            uid_to_hotkey_and_model_metadata[other_uid] = (other_hotkey, None)
+                            bt.logging.debug(
+                                f"Perferring duplicate of {other_uid} with {uid_i} since it is older"
+                            )
+                            uid_to_hotkey_and_model_metadata[other_uid] = (
+                                other_hotkey,
+                                None,
+                            )
                         else:
-                            bt.logging.debug(f"Perferring duplicate of {uid_i} with {other_uid} since it is newer")
+                            bt.logging.debug(
+                                f"Perferring duplicate of {uid_i} with {other_uid} since it is newer"
+                            )
                             model_i_metadata = None
                         break
 
             uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
 
-        for uid_i, (hotkey, model_i_metadata) in uid_to_hotkey_and_model_metadata.items():
+        for uid_i, (
+            hotkey,
+            model_i_metadata,
+        ) in uid_to_hotkey_and_model_metadata.items():
             losses: typing.List[float] = []
             sample: typing.Optional[typing.Tuple[str, str]] = None
 
             if model_i_metadata != None:
-                if model_i_metadata.id.competition_id == competition_parameters.competition_id:
+                if (
+                    model_i_metadata.id.competition_id
+                    == competition_parameters.competition_id
+                ):
                     self.model_tracker.touch_miner_model(hotkey)
 
                     try:
@@ -602,7 +680,11 @@ class Validator:
                         if model_i.tokenizer is None:
                             raise RuntimeError("Missing tokenizer")
 
-                        tokenizer = fixed_tokenizer if fixed_tokenizer is not None else model_i.tokenizer
+                        tokenizer = (
+                            fixed_tokenizer
+                            if fixed_tokenizer is not None
+                            else model_i.tokenizer
+                        )
                         batches = cortex_data.tokenize(tokenizer)
 
                         with compute_loss_perf.sample():
@@ -611,18 +693,33 @@ class Validator:
                             )
 
                         if self.config.do_sample:
-                            prompt, truth = cortex_data.buffer[random.randint(0, len(cortex_data.buffer))]
+                            prompt, truth = cortex_data.buffer[
+                                random.randint(0, len(cortex_data.buffer))
+                            ]
                             conversation = [{"role": "user", "content": prompt}]
-                            input_ids =  tokenizer.apply_chat_template(
-                                conversation, truncation=True, return_tensors="pt",
-                                max_length=constants.sequence_length, add_generation_prompt=True,
+                            input_ids = tokenizer.apply_chat_template(
+                                conversation,
+                                truncation=True,
+                                return_tensors="pt",
+                                max_length=constants.sequence_length,
+                                add_generation_prompt=True,
                             ).to(self.config.device)
-                            output = model_i.pt_model.generate(input_ids, generation_config=GenerationConfig(
-                                max_length=constants.sequence_length, do_sample=True, temperature=0.8,
-                                top_p=0.95, top_k=40, repetition_penalty=1.1,
-                                eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.eos_token_id
-                            ))
-                            response = tokenizer.decode(output[0][len(input_ids[0]):], skip_special_tokens=True)
+                            output = model_i.pt_model.generate(
+                                input_ids,
+                                generation_config=GenerationConfig(
+                                    max_length=constants.sequence_length,
+                                    do_sample=True,
+                                    temperature=0.8,
+                                    top_p=0.95,
+                                    top_k=40,
+                                    repetition_penalty=1.1,
+                                    eos_token_id=tokenizer.eos_token_id,
+                                    pad_token_id=tokenizer.eos_token_id,
+                                ),
+                            )
+                            response = tokenizer.decode(
+                                output[0][len(input_ids[0]) :], skip_special_tokens=True
+                            )
                             sample = (prompt, response, truth)
                             sample_per_uid[uid_i] = sample
 
@@ -640,16 +737,16 @@ class Validator:
                     f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to inifinity."
                 )
 
-            average_model_loss = sum(losses) / len(losses) if len(losses) > 0 else math.inf
+            average_model_loss = (
+                sum(losses) / len(losses) if len(losses) > 0 else math.inf
+            )
             losses_per_uid[uid_i] = losses
             bt.logging.trace(
                 f"Computed model losses for uid: {uid_i} with average loss: {average_model_loss}"
             )
 
         # Compute wins and win rates per uid.
-        wins, win_rate = ft.validation.compute_wins(
-            uids, losses_per_uid, uid_to_block
-        )
+        wins, win_rate = ft.validation.compute_wins(uids, losses_per_uid, uid_to_block)
 
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor(
@@ -661,12 +758,20 @@ class Validator:
         new_weights = torch.zeros_like(self.metagraph.S)
         for i, uid_i in enumerate(uids):
             new_weights[uid_i] = step_weights[i]
-        scale = len(constants.COMPETITION_SCHEDULE) * competition_parameters.reward_percentage
+        scale = (
+            len(constants.COMPETITION_SCHEDULE)
+            * competition_parameters.reward_percentage
+        )
         new_weights *= scale / new_weights.sum()
         if new_weights.shape[0] < self.weights.shape[0]:
-            self.weights = self.weights[:new_weights.shape[0]]
+            self.weights = self.weights[: new_weights.shape[0]]
         elif new_weights.shape[0] > self.weights.shape[0]:
-            self.weights = torch.cat([self.weights, torch.zeros(new_weights.shape[0] - self.weights.shape[0])])
+            self.weights = torch.cat(
+                [
+                    self.weights,
+                    torch.zeros(new_weights.shape[0] - self.weights.shape[0]),
+                ]
+            )
         self.weights = (
             constants.alpha * self.weights + (1 - constants.alpha) * new_weights
         )
@@ -674,7 +779,7 @@ class Validator:
 
         # Filter based on win rate removing all by the sample_min best models for evaluation.
         self.uids_to_eval[competition_parameters.competition_id] = set(
-            sorted(win_rate, key=win_rate.get, reverse=True)[: self.config.sample_min ]
+            sorted(win_rate, key=win_rate.get, reverse=True)[: self.config.sample_min]
         )
 
         # Log the performance of the eval loop.
@@ -726,14 +831,36 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
-                "average_loss": sum(losses_per_uid[uid]) / len(losses_per_uid[uid]) if len(losses_per_uid[uid]) > 0 else math.inf,
-                "perplexity": float(torch.exp(torch.stack([torch.Tensor([x]) for x in losses_per_uid[uid]]).mean()).float().cpu()) if len(losses_per_uid[uid]) > 0 else math.inf,
+                "average_loss": (
+                    sum(losses_per_uid[uid]) / len(losses_per_uid[uid])
+                    if len(losses_per_uid[uid]) > 0
+                    else math.inf
+                ),
+                "perplexity": (
+                    float(
+                        torch.exp(
+                            torch.stack(
+                                [torch.Tensor([x]) for x in losses_per_uid[uid]]
+                            ).mean()
+                        )
+                        .float()
+                        .cpu()
+                    )
+                    if len(losses_per_uid[uid]) > 0
+                    else math.inf
+                ),
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
                 "weight": self.weights[uid].item(),
-                "sample_prompt": sample_per_uid[uid][0] if sample_per_uid[uid] is not None else None,
-                "sample_response": sample_per_uid[uid][1] if sample_per_uid[uid] is not None else None,
-                "sample_truth": sample_per_uid[uid][2] if sample_per_uid[uid] is not None else None,
+                "sample_prompt": (
+                    sample_per_uid[uid][0] if sample_per_uid[uid] is not None else None
+                ),
+                "sample_response": (
+                    sample_per_uid[uid][1] if sample_per_uid[uid] is not None else None
+                ),
+                "sample_truth": (
+                    sample_per_uid[uid][2] if sample_per_uid[uid] is not None else None
+                ),
             }
         table = Table(title="Step")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
