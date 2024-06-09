@@ -283,11 +283,11 @@ class CortexSubsetLoader(IterableDataset):
                                 - dt.datetime.fromtimestamp(sample["_timestamp"])
                                 > max_run_age
                             ):
-                                break
+                                continue
 
                             # Skip any samples that are not text based.
                             if "modality" not in sample or sample["modality"] != "text":
-                                break
+                                continue
 
                             for uid in range(constants.CORTEX_MAX_UIDS):
                                 try:
@@ -307,7 +307,7 @@ class CortexSubsetLoader(IterableDataset):
                                             not isinstance(score, float)
                                             or score < min_score
                                         ):
-                                            break
+                                            continue
 
                                     if isinstance(prompt, str) and isinstance(
                                         response, str

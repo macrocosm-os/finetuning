@@ -540,7 +540,6 @@ class Validator:
                 steps=self.config.latest_cortex_steps,
                 page_size=self.config.latest_cortex_steps,
                 max_run_age=constants.CORTEX_MAX_AGE,
-                min_score=constants.CORTEX_MIN_SCORE,
             )
 
         # Prepare evaluation
