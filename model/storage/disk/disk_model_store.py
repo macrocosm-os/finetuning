@@ -1,13 +1,15 @@
-import bittensor as bt
 import datetime
 import os
-from typing import Dict
-from constants import CompetitionParameters
+from pathlib import Path
+from typing import Any, Dict
+
+import bittensor as bt
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from constants import Competition
 from model.data import Model, ModelId
 from model.storage.disk import utils
 from model.storage.local_model_store import LocalModelStore
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from pathlib import Path
 
 
 class DiskModelStore(LocalModelStore):
@@ -44,7 +46,7 @@ class DiskModelStore(LocalModelStore):
         return model.id
 
     def retrieve_model(
-        self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters
+        self, hotkey: str, model_id: ModelId, kwargs: Dict[str, Any]
     ) -> Model:
         """Retrieves a trained model locally."""
 
@@ -52,12 +54,12 @@ class DiskModelStore(LocalModelStore):
             self.base_dir, hotkey, model_id
         )
 
-        model = model_parameters.architecture.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=pretrained_model_name_or_path,
             revision=model_id.commit,
             local_files_only=True,
             use_safetensors=True,
-            **model_parameters.kwargs,
+            **kwargs,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(

@@ -1,7 +1,8 @@
 import os
 import unittest
-from model.data import ModelId, ModelMetadata
 
+from competitions.data import CompetitionId
+from model.data import ModelId, ModelMetadata
 from model.model_tracker import ModelTracker
 
 
@@ -16,6 +17,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 
@@ -40,6 +42,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 
@@ -60,6 +63,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 
@@ -68,6 +72,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name2",
             commit="test_commit2",
             hash="test_hash2",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         new_model_metadata = ModelMetadata(id=new_model_id, block=2)
 
@@ -89,6 +94,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 
@@ -115,6 +121,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata_1 = ModelMetadata(id=model_id_1, block=1)
 
@@ -124,6 +131,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name2",
             commit="test_commit2",
             hash="test_hash2",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata_2 = ModelMetadata(id=model_id_2, block=2)
 
@@ -145,6 +153,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 
@@ -160,6 +169,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata = ModelMetadata(id=model_id, block=1)
 

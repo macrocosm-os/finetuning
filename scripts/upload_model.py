@@ -9,18 +9,21 @@ Prerequisites:
    3. Your miner is registered
 """
 
+import argparse
 import asyncio
 import os
-import argparse
-import torch
-import constants
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-from model.model_updater import ModelUpdater
-import finetune as ft
-import bittensor as bt
-from utilities import utils
 
+import bittensor as bt
+import torch
 from dotenv import load_dotenv
+
+import constants
+import finetune as ft
+from competitions import utils as competition_utils
+from competitions.data import CompetitionId
+from model.storage.hugging_face.hugging_face_model_store import \
+    HuggingFaceModelStore
+from utilities import utils
 
 load_dotenv()  # take environment variables from .env.
 
@@ -50,8 +53,8 @@ def get_config():
     )
     parser.add_argument(
         "--competition_id",
-        type=str,
-        default=constants.ORIGINAL_COMPETITION_ID,
+        type=CompetitionId,
+        default=CompetitionId.SN9_MODEL,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
@@ -85,16 +88,17 @@ async def main(config: bt.config):
     actions = ft.mining.Actions.create(config, wallet, subtensor)
 
     # Get current model parameters
-    parameters = ModelUpdater.get_competition_parameters(config.competition_id)
-    if parameters is None:
+    competition = competition_utils.get_competition(config.competition_id)
+    if competition is None:
         raise RuntimeError(
-            f"Could not get competition parameters for block {config.competition_id}"
+            f"Could not get competition for block {config.competition_id}"
         )
-    parameters.kwargs["torch_dtype"] = torch.bfloat16
-
+    # TODO: Probably remove?
+    kwargs = {**competition.constraints.kwargs, **{"torch_dtype": torch.bfloat16}}
+    
     # Load the model from disk and push it to the chain and Hugging Face.
-    model, tokenizer = actions.load_local_model(config.load_model_dir, parameters)
-    await actions.push(model, tokenizer, parameters)
+    model, tokenizer = actions.load_local_model(config.load_model_dir, kwargs)
+    await actions.push(model, tokenizer, competition)
 
 
 if __name__ == "__main__":

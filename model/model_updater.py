@@ -1,14 +1,16 @@
-import bittensor as bt
-from typing import Optional
-from constants import CompetitionParameters, COMPETITION_SCHEDULE
-from model.utils import get_hash_of_two_strings
-import constants
 import statistics
-from model.data import ModelMetadata, Model
+from typing import Optional
+
+import bittensor as bt
+
+import constants
+from competitions import utils as competition_utils
+from model.data import Model, ModelMetadata
 from model.model_tracker import ModelTracker
 from model.storage.local_model_store import LocalModelStore
 from model.storage.model_metadata_store import ModelMetadataStore
 from model.storage.remote_model_store import RemoteModelStore
+from model.utils import get_hash_of_two_strings
 
 
 class ModelUpdater:
@@ -30,27 +32,25 @@ class ModelUpdater:
     def set_min_block(self, val: Optional[int]):
         self.min_block = val
 
-    @classmethod
-    def get_competition_parameters(cls, id: str) -> Optional[CompetitionParameters]:
-        for x in COMPETITION_SCHEDULE:
-            if x.competition_id == id:
-                return x
-        return None
-
     @staticmethod
     def verify_model_satisfies_parameters(model: Model) -> bool:
-        parameters = ModelUpdater.get_competition_parameters(model.id.competition_id)
-        if not parameters:
-            bt.logging.trace(
-                f"No competition parameters found for {model.id.competition_id}"
-            )
+        competition = competition_utils.get_competition(model.id.competition_id)
+        if not competition:
+            bt.logging.trace(f"No competition found for {model.id.competition_id}")
             return False
 
         # Check that the parameter count of the model is within allowed bounds.
         parameter_size = sum(p.numel() for p in model.pt_model.parameters())
+        if parameter_size > competition.constraints.max_model_parameter_size:
+            return False
+
+        # Make sure it's an allowed architecture and using an allowed tokenizer.
+        if type(model.pt_model) not in competition.constraints.allowed_architectures:
+            return False
+
         if (
-            parameters.max_model_parameter_size is not None
-            and parameter_size > parameters.max_model_parameter_size
+            competition.constraints.allowed_tokenizers
+            and type(model.tokenizer) not in competition.constraints.allowed_tokenizers
         ):
             return False
 
@@ -77,21 +77,16 @@ class ModelUpdater:
             )
             return False
 
+        # TODO: Remove?
         if self.min_block and metadata.block < self.min_block:
             bt.logging.trace(
                 f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
             )
             return False
 
-        # Backwards compatability for models submitted before competition id added
-        if metadata.id.competition_id is None:
-            metadata.id.competition_id = constants.ORIGINAL_COMPETITION_ID
-
-        parameters = ModelUpdater.get_competition_parameters(metadata.id.competition_id)
-        if not parameters:
-            bt.logging.trace(
-                f"No competition parameters found for {metadata.id.competition_id}"
-            )
+        competition = competition_utils.get_competition(metadata.id.competition_id)
+        if not competition:
+            bt.logging.trace(f"No competition found for {metadata.id.competition_id}")
             return False
 
         # Check what model id the model tracker currently has for this hotkey.
@@ -105,7 +100,7 @@ class ModelUpdater:
         path = self.local_store.get_path(hotkey)
 
         # Otherwise we need to download the new model based on the metadata.
-        model = await self.remote_store.download_model(metadata.id, path, parameters)
+        model = await self.remote_store.download_model(metadata.id, path, competition)
 
         # Check that the hash of the downloaded content matches.
         secure_hash = get_hash_of_two_strings(model.id.hash, hotkey)
@@ -117,9 +112,10 @@ class ModelUpdater:
                 f"Sync for hotkey {hotkey} failed. Hash of content downloaded from hugging face does not match chain metadata. {metadata}"
             )
 
+        # TODO: Is this the right place to check the model against the competition constraints? Or should it be in the validator eval loop?
         if not ModelUpdater.verify_model_satisfies_parameters(model):
             raise ValueError(
-                f"Sync for hotkey {hotkey} failed, model does not satisfy parameters for block {metadata.block}"
+                f"Sync for hotkey {hotkey} failed, model does not satisfy parameters for competition {competition.id}"
             )
 
         # Update the tracker

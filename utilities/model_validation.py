@@ -1,28 +1,30 @@
-import sys
+import argparse
 import math
 import random
+import sys
 
-from model.data import ModelId
-from transformers import AutoTokenizer
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+import constants
+from competitions import utils as competition_utils
+from competitions.data import Competition, CompetitionId
 from finetune.dataset import CortexSubsetLoader
 from finetune.validation import compute_losses
-from model.data import Model
-import argparse
-import constants
-import torch
+from model.data import Model, ModelId
 from model.model_updater import ModelUpdater
 from utilities.perf_monitor import PerfMonitor
 
 
-def load_model(model_path, parameters: constants.CompetitionParameters):
+def load_model(model_path, competition: Competition):
     model_id = ModelId(
-        namespace="namespace", name="name", competition_id=parameters.competition_id
+        namespace="namespace", name="name", competition_id=competition.id
     )
-    pt_model = parameters.architecture.from_pretrained(
+    pt_model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_path,
         local_files_only=True,
         use_safetensors=True,
-        **parameters.kwargs,
+        **competition.constraints.kwargs,
     )
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -46,7 +48,7 @@ def main():
     parser.add_argument(
         "--latest_cortex_steps",
         type=int,
-        default=1,
+        default=5,
         help="Number of most recent Cortex steps to sample data from",
     )
     parser.add_argument(
@@ -68,8 +70,8 @@ def main():
     )
     parser.add_argument(
         "--competition_id",
-        type=str,
-        default=constants.ORIGINAL_COMPETITION_ID,
+        type=CompetitionId,
+        default=CompetitionId.SN9_MODEL,
         help="competition to validate against (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
@@ -80,19 +82,22 @@ def main():
         print(constants.COMPETITION_SCHEDULE)
         return
 
-    competition_parameters = ModelUpdater.get_competition_parameters(
+    competition = competition_utils.get_competition(
         args.competition_id
     )
-    competition_parameters.kwargs["torch_dtype"] = (
+    if competition is None:
+        raise AssertionError("Competition for {args.competition_id} not found")
+    
+    competition.constraints.kwargs["torch_dtype"] = (
         torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
     )
-    competition_parameters.kwargs["attn_implementation"] = args.attn_implementation
-    competition_parameters.kwargs["use_cache"] = True
+    competition.constraints.kwargs["attn_implementation"] = args.attn_implementation
+    competition.constraints.kwargs["use_cache"] = True
 
     print(f"Loading model for competition {args.competition_id}")
     load_model_perf = PerfMonitor("Eval: Load model")
     with load_model_perf.sample():
-        model = load_model(args.model_path, competition_parameters)
+        model = load_model(args.model_path, competition)
     print(load_model_perf.summary_str())
 
     if not ModelUpdater.verify_model_satisfies_parameters(model):
@@ -115,7 +120,7 @@ def main():
 
     print("Tokenizing cortex data")
     tokenizer = model.tokenizer
-    batches = cortex_data.tokenize(tokenizer)
+    batches = cortex_data.tokenize(tokenizer, competition.constraints.sequence_length)
 
     print("Calculating losses")
     compute_loss_perf = PerfMonitor("Eval: Compute loss")
