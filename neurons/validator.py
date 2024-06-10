@@ -103,7 +103,7 @@ class Validator:
             "--sample_min",
             type=int,
             default=5,
-            help="Number of uidcs to eval each step.",
+            help="Number of uids to eval each step.",
         )
         parser.add_argument(
             "--dont_set_weights",
@@ -548,7 +548,7 @@ class Validator:
         6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
         7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
         """
-        
+
         # TODO: Should this be synchronized across valis?
         competition = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
@@ -571,9 +571,7 @@ class Validator:
                 )
                 time.sleep(300)
             else:
-                bt.logging.debug(
-                    f"No uids to eval for competition {competition.id}."
-                )
+                bt.logging.debug(f"No uids to eval for competition {competition.id}.")
             return
 
         # Keep track of which block this uid last updated their model.
@@ -605,15 +603,11 @@ class Validator:
         kwargs["torch_dtype"] = (
             torch.bfloat16 if self.config.dtype == "bfloat16" else torch.float16
         )
-        kwargs["attn_implementation"] = (
-            self.config.attn_implementation
-        )
+        kwargs["attn_implementation"] = self.config.attn_implementation
         kwargs["use_cache"] = True
 
         # Compute model losses on batches.
-        bt.logging.debug(
-            f"Computing losses on {uids} for competition {competition.id}"
-        )
+        bt.logging.debug(f"Computing losses on {uids} for competition {competition.id}")
         losses_per_uid = {muid: None for muid in uids}
         sample_per_uid = {muid: None for muid in uids}
 
@@ -665,14 +659,12 @@ class Validator:
             sample: typing.Optional[typing.Tuple[str, str]] = None
 
             if model_i_metadata is not None:
-                if (
-                    model_i_metadata.id.competition_id
-                    != competition.id
-                ):
-                     bt.logging.trace(
+                if model_i_metadata.id.competition_id != competition.id:
+                    bt.logging.trace(
                         f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to inifinity."
                     )
-                    
+                    continue
+
                 self.model_tracker.touch_miner_model(hotkey)
 
                 try:
@@ -690,7 +682,9 @@ class Validator:
                         raise RuntimeError("Missing tokenizer")
 
                     tokenizer = model_i.tokenizer
-                    batches = cortex_data.tokenize(tokenizer, competition.constraints.sequence_length)
+                    batches = cortex_data.tokenize(
+                        tokenizer, competition.constraints.sequence_length
+                    )
 
                     with compute_loss_perf.sample():
                         losses = ft.validation.compute_losses(
@@ -759,10 +753,7 @@ class Validator:
         new_weights = torch.zeros_like(self.metagraph.S)
         for i, uid_i in enumerate(uids):
             new_weights[uid_i] = step_weights[i]
-        scale = (
-            len(constants.COMPETITION_SCHEDULE)
-            * competition.reward_percentage
-        )
+        scale = len(constants.COMPETITION_SCHEDULE) * competition.reward_percentage
         new_weights *= scale / new_weights.sum()
         if new_weights.shape[0] < self.weights.shape[0]:
             self.weights = self.weights[: new_weights.shape[0]]
