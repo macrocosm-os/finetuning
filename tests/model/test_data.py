@@ -1,4 +1,6 @@
 import unittest
+
+from competitions.data import CompetitionId
 from model.data import ModelId
 
 
@@ -11,7 +13,7 @@ class TestData(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             secure_hash="secure_hash",
-            competition_id="1",
+            competition_id=CompetitionId.SN9_MODEL,
         )
 
         roundtrip_model_id = ModelId.from_compressed_str(model_id.to_compressed_str())
@@ -24,7 +26,7 @@ class TestData(unittest.TestCase):
             namespace="test_model",
             name="test_name",
             secure_hash="secure_hash",
-            competition_id="1",
+            competition_id=CompetitionId.SN9_MODEL,
         )
 
         roundtrip_model_id = ModelId.from_compressed_str(model_id.to_compressed_str())

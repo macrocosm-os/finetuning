@@ -29,22 +29,22 @@ class ModelId:
 
     # Namespace where the model can be found. ex. Hugging Face username/org.
     namespace: str
-    
+
     # Name of the model.
     name: str
+
+    # Identifier for competition
+    competition_id: CompetitionId
 
     # When handling a model locally the commit and hash are not necessary.
     # Commit must be filled when trying to download from a remote store.
     commit: Optional[str] = dataclasses.field(default=None)
-    
+
     # Hash is filled automatically when uploading to or downloading from a remote store.
     hash: Optional[str] = dataclasses.field(default=None)
 
     # The secure hash that's used for validation.
     secure_hash: Optional[str] = dataclasses.field(default=None)
-
-    # Identifier for competition
-    competition_id: CompetitionId
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
@@ -55,8 +55,8 @@ class ModelId:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
         competition_id = int(tokens[4])
-        assert(competition_id in [c.value for c in CompetitionId])
-        
+        assert competition_id in [c.value for c in CompetitionId]
+
         return cls(
             namespace=tokens[0],
             name=tokens[1],
@@ -75,10 +75,10 @@ class Model:
 
     # Identifier for this model.
     id: ModelId
-    
+
     # PreTrainedModel.base_model returns torch.nn.Module if needed.
     pt_model: PreTrainedModel
-    
+
     tokenizer: PreTrainedTokenizerBase
 
 
@@ -86,6 +86,6 @@ class Model:
 class ModelMetadata:
     # Identifier for this trained model.
     id: ModelId
-    
+
     # Block on which this model was uploaded on the chain.
     block: int
