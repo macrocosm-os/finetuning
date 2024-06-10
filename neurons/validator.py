@@ -128,11 +128,6 @@ class Validator:
             default="flash_attention_2",
             help="Implementation of attention to use",
         )
-        parser.add_argument(
-            "--genesis",
-            action="store_true",
-            help="Don't sync to consensus, rather start evaluation from scratch",
-        )
         # TODO: Should we enforce bfloat16?
         parser.add_argument(
             "--dtype",
@@ -267,84 +262,6 @@ class Validator:
             local_store=self.local_store,
             model_tracker=self.model_tracker,
         )
-
-        # Sync to consensus
-        if not self.config.genesis:
-            bt.logging.trace("Pulling competition ids for all hotkeys")
-            competition_ids: typing.Dict[int, typing.Optional[str]] = {}
-            for uid, hotkey in enumerate(list(self.metagraph.hotkeys)):
-                try:
-                    metadata: typing.Optional[ModelMetadata] = asyncio.run(
-                        self.metadata_store.retrieve_model_metadata(hotkey)
-                    )
-                    competition_ids[uid] = (
-                        (
-                            metadata.id.competition_id
-                            if metadata.id.competition_id is not None
-                            else constants.ORIGINAL_COMPETITION_ID
-                        )
-                        if metadata is not None
-                        else None
-                    )
-                except:
-                    competition_ids[uid] = None
-
-            self.weights.copy_(self.metagraph.C)
-
-            for competition in constants.COMPETITION_SCHEDULE:
-                bt.logging.trace(
-                    f"Building consensus state for competition {competition.competition_id}"
-                )
-                consensus = [
-                    x[0]
-                    for x in sorted(
-                        [
-                            (i, val.nan_to_num(0).item())
-                            for (i, val) in enumerate(list(self.metagraph.consensus))
-                            if competition_ids[i] == competition.competition_id
-                        ],
-                        key=lambda x: x[1],
-                        reverse=True,
-                    )[: self.config.sample_min]
-                ]
-
-                self.uids_to_eval[competition.competition_id] = set(consensus)
-                self.pending_uids_to_eval[competition.competition_id] = set()
-
-                consensus_map = {uid: self.weights[uid].item() for uid in consensus}
-                bt.logging.info(
-                    f"Consensus for competition {competition.competition_id}: {consensus_map}"
-                )
-
-                for uid in consensus:
-                    hotkey = self.metagraph.hotkeys[uid]
-                    try:
-                        asyncio.run(self.model_updater.sync_model(hotkey))
-                        if (
-                            self.model_tracker.get_model_metadata_for_miner_hotkey(
-                                hotkey
-                            )
-                            is None
-                        ):
-                            bt.logging.warning(
-                                f"Unable to get metadata for consensus UID {uid} with hotkey {hotkey}"
-                            )
-                    except:
-                        bt.logging.warning(
-                            f"Unable to sync model for consensus UID {uid} with hotkey {hotkey}"
-                        )
-
-            # only download new models since last full consensus set
-            block = self.metagraph.block.item()
-            tempo = self.subtensor.get_subnet_hyperparameters(self.config.netuid).tempo
-            last_consensus_block = ft.graph.nearest_tempo(
-                constants.SUBNET_START_BLOCK, tempo, block - tempo
-            )
-
-            bt.logging.debug(
-                f"Only downloading models newer than block {last_consensus_block}"
-            )
-            self.model_updater.set_min_block(last_consensus_block)
 
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
@@ -565,14 +482,10 @@ class Validator:
         uids = list(self.uids_to_eval[competition.id])
 
         if not uids:
-            if self.config.genesis:
-                bt.logging.debug(
-                    f"No uids to eval for competition {competition.id}. Waiting 5 minutes to download some models."
-                )
-                time.sleep(300)
-            else:
-                bt.logging.debug(f"No uids to eval for competition {competition.id}.")
-            return
+            bt.logging.debug(
+                f"No uids to eval for competition {competition.id}. Waiting 5 minutes to download some models."
+            )
+            time.sleep(300)
 
         # Keep track of which block this uid last updated their model.
         # Default to an infinite block if we can't retrieve the metadata for the miner.
