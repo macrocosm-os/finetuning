@@ -33,7 +33,13 @@ CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
 CORTEX_MAX_AGE = dt.timedelta(days=1)
 CORTEX_MIN_SCORE = 0.85
+# Minimum stake to get data from a cortex validator.
 CORTEX_MIN_STAKE = 100_000
+# Minimum stake to consider a validator when checking for miners with weights.
+WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
+# Minimum percent of weight on a vali for a miner to be considered a top miner.
+# Since there can be multiple competitions at different reward percentages we can't just check biggest.
+WEIGHT_SYNC_MINER_MIN_PERCENT = 0.10
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo
@@ -42,7 +48,7 @@ MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
 # Schedule of model architectures
 COMPETITION_SCHEDULE: List[Competition] = [
     Competition(
-        id = CompetitionId.SN9_MODEL,
+        id=CompetitionId.SN9_MODEL,
         constraints=ModelConstraints(
             max_model_parameter_size=6_900_000_000,
             sequence_length=4096,
@@ -74,3 +80,7 @@ timestamp_epsilon = 0.005
 norm_eps_soft = 200
 norm_eps_soft_percent_threshold = 0.15
 norm_eps_hard = 1000
+# time required between updates to the chain.
+chain_update_cadence = dt.timedelta(minutes=20)
+# time required between retrying evaluation of a stale model. (First retry will be immediate).
+model_retry_cadence = dt.timedelta(hours=4)

@@ -1,9 +1,11 @@
 import concurrent
 import functools
 import multiprocessing
-from typing import Any, Set, Tuple
+from typing import Any, List, Set, Tuple
+
 import bittensor as bt
 
+import constants
 from model.data import ModelId
 
 
@@ -23,6 +25,37 @@ def assert_registered(wallet: bt.wallet, metagraph: bt.metagraph) -> int:
     )
 
     return uid
+
+
+def get_top_miners(
+    metagraph: bt.metagraph, min_vali_stake: int, min_miner_weight_percent: float
+) -> Set[int]:
+    """Returns the set of top miners, chosen based on weights set on the valis above the specifed threshold.
+
+    Args:
+        metagraph (bt.metagraph): Metagraph to use. Must not be lite.
+        min_vali_stake (int): Minimum stake threshold for a vali's weights to be considered.
+        min_miner_weight_percent (float): Minimum weight on a vali for the miner to count as a top miner.
+    """
+
+    top_miners = set()
+
+    # Find validators over 100k in stake.
+    valis_by_stake = get_high_stake_validators(metagraph, min_vali_stake)
+
+    # For each, find miners with at least min_miner_weight_percent of the weights.
+    # Since there can be multiple competitions at different reward percentages we can't just check biggest.
+    for uid in valis_by_stake:
+        # Weights is a list of (uid, weight) pairs
+        weights: List[Tuple[int, float]] = metagraph.neurons[uid].weights
+        total_weight = sum(weight for _, weight in weights)
+
+        threshold = total_weight * min_miner_weight_percent
+        for uid, weight in weights:
+            if weight >= threshold:
+                top_miners.add(uid)
+
+    return list(top_miners)
 
 
 def get_high_stake_validators(metagraph: bt.metagraph, min_stake: int) -> Set[int]:
