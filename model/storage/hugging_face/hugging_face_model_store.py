@@ -1,13 +1,13 @@
-import tempfile
 import os
+import tempfile
+
 from huggingface_hub import HfApi
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from constants import MAX_HUGGING_FACE_BYTES, Competition
 from model.data import Model, ModelId
 from model.storage.disk import utils
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from constants import CompetitionParameters, MAX_HUGGING_FACE_BYTES
-
 from model.storage.remote_model_store import RemoteModelStore
-import constants
 
 
 class HuggingFaceModelStore(RemoteModelStore):
@@ -21,7 +21,7 @@ class HuggingFaceModelStore(RemoteModelStore):
         return os.getenv("HF_ACCESS_TOKEN")
 
     async def upload_model(
-        self, model: Model, competition_parameters: CompetitionParameters
+        self, model: Model, competition: Competition
     ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
         token = HuggingFaceModelStore.assert_access_token_exists()
@@ -52,7 +52,7 @@ class HuggingFaceModelStore(RemoteModelStore):
         # To get the hash we need to redownload it at a local tmp directory after which it can be deleted.
         with tempfile.TemporaryDirectory() as temp_dir:
             model_with_hash = await self.download_model(
-                model_id_with_commit, temp_dir, competition_parameters
+                model_id_with_commit, temp_dir, competition
             )
             # Return a ModelId with both the correct commit and hash.
             return model_with_hash.id
@@ -61,7 +61,7 @@ class HuggingFaceModelStore(RemoteModelStore):
         self,
         model_id: ModelId,
         local_path: str,
-        model_parameters: CompetitionParameters,
+        competition: Competition,
     ) -> Model:
         """Retrieves a trained model from Hugging Face."""
         if not model_id.commit:
@@ -81,13 +81,12 @@ class HuggingFaceModelStore(RemoteModelStore):
             )
 
         # Transformers library can pick up a model based on the hugging face path (username/model) + rev.
-
-        model = model_parameters.architecture.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=repo_id,
             revision=model_id.commit,
             cache_dir=local_path,
             use_safetensors=True,
-            **model_parameters.kwargs,
+            **competition.kwargs,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(

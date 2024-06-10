@@ -16,26 +16,29 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import argparse
 import asyncio
+import datetime as dt
 import math
 import os
-import wandb
-import torch
 import random
-import argparse
-import constants
 import typing
-from model.model_updater import ModelUpdater
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-import finetune as ft
-import bittensor as bt
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
-from finetune.mining import Actions
-from utilities import utils
-import datetime as dt
 
+import bittensor as bt
+import torch
+import wandb
 from dotenv import load_dotenv
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
+
+import constants
+import finetune as ft
+from competitions import utils as competition_utils
+from competitions.data import CompetitionId
+from finetune.mining import Actions
+from model.model_updater import ModelUpdater
+from model.storage.hugging_face.hugging_face_model_store import \
+    HuggingFaceModelStore
+from utilities import utils
 
 load_dotenv()  # take environment variables from .env.
 
@@ -149,8 +152,8 @@ def get_config():
     )
     parser.add_argument(
         "--competition_id",
-        type=str,
-        default=constants.ORIGINAL_COMPETITION_ID,
+        type=CompetitionId,
+        default=CompetitionId.SN9_MODEL,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
@@ -172,7 +175,7 @@ async def load_starting_model(
     actions: Actions,
     config: bt.config,
     metagraph: bt.metagraph,
-    model_parameters: constants.CompetitionParameters,
+    kwargs: typing.Dict[typing.Any],
 ) -> typing.Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     """Loads the model to train based on the provided config."""
 
@@ -202,7 +205,7 @@ async def load_starting_model(
     # Check if we should load a model from a local directory.
     if config.load_model_dir:
         model, tokenizer = actions.load_local_model(
-            config.load_model_dir, model_parameters
+            config.load_model_dir, kwargs
         )
         bt.logging.success(f"Training with model from disk. Model={str(model)}")
         return model, tokenizer
@@ -243,18 +246,17 @@ async def main(config: bt.config):
         else:
             use_wandb = True
 
-    block = metagraph.block.item()
-    model_parameters = ModelUpdater.get_competition_parameters(config.competition_id)
-    if not model_parameters:
-        raise RuntimeError(f"No model parameters found for block {block}")
-    model_parameters.kwargs["torch_dtype"] = (
+    competition = competition_utils.get_competition(config.competition_id)
+    if not competition:
+        raise RuntimeError(f"No competition found for {config.competition_id}")
+    competition.constraints.kwargs["torch_dtype"] = (
         torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
     )
-    model_parameters.kwargs["attn_implementation"] = config.attn_implementation
+    competition.constraints.kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
     model, tokenizer = await load_starting_model(
-        miner_actions, config, metagraph, model_parameters
+        miner_actions, config, metagraph, competition.constraints.kwargs
     )
     model = model.train()
     model = model.to(config.device)
@@ -317,7 +319,7 @@ async def main(config: bt.config):
                 steps=config.cortex_steps,
                 page_size=config.cortex_steps,
             )
-            batches = loader.tokenize(tokenizer)
+            batches = loader.tokenize(tokenizer, competition.constraints.sequence_length)
 
             # Enumerate over the data loader
             n_batches = 0
@@ -379,10 +381,10 @@ async def main(config: bt.config):
 
                 # First, reload the best model from the training run.
                 model_to_upload, tokenizer_to_upload = miner_actions.load_local_model(
-                    model_dir, model_parameters
+                    model_dir, competition.constraints.kwargs
                 )
                 await miner_actions.push(
-                    model_to_upload, tokenizer_to_upload, model_parameters
+                    model_to_upload, tokenizer_to_upload, competition
                 )
             else:
                 bt.logging.success(

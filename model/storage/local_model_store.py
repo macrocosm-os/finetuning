@@ -1,7 +1,8 @@
 import abc
-from typing import Dict
+import datetime
+from typing import Any, Dict
+
 from model.data import Model, ModelId
-from constants import CompetitionParameters
 
 
 class LocalModelStore(abc.ABC):
@@ -19,14 +20,17 @@ class LocalModelStore(abc.ABC):
 
     @abc.abstractmethod
     def retrieve_model(
-        self, hotkey: str, model_id: ModelId, parameters: CompetitionParameters
+        self, hotkey: str, model_id: ModelId, kwargs: Dict[str, Any]
     ) -> Model:
         """Retrieves a trained model from the appropriate location based on implementation."""
         pass
 
     @abc.abstractmethod
     def delete_unreferenced_models(
-        self, valid_models_by_hotkey: Dict[str, ModelId], grace_period_seconds: int
+        self,
+        valid_models_by_hotkey: Dict[str, ModelId],
+        model_touched_by_hotkey: Dict[str, datetime.datetime],
+        grace_period_seconds: int,
     ):
         """Check across all of local storage and delete unreferenced models out of grace period."""
         pass

@@ -1,11 +1,13 @@
 import base64
 import datetime
+import os
 import shutil
 import time
 import unittest
-from model.data import ModelId
+
 import model.storage.disk.utils as utils
-import os
+from competitions.data import CompetitionId
+from model.data import ModelId
 
 
 class TestUtils(unittest.TestCase):
@@ -36,7 +38,11 @@ class TestUtils(unittest.TestCase):
         name = "test-name"
         commit = "test-commit"
         model_id = ModelId(
-            namespace=namespace, name=name, hash="test-hash", commit=commit
+            namespace=namespace,
+            name=name,
+            hash="test-hash",
+            commit=commit,
+            competition_id=CompetitionId.SN9_MODEL,
         )
 
         model_dir = utils.get_local_model_dir(self.base_dir, hotkey, model_id)
@@ -61,7 +67,11 @@ class TestUtils(unittest.TestCase):
         name = "test-name"
         commit = "test-commit"
         model_id = ModelId(
-            namespace=namespace, name=name, hash="test-hash", commit=commit
+            namespace=namespace,
+            name=name,
+            hash="test-hash",
+            commit=commit,
+            competition_id=CompetitionId.SN9_MODEL,
         )
 
         model_dir = utils.get_local_model_snapshot_dir(self.base_dir, hotkey, model_id)
@@ -90,7 +100,11 @@ class TestUtils(unittest.TestCase):
         name = "test-name"
         commit = "test-commit"
         model_id = ModelId(
-            namespace=namespace, name=name, hash="test-hash", commit=commit
+            namespace=namespace,
+            name=name,
+            hash="test-hash",
+            commit=commit,
+            competition_id=CompetitionId.SN9_MODEL,
         )
 
         hf_download_path_dir = utils.get_hf_download_path(

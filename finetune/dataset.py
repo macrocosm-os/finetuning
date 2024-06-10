@@ -355,7 +355,7 @@ class CortexSubsetLoader(IterableDataset):
                     raise
 
     def tokenize(
-        self, tokenizer: PreTrainedTokenizerBase
+        self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
     ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
         batches = []
         for prompt, response in self:
@@ -366,13 +366,13 @@ class CortexSubsetLoader(IterableDataset):
             prompt_ids = tokenizer.apply_chat_template(
                 [conversation[0]],
                 truncation=True,
-                max_length=constants.sequence_length,
+                max_length=sequence_length,
                 add_generation_prompt=True,
             )
             ids = tokenizer.apply_chat_template(
                 conversation,
                 truncation=True,
-                max_length=constants.sequence_length,
+                max_length=sequence_length,
             )
             batches.append((torch.stack([torch.tensor(ids)]), len(prompt_ids)))
         return batches

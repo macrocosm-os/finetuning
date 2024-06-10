@@ -1,11 +1,10 @@
-import threading
 import typing
 
 import bittensor as bt
 import torch
 
 import constants
-from competitions.data import CompetitionId, CompetitionParameters
+from competitions.data import CompetitionId, Competition
 
 
 class CompetitionTracker:
@@ -62,12 +61,12 @@ class CompetitionTracker:
                 del self.weights_by_competition[key]
 
     def get_subnet_weights(
-        self, competitions: typing.List[CompetitionParameters]
+        self, competitions: typing.List[Competition]
     ) -> torch.Tensor:
         """Gets the weights that should be set on the subnet level based on all competitions.
 
         Args:
-            competitions (typing.List[CompetitionParameters]): Competitions to calculate weights across.
+            competitions (typing.List[Competition]): Competitions to calculate weights across.
 
         Returns:
             torch.Tensor: Weights calculated across all specified competitions.
@@ -77,14 +76,13 @@ class CompetitionTracker:
         subnet_weights = torch.zeros(self.num_neurons, dtype=torch.float32)
 
         # For each competition, add the relative competition weight
-        for competition_parameters in competitions:
-            comp_enum = competition_parameters.competition_enum
-            if comp_enum in self.weights_by_competition:
-                comp_weights = self.weights_by_competition[comp_enum]
+        for competition in competitions:
+            if competition.id in self.weights_by_competition:
+                comp_weights = self.weights_by_competition[competition.id]
                 for i in range(self.num_neurons):
                     # Today uids can only participate in one competition so += and = would be equivalent.
                     subnet_weights[i] += (
-                        comp_weights[i] * competition_parameters.reward_percentage
+                        comp_weights[i] * competition.reward_percentage
                     )
 
         # Normalize weights again in case a competition hasn't run yet.

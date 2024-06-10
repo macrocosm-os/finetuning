@@ -1,6 +1,9 @@
 from typing import ClassVar, Optional, Type
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
+
 from pydantic import BaseModel, Field, PositiveInt
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
+
+from competitions.data import CompetitionId
 
 # The maximum bytes for metadata on the chain.
 MAX_METADATA_BYTES = 128
@@ -45,24 +48,25 @@ class ModelId(BaseModel):
     )
 
     # Identifier for competition
-    competition_id: Optional[str] = Field(description="The competition id")
+    competition_id: CompetitionId = Field(description="The competition id")
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.namespace}:{self.name}:{self.commit}:{self.secure_hash}:{self.competition_id}"
+        return f"{self.namespace}:{self.name}:{self.commit}:{self.secure_hash}:{self.competition_id.value}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ModelId"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
+        competition_id = int(tokens[4])
+        assert(competition_id in [c.value for c in CompetitionId])
+        
         return cls(
             namespace=tokens[0],
             name=tokens[1],
             commit=tokens[2] if tokens[2] != "None" else None,
             secure_hash=tokens[3] if tokens[3] != "None" else None,
-            competition_id=(
-                tokens[4] if len(tokens) >= 5 and tokens[4] != "None" else None
-            ),
+            competition_id=competition_id,
         )
 
 

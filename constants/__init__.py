@@ -1,13 +1,11 @@
-from pathlib import Path
-from transformers import (
-    LlamaForCausalLM,
-    StableLmForCausalLM,
-)
-from typing import List
 import datetime as dt
 import math
-from competitions.data import CompetitionId, CompetitionParameters
+from pathlib import Path
+from typing import List
 
+from transformers import LlamaForCausalLM
+
+from competitions.data import CompetitionId, Competition, ModelConstraints
 
 # ---------------------------------
 # Project Constants.
@@ -42,34 +40,21 @@ ROOT_DIR = Path(__file__).parent.parent
 MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
 # TODO: Adjust below to be done by block instead as in 9 with helpers.
 # Schedule of model architectures
-COMPETITION_SCHEDULE: List[CompetitionParameters] = [
-    CompetitionParameters(
-        max_model_parameter_size=8 * 1024 * 1024 * 1024,
-        architecture=LlamaForCausalLM,
-        kwargs={},
-        tokenizer="NousResearch/Meta-Llama-3-8B-Instruct",
-        reward_percentage=0.6,
-        competition_id="l3",
-        competition_enum=CompetitionId.COMPETITION_1,
-    ),
-    CompetitionParameters(
-        max_model_parameter_size=2 * 1024 * 1024 * 1024,
-        architecture=StableLmForCausalLM,
-        kwargs={},
-        tokenizer="stabilityai/stablelm-2-zephyr-1_6b",
-        reward_percentage=0.4,
-        competition_id="s1",
-        competition_enum=CompetitionId.COMPETITION_2,
-    ),
+COMPETITION_SCHEDULE: List[Competition] = [
+    Competition(
+        id = CompetitionId.SN9_MODEL,
+        constraints=ModelConstraints(
+            max_model_parameter_size=6_900_000_000,
+            sequence_length=4096,
+            allowed_architectures=[LlamaForCausalLM],
+            allowed_tokenizers=["Xenova/gpt-4"],
+            kwargs={"torch_dtype": "bfloat16"},
+        ),
+        reward_percentage=1.0,
+    )
 ]
-ORIGINAL_COMPETITION_ID = "m1"
-
 
 assert math.isclose(sum(x.reward_percentage for x in COMPETITION_SCHEDULE), 1.0)
-assert all(
-    len(x.competition_id) > 0 and len(x.competition_id) <= 2
-    for x in COMPETITION_SCHEDULE
-)
 
 # ---------------------------------
 # Miner/Validator Model parameters.
@@ -84,8 +69,6 @@ alpha = 0.5
 temperature = 0.01
 # validator score boosting for earlier models.
 timestamp_epsilon = 0.005
-# validator eval sequence length.
-sequence_length = 2048
 
 # norm validation values
 norm_eps_soft = 200

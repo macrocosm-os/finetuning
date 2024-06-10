@@ -17,23 +17,23 @@
 
 import os
 import time
-from typing import Optional, Tuple
-from constants import CompetitionParameters
+from typing import Any, Dict, Optional, Tuple
+
+import bittensor as bt
+from huggingface_hub import update_repo_visibility
+from transformers import (AutoModelForCausalLM, AutoTokenizer, PreTrainedModel,
+                          PreTrainedTokenizerBase)
+
+from constants import Competition
+from competitions import utils as competition_utils
 from model.data import Model, ModelId
-from model.model_updater import ModelUpdater
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
+from model.storage.chain.chain_model_metadata_store import \
+    ChainModelMetadataStore
+from model.storage.hugging_face.hugging_face_model_store import \
+    HuggingFaceModelStore
 from model.storage.model_metadata_store import ModelMetadataStore
 from model.storage.remote_model_store import RemoteModelStore
 from model.utils import get_hash_of_two_strings
-import bittensor as bt
-from transformers import (
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-    AutoTokenizer,
-)
-from huggingface_hub import update_repo_visibility
-
 from utilities import utils
 
 
@@ -93,14 +93,15 @@ class Actions:
         tokenizer.save_pretrained(save_directory=model_dir)
 
     def load_local_model(
-        self, model_dir: str, model_parameters: CompetitionParameters
+        self, model_dir: str, kwargs: Dict[str, Any]
     ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
         """Loads a model from a directory."""
-        model = model_parameters.architecture.from_pretrained(
+        # TODO: bfloat16?
+        model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=model_dir,
             local_files_only=True,
             use_safetensors=True,
-            **model_parameters.kwargs,
+            **kwargs,
         )
         tokenizer = AutoTokenizer.from_pretrained(
             pretrained_model_name_or_path=model_dir, local_files_only=True
@@ -122,16 +123,16 @@ class Actions:
         if not model_metadata:
             raise ValueError(f"No model metadata found for miner {uid}")
 
-        parameters = ModelUpdater.get_competition_parameters(
+        competition = competition_utils.get_competition(
             model_metadata.id.competition_id
         )
-        if parameters is None:
+        if competition is None:
             raise RuntimeError(
-                f"Could not get competition parameters for {model_metadata.id.competition_id}"
+                f"Could not get competition for {model_metadata.id.competition_id}"
             )
 
         model: Model = await self.remote_model_store.download_model(
-            model_metadata.id, download_dir, parameters
+            model_metadata.id, download_dir, competition
         )
         return model.pt_model, model.tokenizer
 
@@ -139,23 +140,23 @@ class Actions:
         self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
-        competition_parameters: CompetitionParameters,
+        competition: Competition,
         retry_delay_secs: int = 60,
     ):
         """Pushes the model to Hugging Face and publishes it on the chain for evaluation by validators."""
         bt.logging.info(
-            f"Pushing model for competition {competition_parameters.competition_id}"
+            f"Pushing model for competition {competition.id}"
         )
 
         # First upload the model to HuggingFace.
         model_id = ModelId(
             namespace=self.hf_repo_namespace,
             name=self.hf_repo_name,
-            competition_id=competition_parameters.competition_id,
+            competition_id=competition.id,
         )
         model_id = await self.remote_model_store.upload_model(
             Model(id=model_id, pt_model=model, tokenizer=tokenizer),
-            competition_parameters,
+            competition,
         )
 
         bt.logging.success("Uploaded model to hugging face.")
