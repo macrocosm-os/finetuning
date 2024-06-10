@@ -23,12 +23,12 @@ class ModelConstraints:
     # Architecture class of model
     allowed_architectures: List[Type[PreTrainedModel]]
     
-    # The list of tokenizers allowed. If none, any tokenizer can be used.
-    allowed_tokenizers: Optional[List[str]] = None
-    
     # The model's sequence length.
     sequence_length: int
     
+    # The list of tokenizers allowed. If none, any tokenizer can be used.
+    allowed_tokenizers: Optional[List[str]] = None
+
     # Any additional arguments to pass to from_pretrained
     kwargs: Any = field(default_factory=dict)
 

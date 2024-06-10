@@ -12,6 +12,7 @@ class TestCompetitionTracker(unittest.TestCase):
         id=CompetitionId.SN9_MODEL,
         constraints=ModelConstraints(
             max_model_parameter_size=8 * 1024 * 1024 * 1024,
+            sequence_length=4096,
             allowed_architectures=[LlamaForCausalLM],
             allowed_tokenizers=["Xenova/gpt-4"],
             kwargs={},
@@ -22,6 +23,7 @@ class TestCompetitionTracker(unittest.TestCase):
         id=CompetitionId.COMPETITION_2,
         constraints=ModelConstraints(
             max_model_parameter_size=2 * 1024 * 1024 * 1024,
+            sequence_length=2048,
             allowed_architectures=[LlamaForCausalLM],
             allowed_tokenizers=["Xenova/gpt-4"],
             kwargs={},

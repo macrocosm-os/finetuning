@@ -45,12 +45,13 @@ COMPETITION_SCHEDULE: List[Competition] = [
         id = CompetitionId.SN9_MODEL,
         constraints=ModelConstraints(
             max_model_parameter_size=6_900_000_000,
+            sequence_length=4096,
             allowed_architectures=[LlamaForCausalLM],
             allowed_tokenizers=["Xenova/gpt-4"],
             kwargs={"torch_dtype": "bfloat16"},
         ),
         reward_percentage=1.0,
-    ),
+    )
 ]
 
 assert math.isclose(sum(x.reward_percentage for x in COMPETITION_SCHEDULE), 1.0)
