@@ -325,7 +325,7 @@ class Validator:
         bt.logging.debug(f"Started a new wandb run: {name}")
 
     def get_pending_and_current_uid_counts(self) -> typing.Tuple[int, int]:
-        """Gets the total number of uids pending eval and currently being evaluated.
+        """Gets the total number of uids pending eval and currently being evaluated across all competitions.
 
         Returns:
             typing.Tuple[int, int]: Pending uid count, Current uid count.
@@ -613,9 +613,16 @@ class Validator:
 
         if not uids:
             bt.logging.debug(
-                f"No uids to eval for competition {competition.id}. Waiting 5 minutes to download some models."
+                f"No uids to eval for competition {competition.id}."
             )
-            time.sleep(300)
+            # Check if no competitions have uids, if so wait 5 minutes to download.
+            pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
+            if pending_uid_count + current_uid_count == 0:
+                bt.logging.debug(
+                    "No uids to eval for any competition. Waiting 5 minutes to download models."
+                )
+                time.sleep(300)
+            return
 
         # Keep track of which block this uid last updated their model.
         # Default to an infinite block if we can't retrieve the metadata for the miner.
