@@ -112,7 +112,7 @@ class Validator:
             "--updated_models_limit",
             type=int,
             default=15 * len(constants.COMPETITION_SCHEDULE),
-            help="Max number of uids that can be updated and ready to eval.",
+            help="Max number of uids that can be either pending eval or currently being evaluated.",
         )
         parser.add_argument(
             "--dont_set_weights",
@@ -210,6 +210,10 @@ class Validator:
         self.metagraph_syncer.do_initial_sync()
         self.metagraph_syncer.start()
 
+        # Create metagraph locks to avoid cross thread access issues in the update loop.
+        self.metagraph_lock = threading.RLock()
+        self.cortex_metagraph_lock = threading.RLock()
+
         self.metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
             constants.SUBNET_UID
         )
@@ -240,11 +244,13 @@ class Validator:
         self.global_step = 0
         self.last_epoch = self.metagraph.block.item()
 
-        self.uids_to_eval: typing.Dict[CompetitionId, typing.Set] = {}
+        self.uids_to_eval: typing.Dict[CompetitionId, typing.Set] = defaultdict(set)
 
         # Create a set of newly added uids that should be evaluated on the next loop.
         self.pending_uids_to_eval_lock = threading.RLock()
-        self.pending_uids_to_eval: typing.Dict[CompetitionId, typing.Set] = {}
+        self.pending_uids_to_eval: typing.Dict[CompetitionId, typing.Set] = defaultdict(
+            set
+        )
 
         # Setup a model tracker to track which miner is using which model id.
         self.model_tracker = ModelTracker()
@@ -318,6 +324,25 @@ class Validator:
 
         bt.logging.debug(f"Started a new wandb run: {name}")
 
+    def get_pending_and_current_uid_counts(self) -> typing.Tuple[int, int]:
+        """Gets the total number of uids pending eval and currently being evaluated.
+
+        Returns:
+            typing.Tuple[int, int]: Pending uid count, Current uid count.
+        """
+        pending_uid_count = 0
+        current_uid_count = 0
+
+        with self.pending_uids_to_eval_lock:
+            # Loop through the uids across all competitions.
+            for uids in self.pending_uids_to_eval.values():
+                pending_uid_count += len(uids)
+            for uids in self.uids_to_eval.values():
+                current_uid_count += len(uids)
+        
+        return pending_uid_count, current_uid_count
+
+
     def update_models(self):
         # Track how recently we updated each uid from sequential iteration.
         uid_last_checked_sequential = dict()
@@ -338,7 +363,8 @@ class Validator:
                     > constants.chain_update_cadence
                 ):
                     last_checked_top_models_time = dt.datetime.now()
-                    metagraph = copy.deepcopy(self.metagraph)
+                    with self.metagraph_lock:
+                        metagraph = copy.deepcopy(self.metagraph)
 
                     # Find any miner UIDs which top valis are assigning weight and aren't currently scheduled for an eval.
                     # This is competition agnostic, as anything with weight is 'winning' a competition for some vali.
@@ -372,17 +398,16 @@ class Validator:
                             try:
                                 uid_last_retried_evaluation[uid] = dt.datetime.now()
 
-                                # Redownload this model and schedule it for eval.
+                                # Redownload this model and schedule it for eval even if it isn't updated by the sync.
                                 hotkey = metagraph.hotkeys[uid]
                                 asyncio.run(
                                     self.model_updater.sync_model(hotkey, force=True)
                                 )
 
                                 # Since this is a top model (as determined by other valis),
-                                # we don't worry if self.pending_uids is already "full". At most
-                                # there can be 10 top models that we'd add here and that would be
-                                # a wildy exceptional case. It would require every vali to have a
-                                # different top model.
+                                # we don't worry if self.pending_uids is already "full".
+                                # Validators should only have ~1 winner per competition and we only check bigger valis
+                                # so there should not be many simultaneous top models not already being evaluated.
                                 top_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
                                     hotkey
                                 )
@@ -405,18 +430,12 @@ class Validator:
 
                 # Top model check complete. Now continue with the sequential iterator to check for the next miner
                 # to update.
-                pending_uid_count = 0
-                current_uid_count = 0
-                with self.pending_uids_to_eval_lock:
-                    # Loop through the uids across all competitions.
-                    for uids in self.pending_uids_to_eval.values():
-                        pending_uid_count += len(uids)
-                    for uids in self.uids_to_eval.values():
-                        current_uid_count += len(uids)
 
                 # Only allow up to limit for updated models. Typically this is carryover from sample_min + new models.
                 # Note that this is shared across all competitions. So if we happen to get more pending for one
                 # competition we still need to wait until that competition goes down to sample_min.
+                pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
+
                 while (
                     pending_uid_count + current_uid_count
                     >= self.config.updated_models_limit
@@ -427,14 +446,7 @@ class Validator:
                     )
                     time.sleep(300)
                     # Check to see if the pending uids have been cleared yet.
-                    with self.pending_uids_to_eval_lock:
-                        pending_uid_count = 0
-                        current_uid_count = 0
-                        # Loop through the uids across all competitions.
-                        for uids in self.pending_uids_to_eval.values():
-                            pending_uid_count += len(uids)
-                        for uids in self.uids_to_eval.values():
-                            current_uid_count += len(uids)
+                    pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
 
                 # We have space to add more models for eval. Process the next UID.
                 next_uid = next(self.miner_iterator)
@@ -458,7 +470,8 @@ class Validator:
                 uid_last_checked_sequential[next_uid] = dt.datetime.now()
 
                 # Get their hotkey from the metagraph.
-                hotkey = self.metagraph.hotkeys[next_uid]
+                with self.metagraph_lock:
+                    hotkey = self.metagraph.hotkeys[next_uid]
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(
@@ -520,18 +533,19 @@ class Validator:
 
     async def try_set_weights(self, ttl: int):
         async def _try_set_weights():
-            try:
-                self.weights.nan_to_num(0.0)
-                self.subtensor.set_weights(
-                    netuid=self.config.netuid,
-                    wallet=self.wallet,
-                    uids=self.metagraph.uids,
-                    weights=self.weights,
-                    wait_for_inclusion=False,
-                    version_key=constants.weights_version_key,
-                )
-            except:
-                pass
+            with self.metagraph_lock:
+                try:
+                    self.weights.nan_to_num(0.0)
+                    self.subtensor.set_weights(
+                        netuid=self.config.netuid,
+                        wallet=self.wallet,
+                        uids=self.metagraph.uids,
+                        weights=self.weights,
+                        wait_for_inclusion=False,
+                        version_key=constants.weights_version_key,
+                    )
+                except:
+                    pass
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
             table.add_column("uid", justify="right", style="cyan", no_wrap=True)
@@ -551,11 +565,13 @@ class Validator:
     def _on_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
         """Processes an update to the metagraph"""
         if netuid == constants.SUBNET_UID:
-            self.metagraph = copy.deepcopy(metagraph)
-            self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+            with self.metagraph_lock:
+                self.metagraph = copy.deepcopy(metagraph)
+                self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
 
         elif netuid == constants.CORTEX_SUBNET_UID:
-            self.cortex_metagraph = copy.deepcopy(metagraph)
+            with self.cortex_metagraph:
+                self.cortex_metagraph = copy.deepcopy(metagraph)
 
     async def try_run_step(self, ttl: int):
         async def _try_run_step():
@@ -607,9 +623,10 @@ class Validator:
 
         # Pull the latest data from Cortex
         # Only pull from validators meeting a minimum stake threshold.
-        vali_uids = utils.get_high_stake_validators(
-            self.cortex_metagraph, constants.CORTEX_MIN_STAKE
-        )
+        with self.cortex_metagraph_lock:
+            vali_uids = utils.get_high_stake_validators(
+                self.cortex_metagraph, constants.CORTEX_MIN_STAKE
+            )
 
         cortex_data = None
         pull_data_perf = PerfMonitor("Eval: Pull data")
@@ -646,7 +663,8 @@ class Validator:
         ] = {}
         for uid_i in uids:
             # Check that the model is in the tracker.
-            hotkey = self.metagraph.hotkeys[uid_i]
+            with self.metagraph_lock:
+                hotkey = self.metagraph.hotkeys[uid_i]
             model_i_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
                 hotkey
             )
@@ -777,7 +795,8 @@ class Validator:
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
         # Update weights based on moving average.
-        new_weights = torch.zeros_like(self.metagraph.S)
+        with self.metagraph_lock
+            new_weights = torch.zeros_like(self.metagraph.S)
         for i, uid_i in enumerate(uids):
             new_weights[uid_i] = step_weights[i]
         scale = len(constants.COMPETITION_SCHEDULE) * competition.reward_percentage
@@ -936,10 +955,12 @@ class Validator:
             uid_data = step_log["uid_data"]
 
             # Create a new dictionary with the required format
+            with self.metagraph_lock:
+                block = self.metagraph.block.item()
             graphed_data = {
                 "time": time.time(),
                 "competition_id": competition_id,
-                "block": self.metagraph.block.item(),
+                "block": block,
                 "uid_data": {
                     str(uid): uid_data[str(uid)]["average_loss"] for uid in uids
                 },
@@ -975,19 +996,21 @@ class Validator:
     async def run(self):
         while True:
             try:
+                with self.metagraph_lock:
+                    block = self.metagraph.block.item()
                 while (
-                    self.metagraph.block.item() - self.last_epoch
+                    block - self.last_epoch
                     < self.config.blocks_per_epoch
                 ):
                     await self.try_run_step(ttl=60 * 20)
                     bt.logging.debug(
-                        f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+                        f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
                     )
                     self.global_step += 1
 
                 if not self.config.dont_set_weights and not self.config.offline:
                     await self.try_set_weights(ttl=60)
-                self.last_epoch = self.metagraph.block.item()
+                self.last_epoch = block.item()
                 self.epoch_step += 1
 
             except KeyboardInterrupt:
