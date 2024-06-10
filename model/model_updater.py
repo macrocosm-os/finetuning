@@ -80,19 +80,23 @@ class ModelUpdater:
             bt.logging.trace(
                 f"No valid metadata found on the chain for hotkey {hotkey}"
             )
-            return False
+            raise ValueError(
+                f"No valid metadata found on the chain for hotkey {hotkey}"
+            )
 
         # TODO: Remove?
         if self.min_block and metadata.block < self.min_block:
             bt.logging.trace(
                 f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
             )
-            return False
+            raise ValueError(
+                f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
+            )
 
         competition = competition_utils.get_competition(metadata.id.competition_id)
         if not competition:
             bt.logging.trace(f"No competition found for {metadata.id.competition_id}")
-            return False
+            raise ValueError(f"No competition found for {metadata.id.competition_id}")
 
         # Check what model id the model tracker currently has for this hotkey.
         tracker_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
