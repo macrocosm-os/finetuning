@@ -44,6 +44,7 @@ def model_path(base_dir: str, run_id: str) -> str:
     return os.path.join(base_dir, "training", run_id)
 
 
+# TODO: Port over the changes from SN9
 class Actions:
     """A suite of actions for Miners to save/load and upload/download models."""
 

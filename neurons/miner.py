@@ -174,6 +174,7 @@ def get_config():
 async def load_starting_model(
     actions: Actions,
     config: bt.config,
+    subtensor: bt.subtensor,
     metagraph: bt.metagraph,
     kwargs: typing.Dict[typing.Any],
 ) -> typing.Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
@@ -181,8 +182,10 @@ async def load_starting_model(
 
     # Initialize the model based on the best on the network.
     if config.load_best:
-        # Get the best UID be incentive and load it.
-        best_uid = ft.graph.best_uid(metagraph)
+        # Get the best UID by incentive and load it.
+        best_uid = ft.graph.best_uid(config.competition_id, metagraph=metagraph, subtensor=subtensor)
+        if not best_uid:
+            raise RuntimeError(f"No miner found for competition {config.competition_id}")
         model, tokenizer = await actions.load_remote_model(
             best_uid, metagraph, config.model_dir
         )
@@ -256,7 +259,7 @@ async def main(config: bt.config):
 
     # Init model.
     model, tokenizer = await load_starting_model(
-        miner_actions, config, metagraph, competition.constraints.kwargs
+        miner_actions, config, subtensor, metagraph, competition.constraints.kwargs
     )
     model = model.train()
     model = model.to(config.device)
