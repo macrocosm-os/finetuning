@@ -39,6 +39,7 @@ from rich.console import Console
 from rich.table import Table
 from transformers import AutoTokenizer, GenerationConfig
 
+from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
 import constants
 import finetune as ft
@@ -255,6 +256,11 @@ class Validator:
         # Setup a model tracker to track which miner is using which model id.
         self.model_tracker = ModelTracker()
 
+        # Setup a competition tracker to track weights across different competitions.
+        self.competition_tracker = CompetitionTracker(
+            num_neurons=len(self.metagraph.uids), alpha=constants.alpha
+        )
+
         # Setup a miner iterator to ensure we update all miners.
         # This subnet does not differentiate between miner and validators so this is passed all uids.
         self.miner_iterator = MinerIterator(self.metagraph.uids.tolist())
@@ -339,9 +345,8 @@ class Validator:
                 pending_uid_count += len(uids)
             for uids in self.uids_to_eval.values():
                 current_uid_count += len(uids)
-        
-        return pending_uid_count, current_uid_count
 
+        return pending_uid_count, current_uid_count
 
     def update_models(self):
         # Track how recently we updated each uid from sequential iteration.
@@ -434,7 +439,9 @@ class Validator:
                 # Only allow up to limit for updated models. Typically this is carryover from sample_min + new models.
                 # Note that this is shared across all competitions. So if we happen to get more pending for one
                 # competition we still need to wait until that competition goes down to sample_min.
-                pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
+                pending_uid_count, current_uid_count = (
+                    self.get_pending_and_current_uid_counts()
+                )
 
                 while (
                     pending_uid_count + current_uid_count
@@ -446,7 +453,9 @@ class Validator:
                     )
                     time.sleep(300)
                     # Check to see if the pending uids have been cleared yet.
-                    pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
+                    pending_uid_count, current_uid_count = (
+                        self.get_pending_and_current_uid_counts()
+                    )
 
                 # We have space to add more models for eval. Process the next UID.
                 next_uid = next(self.miner_iterator)
@@ -536,7 +545,6 @@ class Validator:
             with self.metagraph_lock:
                 uids = self.metagraph.uids
             try:
-                self.weights.nan_to_num(0.0)
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
                     wallet=self.wallet,
@@ -613,11 +621,11 @@ class Validator:
         uids = list(self.uids_to_eval[competition.id])
 
         if not uids:
-            bt.logging.debug(
-                f"No uids to eval for competition {competition.id}."
-            )
+            bt.logging.debug(f"No uids to eval for competition {competition.id}.")
             # Check if no competitions have uids, if so wait 5 minutes to download.
-            pending_uid_count, current_uid_count = self.get_pending_and_current_uid_counts()
+            pending_uid_count, current_uid_count = (
+                self.get_pending_and_current_uid_counts()
+            )
             if pending_uid_count + current_uid_count == 0:
                 bt.logging.debug(
                     "No uids to eval for any competition. Waiting 5 minutes to download models."
@@ -802,26 +810,24 @@ class Validator:
         )
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
-        # Update weights based on moving average.
-        with self.metagraph_lock
-            new_weights = torch.zeros_like(self.metagraph.S)
+        # Fill in metagraph sized tensor with the step weights of the evaluated models.
+        with self.metagraph_lock:
+            competition_weights = torch.zeros_like(self.metagraph.S)
+
         for i, uid_i in enumerate(uids):
-            new_weights[uid_i] = step_weights[i]
-        scale = len(constants.COMPETITION_SCHEDULE) * competition.reward_percentage
-        new_weights *= scale / new_weights.sum()
-        if new_weights.shape[0] < self.weights.shape[0]:
-            self.weights = self.weights[: new_weights.shape[0]]
-        elif new_weights.shape[0] > self.weights.shape[0]:
-            self.weights = torch.cat(
-                [
-                    self.weights,
-                    torch.zeros(new_weights.shape[0] - self.weights.shape[0]),
-                ]
-            )
-        self.weights = (
-            constants.alpha * self.weights + (1 - constants.alpha) * new_weights
+            competition_weights[uid_i] = step_weights[i]
+
+        # Record weights for the current competition.
+        self.competition_tracker.record_competition_weights(
+            competition.id, competition_weights
         )
-        self.weights = self.weights.nan_to_num(0.0)
+
+        # Get ids for all competitions in the schedule.
+        active_competitions = set([comp.id for comp in constants.COMPETITION_SCHEDULE])
+        # Align competition_tracker to only track active competitions.
+        self.competition_tracker.reset_competitions(active_competitions)
+        # Update self.weights to the merged values across active competitions.
+        self.weights = self.competition_tracker.get_subnet_weights(active_competitions)
 
         # Filter based on win rate removing all by the sample_min best models for evaluation.
         self.uids_to_eval[competition.competition_id] = set(
@@ -1006,10 +1012,7 @@ class Validator:
             try:
                 with self.metagraph_lock:
                     block = self.metagraph.block.item()
-                while (
-                    block - self.last_epoch
-                    < self.config.blocks_per_epoch
-                ):
+                while block - self.last_epoch < self.config.blocks_per_epoch:
                     await self.try_run_step(ttl=60 * 20)
                     bt.logging.debug(
                         f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
