@@ -23,6 +23,7 @@ import datetime as dt
 import json
 import math
 import os
+import pickle
 import random
 import sys
 import threading
@@ -46,11 +47,9 @@ from competitions.data import CompetitionId
 from model.data import ModelMetadata
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
-from model.storage.chain.chain_model_metadata_store import \
-    ChainModelMetadataStore
+from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.disk.disk_model_store import DiskModelStore
-from model.storage.hugging_face.hugging_face_model_store import \
-    HuggingFaceModelStore
+from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from utilities import utils
 from utilities.metagraph_syncer import MetagraphSyncer
 from utilities.miner_iterator import MinerIterator
@@ -60,6 +59,10 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 
 class Validator:
+    MODEL_TRACKER_FILENAME = "model_tracker_2.pickle"
+    COMPETITION_TRACKER_FILENAME = "competition_tracker_2.pickle"
+    UIDS_FILENAME = "uids_2.pickle"
+    VERSION_FILENAME = "version.txt"
 
     @staticmethod
     def config():
@@ -262,6 +265,86 @@ class Validator:
             num_neurons=len(self.metagraph.uids), alpha=constants.alpha
         )
 
+        # Construct the filepaths to save/load state.
+        state_dir = self.state_path()
+        os.makedirs(state_dir, exist_ok=True)
+
+        self.uids_filepath = os.path.join(state_dir, Validator.UIDS_FILENAME)
+        self.model_tracker_filepath = os.path.join(
+            state_dir, Validator.MODEL_TRACKER_FILENAME
+        )
+        self.competition_tracker_filepath = os.path.join(
+            state_dir, Validator.COMPETITION_TRACKER_FILENAME
+        )
+        self.version_filepath = os.path.join(state_dir, Validator.VERSION_FILENAME)
+
+        # Check if the version has changed since we last restarted.
+        previous_version = utils.get_version(self.version_filepath)
+        utils.save_version(self.version_filepath, constants.__spec_version__)
+
+        # If this is an upgrade, blow away state so that everything is re-evaluated.
+        if previous_version != constants.__spec_version__:
+            bt.logging.info(
+                f"Validator updated. Previous version={previous_version}. Current version={constants.__spec_version__}"
+            )
+            if os.path.exists(self.uids_filepath):
+                bt.logging.info(
+                    f"Because the validator updated, deleting {self.uids_filepath} so everything is re-evaluated."
+                )
+                os.remove(self.uids_filepath)
+            if os.path.exists(self.tracker_filepath):
+                bt.logging.info(
+                    f"Because the validator updated, deleting {self.tracker_filepath} so everything is re-evaluated."
+                )
+                os.remove(self.tracker_filepath)
+
+        # Initialize the model tracker.
+        if not os.path.exists(self.model_tracker_filepath):
+            bt.logging.warning(
+                "No model tracker state file found. Starting from scratch."
+            )
+        else:
+            try:
+                self.model_tracker.load_state(self.model_tracker_filepath)
+            except Exception as e:
+                bt.logging.warning(
+                    f"Failed to load model tracker state. Reason: {e}. Starting from scratch."
+                )
+
+        # Initialize the competition tracker.
+        if not os.path.exists(self.competition_tracker_filepath):
+            bt.logging.warning(
+                "No competition tracker state file found. Starting from scratch."
+            )
+        else:
+            try:
+                self.competition_tracker.load_state(self.competition_tracker_filepath)
+            except Exception as e:
+                bt.logging.warning(
+                    f"Failed to load competition tracker state. Reason: {e}. Starting from scratch."
+                )
+
+        # Initialize the UIDs to eval.
+        if not os.path.exists(self.uids_filepath):
+            bt.logging.warning("No uids state file found. Starting from scratch.")
+        else:
+            try:
+                with open(self.uids_filepath, "rb") as f:
+                    self.uids_to_eval = pickle.load(f)
+                    self.pending_uids_to_eval = pickle.load(f)
+            except Exception as e:
+                bt.logging.warning(
+                    f"Failed to load uids to eval state. Reason: {e}. Starting from scratch."
+                )
+                # We also need to wipe the model tracker state in this case to ensure we re-evaluate all the models.
+                # We do not wipe the competition tracker state in this case since previous weights are still valid.
+                self.model_tracker = ModelTracker()
+                if os.path.exists(self.model_tracker_filepath):
+                    bt.logging.warning(
+                        f"Because the uids to eval state failed to load, deleting model tracker state at {self.model_tracker_filepath} so everything is re-evaluated."
+                    )
+                    os.remove(self.model_tracker_filepath)
+
         # Setup a miner iterator to ensure we update all miners.
         # This subnet does not differentiate between miner and validators so this is passed all uids.
         self.miner_iterator = MinerIterator(self.metagraph.uids.tolist())
@@ -327,6 +410,23 @@ class Validator:
         )
 
         bt.logging.debug(f"Started a new wandb run: {name}")
+
+    def save_state(self):
+        """Saves the state of the validator to a file."""
+
+        bt.logging.trace("Saving validator state.")
+        if not os.path.exists(self.state_path()):
+            os.makedirs(self.state_path())
+
+        with self.pending_uids_to_eval_lock:
+            # Save the state of the validator uids to file.
+            with open(self.uids_filepath, "wb") as f:
+                pickle.dump(self.uids_to_eval, f)
+                pickle.dump(self.pending_uids_to_eval, f)
+
+        # Save the state of the trackers to file.
+        self.model_tracker.save_state(self.model_tracker_filepath)
+        self.competition_tracker.save_state(self.competition_tracker_filepath)
 
     def get_pending_and_current_uid_counts(self) -> typing.Tuple[int, int]:
         """Gets the total number of uids pending eval and currently being evaluated across all competitions.
@@ -851,6 +951,9 @@ class Validator:
         self.uids_to_eval[competition.competition_id] = set(
             sorted(win_rate, key=win_rate.get, reverse=True)[: self.config.sample_min]
         )
+
+        # Save state
+        self.save_state()
 
         # Log the performance of the eval loop.
         bt.logging.debug(pull_data_perf.summary_str())
