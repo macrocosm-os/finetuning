@@ -534,18 +534,19 @@ class Validator:
     async def try_set_weights(self, ttl: int):
         async def _try_set_weights():
             with self.metagraph_lock:
-                try:
-                    self.weights.nan_to_num(0.0)
-                    self.subtensor.set_weights(
-                        netuid=self.config.netuid,
-                        wallet=self.wallet,
-                        uids=self.metagraph.uids,
-                        weights=self.weights,
-                        wait_for_inclusion=False,
-                        version_key=constants.weights_version_key,
-                    )
-                except:
-                    pass
+                uids = self.metagraph.uids
+            try:
+                self.weights.nan_to_num(0.0)
+                self.subtensor.set_weights(
+                    netuid=self.config.netuid,
+                    wallet=self.wallet,
+                    uids=uids,
+                    weights=self.weights,
+                    wait_for_inclusion=False,
+                    version_key=constants.weights_version_key,
+                )
+            except:
+                pass
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
             table.add_column("uid", justify="right", style="cyan", no_wrap=True)
