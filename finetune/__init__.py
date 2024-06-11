@@ -29,3 +29,4 @@ from . import dataset
 from . import graph
 from . import mining
 from . import validation
+from . import model

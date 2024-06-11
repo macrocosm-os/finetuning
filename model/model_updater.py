@@ -40,14 +40,8 @@ class ModelUpdater:
         if parameter_size > competition.constraints.max_model_parameter_size:
             return False
 
-        # Make sure it's an allowed architecture and using an allowed tokenizer.
+        # Make sure it's an allowed architecture.
         if type(model.pt_model) not in competition.constraints.allowed_architectures:
-            return False
-
-        if (
-            competition.constraints.allowed_tokenizers
-            and type(model.tokenizer) not in competition.constraints.allowed_tokenizers
-        ):
             return False
 
         # Check parameters are sane

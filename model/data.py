@@ -1,7 +1,7 @@
 import dataclasses
 from typing import ClassVar, Optional, Type
 
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from transformers import PreTrainedModel
 
 from competitions.data import CompetitionId
 
@@ -78,8 +78,6 @@ class Model:
 
     # PreTrainedModel.base_model returns torch.nn.Module if needed.
     pt_model: PreTrainedModel
-
-    tokenizer: PreTrainedTokenizerBase
 
 
 @dataclasses.dataclass

@@ -2,7 +2,7 @@ import os
 import tempfile
 
 from huggingface_hub import HfApi
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 
 from constants import MAX_HUGGING_FACE_BYTES, Competition
 from model.data import Model, ModelId
@@ -25,13 +25,6 @@ class HuggingFaceModelStore(RemoteModelStore):
     ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
         token = HuggingFaceModelStore.assert_access_token_exists()
-
-        # PreTrainedModel.save_pretrained only saves locally
-        model.tokenizer.push_to_hub(
-            repo_id=model.id.namespace + "/" + model.id.name,
-            token=token,
-            private=True,
-        )
 
         commit_info = model.pt_model.push_to_hub(
             repo_id=model.id.namespace + "/" + model.id.name,
@@ -89,12 +82,6 @@ class HuggingFaceModelStore(RemoteModelStore):
             **competition.kwargs,
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=repo_id,
-            revision=model_id.commit,
-            cache_dir=local_path,
-        )
-
         # Get the directory the model was stored to.
         model_dir = utils.get_hf_download_path(local_path, model_id)
 
@@ -111,4 +98,4 @@ class HuggingFaceModelStore(RemoteModelStore):
             competition_id=model_id.competition_id,
         )
 
-        return Model(id=model_id_with_hash, pt_model=model, tokenizer=tokenizer)
+        return Model(id=model_id_with_hash, pt_model=model)

@@ -16,7 +16,7 @@ class TestUtils(unittest.TestCase):
                 max_model_parameter_size=6_900_000_000,
                 sequence_length=4096,
                 allowed_architectures=[LlamaForCausalLM],
-                allowed_tokenizers=["Xenova/gpt-4"],
+                tokenizer="Xenova/gpt-4",
                 kwargs={"torch_dtype": "bfloat16"},
             ),
             reward_percentage=1.0,

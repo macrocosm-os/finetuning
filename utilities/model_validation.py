@@ -4,9 +4,10 @@ import random
 import sys
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 
 import constants
+import finetune as ft
 from competitions import utils as competition_utils
 from competitions.data import Competition, CompetitionId
 from finetune.dataset import CortexSubsetLoader
@@ -16,7 +17,7 @@ from model.model_updater import ModelUpdater
 from utilities.perf_monitor import PerfMonitor
 
 
-def load_model(model_path, competition: Competition):
+def load_model(model_path, competition: Competition) -> Model:
     model_id = ModelId(
         namespace="namespace", name="name", competition_id=competition.id
     )
@@ -27,11 +28,7 @@ def load_model(model_path, competition: Competition):
         **competition.constraints.kwargs,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=model_path,
-        local_files_only=True,
-    )
-    return Model(id=model_id, pt_model=pt_model, tokenizer=tokenizer)
+    return Model(id=model_id, pt_model=pt_model)
 
 
 def main():
@@ -119,7 +116,7 @@ def main():
     print(pull_data_perf.summary_str())
 
     print("Tokenizing cortex data")
-    tokenizer = model.tokenizer
+    tokenizer = ft.model.load_tokenizer(competition)
     batches = cortex_data.tokenize(tokenizer, competition.constraints.sequence_length)
 
     print("Calculating losses")
