@@ -27,10 +27,6 @@ class ModelUpdater:
         self.remote_store = remote_store
         self.local_store = local_store
         self.model_tracker = model_tracker
-        self.min_block: Optional[int] = None
-
-    def set_min_block(self, val: Optional[int]):
-        self.min_block = val
 
     @staticmethod
     def verify_model_satisfies_parameters(model: Model) -> bool:
@@ -76,15 +72,6 @@ class ModelUpdater:
             )
             raise ValueError(
                 f"No valid metadata found on the chain for hotkey {hotkey}"
-            )
-
-        # TODO: Remove?
-        if self.min_block and metadata.block < self.min_block:
-            bt.logging.trace(
-                f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
-            )
-            raise ValueError(
-                f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
             )
 
         competition = competition_utils.get_competition(metadata.id.competition_id)

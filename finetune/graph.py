@@ -16,20 +16,47 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import typing
-import constants
+import asyncio
+from typing import Optional
 import bittensor as bt
 
+from competitions.data import CompetitionId
+import constants
+from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
+from model.storage.model_metadata_store import ModelMetadataStore
 
-def best_uid(metagraph: bt.metagraph) -> int:
-    """Returns the best performing UID in the metagraph."""
-    return max(range(metagraph.n), key=lambda uid: metagraph.I[uid].item())
 
+def best_uid(
+    competition_id: CompetitionId,
+    subtensor: Optional[bt.subtensor] = None,
+    metagraph: Optional[bt.metagraph] = None,
+    metadata_store: Optional[ModelMetadataStore] = None,
+) -> Optional[int]:
+    """Returns the best performing UID in the metagraph for the given competition.
 
-def nearest_tempo(start_block, tempo, block):
-    start_num = start_block + tempo
-    intervals = (block - start_num) // tempo
-    nearest_num = start_num + intervals * tempo
-    if nearest_num >= block:
-        nearest_num -= tempo
-    return nearest_num
+    Returns:
+        int: The UID of the best performing miner in the metagraph for the given competition or None if no miner for the given competition is found.
+    """
+    if not subtensor:
+        subtensor = bt.subtensor()
+
+    if not metagraph:
+        metagraph = subtensor.metagraph(constants.SUBNET_UID)
+
+    if not metadata_store:
+        metadata_store = ChainModelMetadataStore(subtensor, constants.SUBNET_UID)
+
+    incentives = [(metagraph.I[uid].item(), uid) for uid in range(metagraph.n)]
+    # With a winner takes all model, we expect ~ 1 model per competition.
+    # So the top 5 miners should provide sufficient coverage.
+    top_miners = sorted(incentives, reverse=True)[:5]
+
+    for _, miner_uid in top_miners:
+        metadata = asyncio.run(
+            metadata_store.retrieve_model_metadata(metagraph.hotkeys[miner_uid])
+        )
+        if metadata and metadata.id.competition_id == competition_id:
+            return miner_uid
+
+    return None
+

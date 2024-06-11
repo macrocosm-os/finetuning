@@ -23,8 +23,6 @@ __spec_version__ = (
 WANDB_PROJECT = "finetuning-subnet"
 # The uid for this subnet.
 SUBNET_UID = 6
-# The start block of this subnet
-SUBNET_START_BLOCK = 2225782
 # The uid for the Cortex subnet.
 CORTEX_SUBNET_UID = 18
 # The Cortex.t validator WANDB project and filters
