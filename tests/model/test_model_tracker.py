@@ -1,3 +1,4 @@
+from dataclasses import replace
 import os
 import unittest
 
@@ -10,15 +11,19 @@ class TestModelTracker(unittest.TestCase):
     def setUp(self):
         self.model_tracker = ModelTracker()
 
-    def test_roundtrip_state(self):
-        hotkey = "test_hotkey"
-        model_id = ModelId(
+    def _create_model_id(self) -> ModelId:
+        return ModelId(
             namespace="test_model",
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            secure_hash="test_secure_hash",
             competition_id=CompetitionId.SN9_MODEL,
         )
+
+    def test_roundtrip_state(self):
+        hotkey = "test_hotkey"
+        model_id = self._create_model_id()
         model_metadata = ModelMetadata(id=model_id, block=1)
 
         state_path = ".test_tracker_state.pickle"
@@ -37,13 +42,8 @@ class TestModelTracker(unittest.TestCase):
 
     def test_on_miner_model_updated_add(self):
         hotkey = "test_hotkey"
-        model_id = ModelId(
-            namespace="test_model",
-            name="test_name",
-            commit="test_commit",
-            hash="test_hash",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        model_id = self._create_model_id()
+
         model_metadata = ModelMetadata(id=model_id, block=1)
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)
@@ -58,22 +58,11 @@ class TestModelTracker(unittest.TestCase):
 
     def test_on_miner_model_updated_update(self):
         hotkey = "test_hotkey"
-        model_id = ModelId(
-            namespace="test_model",
-            name="test_name",
-            commit="test_commit",
-            hash="test_hash",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        model_id = self._create_model_id()
+
         model_metadata = ModelMetadata(id=model_id, block=1)
 
-        new_model_id = ModelId(
-            namespace="test_model2",
-            name="test_name2",
-            commit="test_commit2",
-            hash="test_hash2",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        new_model_id = replace(model_id, commit="other_commit", hash="other_hash", secure_hash="other_secure_hash")
         new_model_metadata = ModelMetadata(id=new_model_id, block=2)
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)
@@ -89,13 +78,8 @@ class TestModelTracker(unittest.TestCase):
 
     def test_get_model_metadata_for_miner_hotkey(self):
         hotkey = "test_hotkey"
-        model_id = ModelId(
-            namespace="test_model",
-            name="test_name",
-            commit="test_commit",
-            hash="test_hash",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        model_id = model_id = self._create_model_id()
+
         model_metadata = ModelMetadata(id=model_id, block=1)
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)
@@ -121,6 +105,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name",
             commit="test_commit",
             hash="test_hash",
+            secure_hash="test_secure_hash",
             competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata_1 = ModelMetadata(id=model_id_1, block=1)
@@ -131,6 +116,7 @@ class TestModelTracker(unittest.TestCase):
             name="test_name2",
             commit="test_commit2",
             hash="test_hash2",
+            secure_hash="test_secure_hash2",
             competition_id=CompetitionId.SN9_MODEL,
         )
         model_metadata_2 = ModelMetadata(id=model_id_2, block=2)
@@ -148,13 +134,8 @@ class TestModelTracker(unittest.TestCase):
 
     def test_on_hotkeys_updated_extra_ignored(self):
         hotkey = "test_hotkey"
-        model_id = ModelId(
-            namespace="test_model",
-            name="test_name",
-            commit="test_commit",
-            hash="test_hash",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        model_id = self._create_model_id()
+
         model_metadata = ModelMetadata(id=model_id, block=1)
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)
@@ -164,13 +145,8 @@ class TestModelTracker(unittest.TestCase):
 
     def test_on_hotkeys_updated_missing_removed(self):
         hotkey = "test_hotkey"
-        model_id = ModelId(
-            namespace="test_model",
-            name="test_name",
-            commit="test_commit",
-            hash="test_hash",
-            competition_id=CompetitionId.SN9_MODEL,
-        )
+        model_id = self._create_model_id()
+
         model_metadata = ModelMetadata(id=model_id, block=1)
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)

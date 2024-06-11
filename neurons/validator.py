@@ -22,7 +22,6 @@ import copy
 import datetime as dt
 import json
 import math
-import multiprocessing
 import os
 import random
 import sys
@@ -37,19 +36,21 @@ import torch
 import wandb
 from rich.console import Console
 from rich.table import Table
-from transformers import AutoTokenizer, GenerationConfig
+from transformers import GenerationConfig
 
 from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
 import constants
 import finetune as ft
+from competitions.data import CompetitionId
 from model.data import ModelMetadata
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
+from model.storage.chain.chain_model_metadata_store import \
+    ChainModelMetadataStore
 from model.storage.disk.disk_model_store import DiskModelStore
-from model.storage.disk.utils import get_local_miners_dir
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
+from model.storage.hugging_face.hugging_face_model_store import \
+    HuggingFaceModelStore
 from utilities import utils
 from utilities.metagraph_syncer import MetagraphSyncer
 from utilities.miner_iterator import MinerIterator
@@ -284,9 +285,6 @@ class Validator:
             model_tracker=self.model_tracker,
         )
 
-        # Touch all models, starting a timer for them to be deleted if not used
-        self.model_tracker.touch_all_miner_models()
-
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
         self.update_thread = threading.Thread(
@@ -509,34 +507,56 @@ class Validator:
 
         bt.logging.info("Exiting update models loop.")
 
-    def clean_models(self, grace_period_minutes: int):
+    def clean_models(self):
+        """Cleans up models that are no longer referenced."""
+
+        # Delay the clean-up thread until the update loop has had time to run one full pass after an upgrade.
+        # This helps prevent unnecessarily deleting a model which is on disk, but hasn't yet been re-added to the
+        # model tracker by the update loop.
+        time.sleep(dt.timedelta(hours=1).total_seconds())
+
         # The below loop checks to clear out all models in local storage that are no longer referenced.
         while not self.stop_event.is_set():
             try:
                 bt.logging.trace("Starting cleanup of stale models.")
-                # Clean out unreferenced models
+
+                # Get a mapping of all hotkeys to model ids.
                 hotkey_to_model_metadata = (
                     self.model_tracker.get_miner_hotkey_to_model_metadata_dict()
                 )
-                hotkey_to_id = {
+                hotkey_to_model_id = {
                     hotkey: metadata.id
                     for hotkey, metadata in hotkey_to_model_metadata.items()
                 }
-                hotkey_to_model_last_touched = (
-                    self.model_tracker.get_miner_hotkey_to_last_touched_dict()
-                )
-                hotkey_to_last_touched = {
-                    hotkey: touched
-                    for hotkey, touched in hotkey_to_model_last_touched.items()
+
+                # Find all hotkeys that are currently being evaluated or pending eval.
+                uids_to_keep = set()
+                with self.pending_uids_to_eval_lock:
+                    for _, uids in self.pending_uids_to_eval.items():
+                        uids_to_keep.update(uids)
+
+                hotkeys_to_keep = set()
+                # TODO: Confirm this merges well with Sid's change.
+                with self.metagraph_lock:
+                    for uid in uids_to_keep:
+                        hotkeys_to_keep.add(self.metagraph.hotkeys[uid])
+
+                # Only keep those hotkeys.
+                evaluated_hotkeys_to_model_id = {
+                    hotkey: model_id
+                    for hotkey, model_id in hotkey_to_model_id.items()
+                    if hotkey in hotkeys_to_keep
                 }
+
                 self.local_store.delete_unreferenced_models(
-                    hotkey_to_id, hotkey_to_last_touched, 60 * grace_period_minutes
+                    valid_models_by_hotkey=evaluated_hotkeys_to_model_id,
+                    grace_period_seconds=300,
                 )
             except Exception as e:
                 bt.logging.error(f"Error in clean loop: {e}")
-                print(traceback.format_exc())
 
-            time.sleep(dt.timedelta(minutes=grace_period_minutes).total_seconds())
+            # Only check every 5 minutes.
+            time.sleep(dt.timedelta(minutes=5).total_seconds())
 
         bt.logging.info("Exiting clean models loop.")
 
@@ -725,8 +745,6 @@ class Validator:
                         f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to inifinity."
                     )
                     continue
-
-                self.model_tracker.touch_miner_model(hotkey)
 
                 try:
                     # Update the block this uid last updated their model.
