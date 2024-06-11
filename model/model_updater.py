@@ -66,8 +66,13 @@ class ModelUpdater:
         """Get metadata about a model by hotkey"""
         return await self.metadata_store.retrieve_model_metadata(hotkey)
 
-    async def sync_model(self, hotkey: str) -> bool:
-        """Updates local model for a hotkey if out of sync and returns if it was updated."""
+    async def sync_model(self, hotkey: str, force: bool = False) -> bool:
+        """Updates local model for a hotkey if out of sync and returns if it was updated."
+
+        Args:
+           hotkey (str): The hotkey of the model to sync.
+           force (bool): Whether to force a sync for this model, even if it's chain metadata hasn't changed.
+        """
         # Get the metadata for the miner.
         metadata = await self._get_metadata(hotkey)
 
@@ -75,25 +80,30 @@ class ModelUpdater:
             bt.logging.trace(
                 f"No valid metadata found on the chain for hotkey {hotkey}"
             )
-            return False
+            raise ValueError(
+                f"No valid metadata found on the chain for hotkey {hotkey}"
+            )
 
         # TODO: Remove?
         if self.min_block and metadata.block < self.min_block:
             bt.logging.trace(
                 f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
             )
-            return False
+            raise ValueError(
+                f"Skipping model for {hotkey} since it was submitted at block {metadata.block} which is less than the minimum block {self.min_block}"
+            )
 
         competition = competition_utils.get_competition(metadata.id.competition_id)
         if not competition:
             bt.logging.trace(f"No competition found for {metadata.id.competition_id}")
-            return False
+            raise ValueError(f"No competition found for {metadata.id.competition_id}")
 
         # Check what model id the model tracker currently has for this hotkey.
         tracker_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
             hotkey
         )
-        if metadata == tracker_model_metadata:
+        # If we are not forcing a sync due to retrying a top model we can short-circuit if no change.
+        if not force and metadata == tracker_model_metadata:
             return False
 
         # Get the local path based on the local store to download to (top level hotkey path)
