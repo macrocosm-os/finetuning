@@ -677,6 +677,8 @@ class Validator:
                 max_run_age=constants.CORTEX_MAX_AGE,
                 validator_uids=vali_uids,
             )
+            
+        tokenizer = ft.model.load_tokenizer(competition, cache_dir=self.config.model_dir)
 
         # Prepare evaluation
         kwargs = competition.constraints.kwargs.copy()
@@ -757,10 +759,6 @@ class Validator:
                             hotkey, model_i_metadata.id, kwargs
                         )
 
-                    if model_i.tokenizer is None:
-                        raise RuntimeError("Missing tokenizer")
-
-                    tokenizer = model_i.tokenizer
                     batches = cortex_data.tokenize(
                         tokenizer, competition.constraints.sequence_length
                     )

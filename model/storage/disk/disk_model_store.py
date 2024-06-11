@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import bittensor as bt
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 
 from model.data import Model, ModelId
 from model.storage.disk import utils
@@ -36,10 +36,6 @@ class DiskModelStore(LocalModelStore):
             safe_serialization=True,
         )
 
-        model.tokenizer.save_pretrained(
-            save_directory=save_directory, revision=model.id.commit
-        )
-
         # Return the same model id used as we do not edit the commit information.
         return model.id
 
@@ -62,13 +58,7 @@ class DiskModelStore(LocalModelStore):
             **kwargs,
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=pretrained_model_name_or_path,
-            revision=model_id.commit,
-            local_files_only=True,
-        )
-
-        return Model(id=model_id, pt_model=model, tokenizer=tokenizer)
+        return Model(id=model_id, pt_model=model)
 
     def delete_unreferenced_models(
         self, valid_models_by_hotkey: Dict[str, ModelId], grace_period_seconds: int

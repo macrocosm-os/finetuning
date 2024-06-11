@@ -97,8 +97,8 @@ async def main(config: bt.config):
     kwargs = {**competition.constraints.kwargs, **{"torch_dtype": torch.bfloat16}}
     
     # Load the model from disk and push it to the chain and Hugging Face.
-    model, tokenizer = actions.load_local_model(config.load_model_dir, kwargs)
-    await actions.push(model, tokenizer, competition)
+    model = actions.load_local_model(config.load_model_dir, kwargs)
+    await actions.push(model, competition)
 
 
 if __name__ == "__main__":

@@ -176,39 +176,39 @@ async def load_starting_model(
     config: bt.config,
     metagraph: bt.metagraph,
     kwargs: typing.Dict[typing.Any],
-) -> typing.Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
+) -> PreTrainedModel:
     """Loads the model to train based on the provided config."""
 
     # Initialize the model based on the best on the network.
     if config.load_best:
         # Get the best UID be incentive and load it.
         best_uid = ft.graph.best_uid(metagraph)
-        model, tokenizer = await actions.load_remote_model(
+        model = await actions.load_remote_model(
             best_uid, metagraph, config.model_dir
         )
         bt.logging.success(
             f"Training with model from best uid: {best_uid}. Model={str(model)}"
         )
-        return model, tokenizer
+        return model
 
     # Initialize the model based on a passed uid.
     if config.load_uid is not None:
         # Sync the state from the passed uid.
-        model, tokenizer = await actions.load_remote_model(
+        model = await actions.load_remote_model(
             config.load_uid, metagraph, config.model_dir
         )
         bt.logging.success(
             f"Training with model from uid: {config.load_uid}. Model={str(model)}"
         )
-        return model, tokenizer
+        return model
 
     # Check if we should load a model from a local directory.
     if config.load_model_dir:
-        model, tokenizer = actions.load_local_model(
+        model = actions.load_local_model(
             config.load_model_dir, kwargs
         )
         bt.logging.success(f"Training with model from disk. Model={str(model)}")
-        return model, tokenizer
+        return model
 
     raise RuntimeError(
         "No starting model specified, pass either --load_best, --load_uid, or --load_model_dir"
@@ -255,7 +255,8 @@ async def main(config: bt.config):
     competition.constraints.kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
-    model, tokenizer = await load_starting_model(
+    tokenizer = ft.model.load_tokenizer(competition, cache_dir=config.model_dir)
+    model = await load_starting_model(
         miner_actions, config, metagraph, competition.constraints.kwargs
     )
     model = model.train()
@@ -380,11 +381,11 @@ async def main(config: bt.config):
                 )
 
                 # First, reload the best model from the training run.
-                model_to_upload, tokenizer_to_upload = miner_actions.load_local_model(
+                model_to_upload = miner_actions.load_local_model(
                     model_dir, competition.constraints.kwargs
                 )
                 await miner_actions.push(
-                    model_to_upload, tokenizer_to_upload, competition
+                    model_to_upload, competition
                 )
             else:
                 bt.logging.success(

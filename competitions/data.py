@@ -26,8 +26,8 @@ class ModelConstraints:
     # The model's sequence length.
     sequence_length: int
     
-    # The list of tokenizers allowed. If none, any tokenizer can be used.
-    allowed_tokenizers: Optional[List[str]] = None
+    # The Pretrained tokenizer to use.
+    tokenizer: str
 
     # Any additional arguments to pass to from_pretrained
     kwargs: Any = field(default_factory=dict)
