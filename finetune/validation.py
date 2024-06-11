@@ -19,13 +19,12 @@
 # Tools for performing validation over models.
 
 import math
-import traceback
-import typing
-
-import bittensor as bt
 import torch
-
+import typing
 import constants
+import traceback
+import statistics
+import bittensor as bt
 
 
 def iswin(loss_i, loss_j, block_i, block_j):
@@ -101,20 +100,16 @@ def compute_losses(
     """
     # Iterate over each page and corresponding batches
     losses = []
-    with torch.no_grad():
-        for batch in batches:
+    with torch.inference_mode():
+        model.to(device)
+        model.eval()
+        for inputs, prompt_len in batches:
             try:
-                inputs = batch.to(device)
-                logits = model(inputs).logits
-
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = inputs[..., 1:].contiguous()
-                # Flatten the tokens
-                loss_fct = torch.nn.CrossEntropyLoss()
-                shift_logits = shift_logits.view(-1, model.config.vocab_size)
-                shift_labels = shift_labels.view(-1)
-                loss = loss_fct(shift_logits, shift_labels).item()
-
+                inputs = inputs.to(device)
+                labels = inputs.clone()
+                labels[:, :prompt_len] = -100  # Only calculate loss on response
+                outputs = model(inputs, labels=labels)
+                loss = outputs.loss.item()  # Extract scalar loss value
                 losses.append(loss)
             except Exception as e:
                 bt.logging.error(f"Exception occurred: {e}")
