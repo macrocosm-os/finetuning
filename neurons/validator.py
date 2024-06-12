@@ -59,9 +59,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 
 class Validator:
-    MODEL_TRACKER_FILENAME = "model_tracker_2.pickle"
-    COMPETITION_TRACKER_FILENAME = "competition_tracker_2.pickle"
-    UIDS_FILENAME = "uids_2.pickle"
+    MODEL_TRACKER_FILENAME = "model_tracker.pickle"
+    COMPETITION_TRACKER_FILENAME = "competition_tracker.pickle"
+    UIDS_FILENAME = "uids.pickle"
     VERSION_FILENAME = "version.txt"
 
     @staticmethod

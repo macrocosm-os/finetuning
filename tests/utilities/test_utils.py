@@ -1,11 +1,13 @@
 import functools
 import time
 import unittest
+from tempfile import NamedTemporaryFile
 from typing import List, Tuple
 from unittest import mock
 
 import bittensor as bt
 import torch
+import constants
 
 from utilities import utils
 from utilities.utils import run_in_subprocess, run_in_thread
@@ -248,6 +250,14 @@ class TestUtils(unittest.TestCase):
             ),
             [0, 2],
         )
+
+    def test_save_and_load_version(self):
+        version = constants.__spec_version__
+        with NamedTemporaryFile() as f:
+            self.assertIsNone(utils.get_version(f.name))
+
+            utils.save_version(f.name, version)
+            self.assertEqual(utils.get_version(f.name), version)
 
 
 if __name__ == "__main__":
