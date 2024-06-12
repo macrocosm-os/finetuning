@@ -1,3 +1,4 @@
+import os
 import unittest
 
 import torch
@@ -181,6 +182,37 @@ class TestCompetitionTracker(unittest.TestCase):
         self.assertFalse(
             CompetitionId.COMPETITION_2
             in self.competition_tracker.weights_by_competition
+        )
+
+    def test_roundtrip_state(self):
+        self.competition_tracker.record_competition_weights(
+            CompetitionId.SN9_MODEL, torch.Tensor([1, 0, 0, 0])
+        )
+
+        state_path = ".test_competition_tracker_state.pickle"
+        self.competition_tracker.save_state(state_path)
+
+        new_competition_tracker = CompetitionTracker(num_neurons=0, alpha=0)
+        new_competition_tracker.load_state(state_path)
+
+        os.remove(state_path)
+
+        self.assertEqual(
+            self.competition_tracker.num_neurons,
+            new_competition_tracker.num_neurons,
+        )
+        self.assertEqual(
+            self.competition_tracker.alpha,
+            new_competition_tracker.alpha,
+        )
+        self.assertEqual(
+            len(new_competition_tracker.weights_by_competition),
+            1,
+        )
+        self.assertTrue(torch.equal(
+            self.competition_tracker.weights_by_competition[CompetitionId.SN9_MODEL],
+            new_competition_tracker.weights_by_competition[CompetitionId.SN9_MODEL],
+            )
         )
 
 
