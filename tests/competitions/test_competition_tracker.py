@@ -206,9 +206,18 @@ class TestCompetitionTracker(unittest.TestCase):
             new_competition_tracker.alpha,
         )
         self.assertEqual(
-            self.competition_tracker.weights_by_competition,
-            new_competition_tracker.weights_by_competition,
+            len(new_competition_tracker.weights_by_competition),
+            1,
         )
+        self.assertTrue(
+            torch.equal(
+                self.competition_tracker.weights_by_competition[
+                    CompetitionId.SN9_MODEL
+                ],
+                new_competition_tracker.weights_by_competition[CompetitionId.SN9_MODEL],
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
