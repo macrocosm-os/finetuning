@@ -1,12 +1,13 @@
 import asyncio
 import functools
-import bittensor as bt
 import os
-from model.data import ModelId, ModelMetadata
-import constants
-from model.storage.model_metadata_store import ModelMetadataStore
 from typing import Optional
 
+import bittensor as bt
+
+import constants
+from model.data import ModelId, ModelMetadata
+from model.storage.model_metadata_store import ModelMetadataStore
 from utilities import utils
 
 
@@ -16,7 +17,7 @@ class ChainModelMetadataStore(ModelMetadataStore):
     def __init__(
         self,
         subtensor: bt.subtensor,
-        subnet_uid: int,
+        subnet_uid: int = constants.SUBNET_UID,
         wallet: Optional[bt.wallet] = None,
     ):
         self.subtensor = subtensor

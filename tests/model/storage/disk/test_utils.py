@@ -14,6 +14,7 @@ class TestUtils(unittest.TestCase):
     def setUp(self):
         self.base_dir = "test-models"
         self.sep = os.path.sep
+        os.mkdir(self.base_dir)
 
     def tearDown(self):
         shutil.rmtree(path=self.base_dir, ignore_errors=True)
@@ -133,7 +134,6 @@ class TestUtils(unittest.TestCase):
         file_name = "test.txt"
         path = self.base_dir + os.path.sep + file_name
 
-        os.mkdir(self.base_dir)
         file = open(path, "w")
         file.write("test text.")
         file.close()
@@ -155,7 +155,6 @@ class TestUtils(unittest.TestCase):
         file_name = "test.txt"
         path = self.base_dir + self.sep + file_name
 
-        os.mkdir(self.base_dir)
         file = open(path, "w")
         file.write("test text.")
         file.close()
@@ -172,7 +171,6 @@ class TestUtils(unittest.TestCase):
         file_name = "test.txt"
         path = self.base_dir + self.sep + file_name
 
-        os.mkdir(self.base_dir)
         file = open(path, "w")
         file.write("test text.")
         file.close()
@@ -186,7 +184,6 @@ class TestUtils(unittest.TestCase):
         file_name = "test.txt"
         path = self.base_dir + self.sep + file_name
 
-        os.mkdir(self.base_dir)
         file = open(path, "w")
         file.write("test text.")
         file.close()
@@ -213,7 +210,6 @@ class TestUtils(unittest.TestCase):
         path_2_file_2 = dir_2 + os.path.sep + file_name_2
         file_paths = [path_1_file_1, path_1_file_2, path_2_file_1, path_2_file_2]
 
-        os.mkdir(self.base_dir)
         os.mkdir(dir_1)
         os.mkdir(dir_2)
 
@@ -240,7 +236,6 @@ class TestUtils(unittest.TestCase):
         symlink_dest = end_file_dir + self.sep + "symlink_end.txt"
 
         # Make a regular file
-        os.mkdir(self.base_dir)
         os.mkdir(end_file_dir)
         file = open(regular_file, "w")
         file.write("test text.")

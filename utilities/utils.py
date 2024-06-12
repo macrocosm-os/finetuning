@@ -6,8 +6,7 @@ from typing import Any, List, Optional, Set, Tuple
 
 import bittensor as bt
 
-import constants
-from model.data import ModelId
+from model.data import ModelId, ModelMetadata
 
 
 def assert_registered(wallet: bt.wallet, metagraph: bt.metagraph) -> int:
@@ -95,6 +94,11 @@ def validate_hf_repo_id(repo_id: str) -> Tuple[str, str]:
         )
 
     return parts[0], parts[1]
+
+
+def get_hf_url(model_metadata: ModelMetadata) -> str:
+    """Returns the URL to the Hugging Face repo for the provided model metadata."""
+    return f"https://huggingface.co/{model_metadata.id.namespace}/{model_metadata.id.name}/tree/{model_metadata.id.commit}"
 
 
 def run_in_subprocess(func: functools.partial, ttl: int) -> Any:
