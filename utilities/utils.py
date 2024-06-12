@@ -1,7 +1,8 @@
 import concurrent
 import functools
 import multiprocessing
-from typing import Any, List, Set, Tuple
+import os
+from typing import Any, List, Optional, Set, Tuple
 
 import bittensor as bt
 
@@ -165,3 +166,24 @@ def run_in_thread(func: functools.partial, ttl: int, name=None) -> Any:
         bt.logging.trace(f"Completed {name}")
         executor.shutdown(wait=False)
         bt.logging.trace(f"{name} cleaned up successfully")
+
+
+def get_version(filepath: str) -> Optional[int]:
+    """Loads a version from the provided filepath or None if the file does not exist.
+
+    Args:
+        filepath (str): Path to the version file."""
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            line = f.readline()
+            if line:
+                return int(line)
+            return None
+    return None
+
+
+def save_version(filepath: str, version: int):
+    """Saves a version to the provided filepath."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "w") as f:
+        f.write(str(version))
