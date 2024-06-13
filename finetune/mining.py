@@ -175,7 +175,6 @@ def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> PreTrainedModel:
 async def load_remote_model(
     uid: int,
     download_dir: str,
-    competition_id: CompetitionId,
     metagraph: Optional[bt.metagraph] = None,
     metadata_store: Optional[ModelMetadataStore] = None,
     remote_model_store: Optional[RemoteModelStore] = None,
@@ -199,14 +198,14 @@ async def load_remote_model(
     if remote_model_store is None:
         remote_model_store = HuggingFaceModelStore()
 
-    competition = competition_utils.get_competition(competition_id)
-    if not competition:
-        raise ValueError("Invalid competition_id")
-
     hotkey = metagraph.hotkeys[uid]
     model_metadata = await metadata_store.retrieve_model_metadata(hotkey)
     if not model_metadata:
         raise ValueError(f"No model metadata found for miner {uid}")
+
+    competition = competition_utils.get_competition(model_metadata.id.competition_id)
+    if not competition:
+        raise ValueError("Invalid competition_id")
 
     bt.logging.success(f"Fetched model metadata: {model_metadata}")
     model: Model = await remote_model_store.download_model(
