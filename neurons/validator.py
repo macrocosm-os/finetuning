@@ -176,20 +176,12 @@ class Validator:
 
     def state_path(self) -> str:
         """
-        Constructs a file path for storing validator state.
+        Returns the file path for storing validator state.
 
         Returns:
         str: A string representing the file path.
         """
-        return os.path.expanduser(
-            "{}/{}/{}/netuid{}/{}".format(
-                bt.logging.config().logging.logging_dir,
-                self.wallet.name,
-                self.wallet.hotkey_str,
-                self.config.netuid,
-                "vali-state",
-            )
-        )
+        return os.path.join(self.config.model_dir, "vali-state")
 
     def __init__(self):
         self.config = Validator.config()
@@ -379,7 +371,6 @@ class Validator:
         # == Initialize the cleaner thread to remove outdated models ==
         self.clean_thread = threading.Thread(
             target=self.clean_models,
-            args=(self.config.grace_period_minutes,),
             daemon=True,
         )
         self.clean_thread.start()
@@ -447,6 +438,8 @@ class Validator:
         return pending_uid_count, current_uid_count
 
     def update_models(self):
+        """Updates the models in the local store based on the latest metadata from the chain."""
+
         # Track how recently we updated each uid from sequential iteration.
         uid_last_checked_sequential = dict()
         # Track how recently we checked the list of top models.
@@ -636,7 +629,6 @@ class Validator:
                         uids_to_keep.update(uids)
 
                 hotkeys_to_keep = set()
-                # TODO: Confirm this merges well with Sid's change.
                 with self.metagraph_lock:
                     for uid in uids_to_keep:
                         hotkeys_to_keep.add(self.metagraph.hotkeys[uid])
@@ -661,6 +653,8 @@ class Validator:
         bt.logging.info("Exiting clean models loop.")
 
     async def try_set_weights(self, ttl: int):
+        """Sets the weights on the chain with ttl, without raising exceptions if it times out."""
+
         async def _try_set_weights():
             with self.metagraph_lock:
                 uids = self.metagraph.uids
@@ -674,7 +668,8 @@ class Validator:
                     version_key=constants.weights_version_key,
                 )
             except:
-                pass
+                bt.logging.warning("Failed to set weights. Trying again later.")
+
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
             table.add_column("uid", justify="right", style="cyan", no_wrap=True)
@@ -703,6 +698,8 @@ class Validator:
                 self.cortex_metagraph = copy.deepcopy(metagraph)
 
     async def try_run_step(self, ttl: int):
+        """Runs a step with ttl in a background process, without raising exceptions if it times out."""
+
         async def _try_run_step():
             await self.run_step()
 
@@ -716,19 +713,19 @@ class Validator:
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
-        1. Identifies valid models for evaluation (top 5 from last run + newly updated models).
-        2. Generates random pages for evaluation and prepares batches for each page from the dataset.
-        3. Computes the scoring for each model based on the losses incurred on the evaluation batches.
-        4. Calculates wins and win rates for each model to determine their performance relative to others.
-        5. Updates the weights of each model based on their performance and applies a softmax normalization.
-        6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
-        7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
+            1. Identifies valid models for evaluation (top 5 from last run + newly updated models).
+            2. Generates random pages for evaluation and prepares batches for each page from the dataset.
+            3. Computes the scoring for each model based on the losses incurred on the evaluation batches.
+            4. Calculates wins and win rates for each model to determine their performance relative to others.
+            5. Updates the weights of each model based on their performance and applies a softmax normalization.
+            6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
+            7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
         """
 
-        # TODO: Should this be synchronized across valis?
         competition = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
         ]
+        bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
@@ -777,8 +774,10 @@ class Validator:
                 max_run_age=constants.CORTEX_MAX_AGE,
                 validator_uids=vali_uids,
             )
-            
-        tokenizer = ft.model.load_tokenizer(competition, cache_dir=self.config.model_dir)
+
+        tokenizer = ft.model.load_tokenizer(
+            competition, cache_dir=self.config.model_dir
+        )
 
         # Prepare evaluation
         kwargs = competition.constraints.kwargs.copy()
@@ -796,10 +795,10 @@ class Validator:
         load_model_perf = PerfMonitor("Eval: Load model")
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
 
-        uid_to_hotkey_and_model_metadata: typing.Dict[
-            int, typing.Tuple[str, typing.Optional[ModelMetadata]]
-        ] = {}
         for uid_i in uids:
+            losses: typing.List[float] = []
+            sample: typing.Optional[typing.Tuple[str, str]] = None
+
             # Check that the model is in the tracker.
             with self.metagraph_lock:
                 hotkey = self.metagraph.hotkeys[uid_i]
@@ -807,47 +806,10 @@ class Validator:
                 hotkey
             )
 
-            # TODO: Remove?
-            if model_i_metadata != None:
-                for other_uid, (
-                    other_hotkey,
-                    other_metadata,
-                ) in uid_to_hotkey_and_model_metadata.items():
-                    if (
-                        other_metadata
-                        and model_i_metadata.id.hash == other_metadata.id.hash
-                    ):
-                        if model_i_metadata.block < other_metadata.block:
-                            bt.logging.debug(
-                                f"Perferring duplicate of {other_uid} with {uid_i} since it is older"
-                            )
-                            uid_to_hotkey_and_model_metadata[other_uid] = (
-                                other_hotkey,
-                                None,
-                            )
-                        else:
-                            bt.logging.debug(
-                                f"Perferring duplicate of {uid_i} with {other_uid} since it is newer"
-                            )
-                            model_i_metadata = None
-                        break
-
-            uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
-
-        for uid_i, (
-            hotkey,
-            model_i_metadata,
-        ) in uid_to_hotkey_and_model_metadata.items():
-            losses: typing.List[float] = []
-            sample: typing.Optional[typing.Tuple[str, str]] = None
-
-            if model_i_metadata is not None:
-                if model_i_metadata.id.competition_id != competition.id:
-                    bt.logging.trace(
-                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to inifinity."
-                    )
-                    continue
-
+            if (
+                model_i_metadata is not None
+                and model_i_metadata.id.competition_id == competition.id
+            ):
                 try:
                     # Update the block this uid last updated their model.
                     uid_to_block[uid_i] = model_i_metadata.block
@@ -906,7 +868,7 @@ class Validator:
                     )
             else:
                 bt.logging.debug(
-                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to inifinity."
+                    f"Unable to load the model metadata for {uid_i} or it belongs to another competition. Setting loss to infinity for this competition."
                 )
 
             average_model_loss = (
@@ -945,10 +907,24 @@ class Validator:
         # Update self.weights to the merged values across active competitions.
         self.weights = self.competition_tracker.get_subnet_weights(active_competitions)
 
-        # Filter based on win rate removing all by the sample_min best models for evaluation.
-        self.uids_to_eval[competition.competition_id] = set(
-            sorted(win_rate, key=win_rate.get, reverse=True)[: self.config.sample_min]
-        )
+        # Prioritize models for keeping up to the sample_min for the next eval loop.
+        # If the model has any significant weight, prioritize by weight with greater weights being kept first.
+        # Then for the unweighted models, prioritize by win_rate.
+        model_prioritization = {
+            uid: (
+                # Add 1 to ensure it is always greater than a win rate.
+                1 + self.weights[uid].item()
+                if self.weights[uid].item() >= 0.001
+                else wr
+            )
+            for uid, wr in win_rate.items()
+        }
+        with self.pending_uids_to_eval_lock:
+            self.uids_to_eval[competition.competition_id] = set(
+                sorted(
+                    model_prioritization, key=model_prioritization.get, reverse=True
+                )[: self.config.sample_min]
+            )
 
         # Save state
         self.save_state()
@@ -990,6 +966,8 @@ class Validator:
         compute_loss_perf_str,
         pull_data_perf_str,
     ):
+        """Logs the results of the step to the console and wandb (if enabled)."""
+
         # Build step log
         step_log = {
             "timestamp": time.time(),
@@ -1127,6 +1105,8 @@ class Validator:
             )
 
     async def run(self):
+        """Runs the validator loop, which continuously evaluates models and sets weights."""
+
         while True:
             try:
                 with self.metagraph_lock:
@@ -1140,7 +1120,7 @@ class Validator:
 
                 if not self.config.dont_set_weights and not self.config.offline:
                     await self.try_set_weights(ttl=60)
-                self.last_epoch = block.item()
+                self.last_epoch = block
                 self.epoch_step += 1
 
             except KeyboardInterrupt:
