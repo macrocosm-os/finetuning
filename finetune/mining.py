@@ -59,6 +59,7 @@ async def push(
     Args:
         model (PreTrainedModel): The model to push.
         repo (str): The repo to push to. Must be in format "namespace/name".
+        competition_id (CompetitionId): The competition the miner is participating in.
         wallet (bt.wallet): The wallet of the Miner uploading the model.
         retry_delay_secs (int): The number of seconds to wait before retrying to push the model to the chain.
         update_repo_visibility (bool): Whether to make the repo public after pushing the model.
@@ -117,17 +118,16 @@ async def push(
                 )
 
             bt.logging.success("Committed model to the chain.")
-            if update_repo_visibility:
-                bt.logging.debug("Making repo public.")
-                huggingface_hub.update_repo_visibility(repo, private=False)
-                bt.logging.success("Model set to public")
             break
         except Exception as e:
-            if update_repo_visibility:
-                huggingface_hub.update_repo_visibility(repo, private=False)
             bt.logging.error(f"Failed to advertise model on the chain: {e}")
             bt.logging.error(f"Retrying in {retry_delay_secs} seconds...")
             time.sleep(retry_delay_secs)
+
+        if update_repo_visibility:
+            bt.logging.debug("Making repo public.")
+            huggingface_hub.update_repo_visibility(repo, private=False)
+            bt.logging.success("Model set to public")
 
 
 def save(model: PreTrainedModel, model_dir: str):
