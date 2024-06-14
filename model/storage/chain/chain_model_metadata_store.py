@@ -6,6 +6,7 @@ from typing import Optional
 import bittensor as bt
 
 import constants
+from competitions.data import CompetitionId
 from model.data import ModelId, ModelMetadata
 from model.storage.model_metadata_store import ModelMetadataStore
 from utilities import utils
@@ -89,7 +90,11 @@ class ChainModelMetadataStore(ModelMetadataStore):
 async def test_store_model_metadata():
     """Verifies that the ChainModelMetadataStore can store data on the chain."""
     model_id = ModelId(
-        namespace="TestPath", name="TestModel", hash="TestHash1", commit="1.0"
+        namespace="TestPath",
+        name="TestModel",
+        competition_id=CompetitionId.SN9_MODEL,
+        hash="TestHash1",
+        commit="1.0",
     )
 
     # Use a different subnet that does not leverage chain storage to avoid conflicts.
@@ -121,7 +126,11 @@ async def test_store_model_metadata():
 async def test_retrieve_model_metadata():
     """Verifies that the ChainModelMetadataStore can retrieve data from the chain."""
     expected_model_id = ModelId(
-        namespace="TestPath", name="TestModel", hash="TestHash1", commit="1.0"
+        namespace="TestPath",
+        name="TestModel",
+        competition_id=CompetitionId.SN9_MODEL,
+        hash="TestHash1",
+        commit="1.0",
     )
 
     # Use a different subnet that does not leverage chain storage to avoid conflicts.
@@ -147,7 +156,11 @@ async def test_retrieve_model_metadata():
 async def test_roundtrip_model_metadata():
     """Verifies that the ChainModelMetadataStore can roundtrip data on the chain."""
     model_id = ModelId(
-        namespace="TestPath", name="TestModel", hash="TestHash1", commit="1.0"
+        namespace="TestPath",
+        name="TestModel",
+        competition_id=CompetitionId.SN9_MODEL,
+        hash="TestHash1",
+        commit="1.0",
     )
 
     # Use a different subnet that does not leverage chain storage to avoid conflicts.
