@@ -125,7 +125,8 @@ def generate_output(
     generation_config: transformers.GenerationConfig,
     device: str,
 ) -> typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]:
-    """_summary_
+    """
+    Generates the un-tokenized output for a model given a tokenized input and generation config.
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
@@ -140,10 +141,4 @@ def generate_output(
         model.to(device)
         model.eval()
         input_ids.to(device)
-        try:
-            return model.generate(
-                input_ids=input_ids, generation_config=generation_config
-            )
-        except Exception as e:
-            bt.logging.error(f"Exception occurred in output generation: {e}")
-            traceback.print_exc()
+        return model.generate(input_ids=input_ids, generation_config=generation_config)

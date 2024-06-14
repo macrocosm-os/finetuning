@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 import datetime as dt
+import random
 import time
 import typing
 
@@ -396,6 +397,11 @@ class CortexSubsetLoader(IterableDataset):
             )
             batches.append((torch.stack([torch.tensor(ids)]), len(prompt_ids)))
         return batches
+
+    def get_sample(self) -> typing.Tuple[str, str]:
+        return self.buffer[
+            random.randint(0, len(self.buffer))
+        ]
 
     def __iter__(self):
         return self.buffer.__iter__()
