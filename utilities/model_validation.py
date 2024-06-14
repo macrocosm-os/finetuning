@@ -55,17 +55,6 @@ def main():
         help="Number of most recent Cortex samples to eval against",
     )
     parser.add_argument(
-        "--attn_implementation",
-        default="flash_attention_2",
-        help="Implementation of attention to use",
-    )
-    parser.add_argument(
-        "--dtype",
-        type=str,
-        default="bfloat16",
-        help="datatype to load model in, either bfloat16 or float16",
-    )
-    parser.add_argument(
         "--competition_id",
         type=CompetitionId,
         default=CompetitionId.SN9_MODEL,
@@ -79,16 +68,10 @@ def main():
         print(constants.COMPETITION_SCHEDULE)
         return
 
-    competition = competition_utils.get_competition(
-        args.competition_id
-    )
+    competition = competition_utils.get_competition(args.competition_id)
     if competition is None:
         raise AssertionError("Competition for {args.competition_id} not found")
-    
-    competition.constraints.kwargs["torch_dtype"] = (
-        torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
-    )
-    competition.constraints.kwargs["attn_implementation"] = args.attn_implementation
+
     competition.constraints.kwargs["use_cache"] = True
 
     print(f"Loading model for competition {args.competition_id}")

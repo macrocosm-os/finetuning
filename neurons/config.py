@@ -17,14 +17,17 @@ def validator_config():
     )
     parser.add_argument(
         "--wandb_project",
+        default=constants.WANDB_PROJECT,
         help="Turn on wandb logging (and log to this project)",
     )
     parser.add_argument(
         "--wandb_entity",
+        default=constants.WANDB_ENTITY,
         help="wandb entity for logging (if --wandb_project set)",
     )
     parser.add_argument(
         "--wandb_max_steps_per_run",
+        default=50,
         type=int,
         help="number of steps before creating a new wandb run",
     )
@@ -62,11 +65,6 @@ def validator_config():
         help="Max number of uids that can be either pending eval or currently being evaluated.",
     )
     parser.add_argument(
-        "--dont_set_weights",
-        action="store_true",
-        help="Validator does not set weights on the chain.",
-    )
-    parser.add_argument(
         "--offline",
         action="store_true",
         help="Does not launch a wandb run, does not set weights, does not check that your key is registered.",
@@ -78,30 +76,6 @@ def validator_config():
     )
     parser.add_argument(
         "--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID."
-    )
-    parser.add_argument(
-        "--attn_implementation",
-        default="flash_attention_2",
-        help="Implementation of attention to use",
-    )
-    # TODO: Should we enforce bfloat16?
-    parser.add_argument(
-        "--dtype",
-        type=str,
-        default="bfloat16",
-        help="datatype to load model in, either bfloat16 or float16",
-    )
-    parser.add_argument(
-        "--grace_period_minutes",
-        type=int,
-        default=120,
-        help="Grace period before old submissions from a UID are deleted",
-    )
-    parser.add_argument(
-        "--update_delay_minutes",
-        type=int,
-        default=5,
-        help="Period between checking for new models from each UID",
     )
     parser.add_argument(
         "--do_sample",
