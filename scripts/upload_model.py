@@ -14,15 +14,13 @@ import asyncio
 import os
 
 import bittensor as bt
-import torch
 from dotenv import load_dotenv
 
 import constants
 import finetune as ft
 from competitions import utils as competition_utils
 from competitions.data import CompetitionId
-from model.storage.hugging_face.hugging_face_model_store import \
-    HuggingFaceModelStore
+from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from utilities import utils
 
 load_dotenv()  # take environment variables from .env.
@@ -84,21 +82,18 @@ async def main(config: bt.config):
     utils.assert_registered(wallet, metagraph)
     HuggingFaceModelStore.assert_access_token_exists()
 
-    # Create the actions object.
-    actions = ft.mining.Actions.create(config, wallet, subtensor)
-
     # Get current model parameters
     competition = competition_utils.get_competition(config.competition_id)
     if competition is None:
         raise RuntimeError(
-            f"Could not get competition for block {config.competition_id}"
+            f"Could not find current competition for id: {config.competition_id}"
         )
-    # TODO: Probably remove?
-    kwargs = {**competition.constraints.kwargs, **{"torch_dtype": torch.bfloat16}}
-    
+
     # Load the model from disk and push it to the chain and Hugging Face.
-    model = actions.load_local_model(config.load_model_dir, kwargs)
-    await actions.push(model, competition)
+    model = ft.mining.load_local_model(
+        config.load_model_dir, competition.constraints.kwargs
+    )
+    await ft.mining.push(model, config.hf_repo_id, competition, wallet)
 
 
 if __name__ == "__main__":

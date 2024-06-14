@@ -17,7 +17,10 @@ class TestUtils(unittest.TestCase):
                 sequence_length=4096,
                 allowed_architectures=[LlamaForCausalLM],
                 tokenizer="Xenova/gpt-4",
-                kwargs={"torch_dtype": "bfloat16"},
+                kwargs={
+                    "torch_dtype": "bfloat16",
+                    "attn_implementation": "flash_attention_2",
+                },
             ),
             reward_percentage=1.0,
         )

@@ -20,7 +20,9 @@ __spec_version__ = (
 )
 
 # The validator WANDB project.
+# TODO: Update these.
 WANDB_PROJECT = "finetuning-subnet"
+WANDB_ENTITY = ""
 # The uid for this subnet.
 SUBNET_UID = 6
 # The uid for the Cortex subnet.
@@ -52,7 +54,10 @@ COMPETITION_SCHEDULE: List[Competition] = [
             sequence_length=4096,
             allowed_architectures=[LlamaForCausalLM],
             tokenizer="Xenova/gpt-4",
-            kwargs={"torch_dtype": "bfloat16"},
+            kwargs={
+                "torch_dtype": "bfloat16",
+                "attn_implementation": "flash_attention_2",
+            },
         ),
         reward_percentage=1.0,
     )

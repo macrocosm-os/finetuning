@@ -677,10 +677,6 @@ class Validator:
 
         # Prepare evaluation.
         kwargs = competition.constraints.kwargs.copy()
-        kwargs["torch_dtype"] = (
-            torch.bfloat16 if self.config.dtype == "bfloat16" else torch.float16
-        )
-        kwargs["attn_implementation"] = self.config.attn_implementation
         kwargs["use_cache"] = True
 
         # Compute model losses on batches.
@@ -1010,7 +1006,7 @@ class Validator:
                     )
                     self.global_step += 1
 
-                if not self.config.dont_set_weights and not self.config.offline:
+                if not self.config.offline:
                     await self.try_set_weights(ttl=60)
                 self.last_epoch = block
                 self.epoch_step += 1
