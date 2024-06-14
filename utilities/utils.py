@@ -101,30 +101,29 @@ def get_hf_url(model_metadata: ModelMetadata) -> str:
     return f"https://huggingface.co/{model_metadata.id.namespace}/{model_metadata.id.name}/tree/{model_metadata.id.commit}"
 
 
-def run_in_subprocess(func: functools.partial, ttl: int) -> Any:
+def _wrapped_func(func: functools.partial, queue: multiprocessing.Queue):
+    try:
+        result = func()
+        queue.put(result)
+    except (Exception, BaseException) as e:
+        # Catch exceptions here to add them to the queue.
+        queue.put(e)
+
+
+def run_in_subprocess(func: functools.partial, ttl: int, mode="fork") -> Any:
     """Runs the provided function on a subprocess with 'ttl' seconds to complete.
 
     Args:
         func (functools.partial): Function to be run.
         ttl (int): How long to try for in seconds.
+        mode (str): Mode by which the multiprocessing context is obtained. Default to fork for pickling.
 
     Returns:
         Any: The value returned by 'func'
     """
-
-    def wrapped_func(func: functools.partial, queue: multiprocessing.Queue):
-        try:
-            result = func()
-            queue.put(result)
-        except (Exception, BaseException) as e:
-            # Catch exceptions here to add them to the queue.
-            queue.put(e)
-
-    # Use "fork" (the default on all POSIX except macOS), because pickling doesn't seem
-    # to work on "spawn".
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context(mode)
     queue = ctx.Queue()
-    process = ctx.Process(target=wrapped_func, args=[func, queue])
+    process = ctx.Process(target=_wrapped_func, args=[func, queue])
 
     process.start()
 

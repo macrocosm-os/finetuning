@@ -24,6 +24,7 @@ import typing
 import constants
 import traceback
 import bittensor as bt
+import transformers
 
 
 def iswin(loss_i, loss_j, block_i, block_j):
@@ -111,8 +112,38 @@ def compute_losses(
                 loss = outputs.loss.item()  # Extract scalar loss value
                 losses.append(loss)
             except Exception as e:
-                bt.logging.error(f"Exception occurred: {e}")
+                bt.logging.error(f"Exception occurred in loss computation: {e}")
                 traceback.print_exc()  # Print the stack trace
                 losses.append(math.inf)  # Use infinity to indicate failure
 
     return losses
+
+
+def generate_output(
+    model,
+    input_ids: torch.Tensor,
+    generation_config: transformers.GenerationConfig,
+    device: str,
+) -> typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]:
+    """_summary_
+
+    Args:
+        model (torch.nn.Module): The model for which losses are to be computed.
+        input_ids (torch.Tensor): Input tokens to generate a response to.
+        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+
+    Returns:
+        typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
+    """
+    with torch.inference_mode():
+        model.to(device)
+        model.eval()
+        input_ids.to(device)
+        try:
+            return model.generate(
+                input_ids=input_ids, generation_config=generation_config
+            )
+        except Exception as e:
+            bt.logging.error(f"Exception occurred in output generation: {e}")
+            traceback.print_exc()
