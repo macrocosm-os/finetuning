@@ -19,6 +19,7 @@
 import asyncio
 import copy
 import datetime as dt
+import functools
 import json
 import math
 import os
@@ -692,7 +693,7 @@ class Validator:
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
 
         for uid_i in uids:
-            losses: typing.List[float] = []
+            losses: typing.List[float] = [math.inf for _ in range(len(batches))]
             sample: typing.Optional[typing.Tuple[str, str]] = None
 
             # Check that the model is in the tracker.
@@ -718,14 +719,20 @@ class Validator:
                         )
 
                     with compute_loss_perf.sample():
-                        losses = ft.validation.compute_losses(
-                            model_i.pt_model, batches, device=self.config.device
+                        # Run each computation in a subprocess so that the GPU is reset between each model.
+                        losses = utils.run_in_subprocess(
+                            functools.partial(
+                                ft.validation.compute_losses,
+                                model_i.pt_model,
+                                batches,
+                                self.config.device,
+                            ),
+                            ttl=360,
+                            mode="spawn",
                         )
 
                     if self.config.do_sample:
-                        prompt, truth = cortex_data.buffer[
-                            random.randint(0, len(cortex_data.buffer))
-                        ]
+                        prompt, truth = cortex_data.get_sample()
                         conversation = [{"role": "user", "content": prompt}]
                         input_ids = tokenizer.apply_chat_template(
                             conversation,
@@ -733,19 +740,28 @@ class Validator:
                             return_tensors="pt",
                             max_length=competition.constraints.sequence_length,
                             add_generation_prompt=True,
-                        ).to(self.config.device)
-                        output = model_i.pt_model.generate(
-                            input_ids,
-                            generation_config=GenerationConfig(
-                                max_length=competition.constraints.sequence_length,
-                                do_sample=True,
-                                temperature=0.8,
-                                top_p=0.95,
-                                top_k=40,
-                                repetition_penalty=1.1,
-                                eos_token_id=tokenizer.eos_token_id,
-                                pad_token_id=tokenizer.eos_token_id,
+                        )
+                        generation_config = GenerationConfig(
+                            max_length=competition.constraints.sequence_length,
+                            do_sample=True,
+                            temperature=0.8,
+                            top_p=0.95,
+                            top_k=40,
+                            repetition_penalty=1.1,
+                            eos_token_id=tokenizer.eos_token_id,
+                            pad_token_id=tokenizer.eos_token_id,
+                        )
+                        # Run each generation in a subprocess so that the GPU is reset between each model.
+                        output = utils.run_in_subprocess(
+                            functools.partial(
+                                ft.validation.generate_output,
+                                model_i.pt_model,
+                                input_ids,
+                                generation_config,
+                                self.config.device,
                             ),
+                            ttl=360,
+                            mode="spawn",
                         )
                         response = tokenizer.decode(
                             output[0][len(input_ids[0]) :], skip_special_tokens=True
@@ -763,9 +779,7 @@ class Validator:
                     f"Unable to load the model metadata for {uid_i} or it belongs to another competition. Setting loss to infinity for this competition."
                 )
 
-            average_model_loss = (
-                sum(losses) / len(losses) if len(losses) > 0 else math.inf
-            )
+            average_model_loss = sum(losses) / len(losses)
             losses_per_uid[uid_i] = losses
             bt.logging.trace(
                 f"Computed model losses for uid: {uid_i} with average loss: {average_model_loss}"
@@ -872,11 +886,7 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
-                "average_loss": (
-                    sum(losses_per_uid[uid]) / len(losses_per_uid[uid])
-                    if len(losses_per_uid[uid]) > 0
-                    else math.inf
-                ),
+                "average_loss": (sum(losses_per_uid[uid]) / len(losses_per_uid[uid])),
                 "perplexity": (
                     float(
                         torch.exp(
@@ -887,8 +897,6 @@ class Validator:
                         .float()
                         .cpu()
                     )
-                    if len(losses_per_uid[uid]) > 0
-                    else math.inf
                 ),
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
