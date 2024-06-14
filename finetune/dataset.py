@@ -232,7 +232,7 @@ class CortexSubsetLoader(IterableDataset):
         cortex_type=constants.CORTEX_WANDB_TYPE,
         max_run_age: typing.Optional[dt.timedelta] = None,
         min_score: typing.Optional[float] = None,
-        validator_uids: typing.Optional[typing.Set[int]] = None,
+        validator_hotkeys: typing.Optional[typing.Set[str]] = None,
     ):
         api = wandb.Api(timeout=100)
 
@@ -240,10 +240,10 @@ class CortexSubsetLoader(IterableDataset):
         filters_or = []
         if running:
             filters_and.append({"state": "running"})
-        if validator_uids:
+        if validator_hotkeys:
             # 'IN' is not supported in the query language so we add a series of 'OR'.
-            for uid in validator_uids:
-                filters_or.append({"config.uid": uid})
+            for hotkey in validator_hotkeys:
+                filters_or.append({"config.hotkey": hotkey})
 
         # Compose the complete dictionary of filters for the wandb call.
         filters = {"$and": filters_and}
@@ -272,6 +272,26 @@ class CortexSubsetLoader(IterableDataset):
                 ):
                     run = runs[run_index]
                     self.selected_runs.append(run_index)
+
+                    # Validator hotkeys are used to ensure the authenticity of the run.
+                    if validator_hotkeys:
+                        hotkey = run.config["hotkey"]
+                        # First check that the hotkey is in fact a desired validator hotkey.
+                        if hotkey not in validator_hotkeys:
+                            bt.logging.debug(
+                                f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
+                            )
+                            continue
+
+                        signature = run.config["signature"]
+                        # Then verify the signature using the hotkey.
+                        if not bt.Keypair(ss58_address=hotkey).verify(
+                            run.id, bytes.fromhex(signature)
+                        ):
+                            bt.logging.debug(
+                                f"Failed Signature: {signature} is not valid for {run.id}."
+                            )
+                            continue
 
                     if latest:
                         last_step: int = run.lastHistoryStep

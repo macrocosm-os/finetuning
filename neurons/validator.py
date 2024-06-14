@@ -760,6 +760,9 @@ class Validator:
             vali_uids = utils.get_high_stake_validators(
                 self.cortex_metagraph, constants.CORTEX_MIN_STAKE
             )
+            vali_hotkeys = set(
+                [self.cortex_metagraph.hotkeys[uid] for uid in vali_uids]
+            )
 
         cortex_data = None
         pull_data_perf = PerfMonitor("Eval: Pull data")
@@ -772,7 +775,7 @@ class Validator:
                 steps=self.config.latest_cortex_steps,
                 page_size=self.config.latest_cortex_steps,
                 max_run_age=constants.CORTEX_MAX_AGE,
-                validator_uids=vali_uids,
+                validator_hotkeys=vali_hotkeys,
             )
 
         # Tokenize the data into batches for use in evaluation.
