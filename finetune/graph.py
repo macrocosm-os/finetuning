@@ -44,7 +44,7 @@ def best_uid(
         metagraph = subtensor.metagraph(constants.SUBNET_UID)
 
     if not metadata_store:
-        metadata_store = ChainModelMetadataStore(subtensor, constants.SUBNET_UID)
+        metadata_store = ChainModelMetadataStore(subtensor)
 
     incentives = [(metagraph.I[uid].item(), uid) for uid in range(metagraph.n)]
     # With a winner takes all model, we expect ~ 1 model per competition.
@@ -59,4 +59,3 @@ def best_uid(
             return miner_uid
 
     return None
-

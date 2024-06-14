@@ -70,7 +70,7 @@ async def push(
     bt.logging.info("Pushing model")
 
     if metadata_store is None:
-        metadata_store = ChainModelMetadataStore(bt.subtensor(), wallet)
+        metadata_store = ChainModelMetadataStore(bt.subtensor(), wallet=wallet)
 
     if remote_model_store is None:
         remote_model_store = HuggingFaceModelStore()
@@ -149,7 +149,7 @@ async def get_repo(
 ) -> str:
     """Returns a URL to the HuggingFace repo of the Miner with the given UID."""
     if metadata_store is None:
-        metadata_store = ChainModelMetadataStore(bt.subtensor(), constants.SUBNET_UID)
+        metadata_store = ChainModelMetadataStore(bt.subtensor())
     if metagraph is None:
         metagraph = bt.metagraph(netuid=constants.SUBNET_UID)
 
