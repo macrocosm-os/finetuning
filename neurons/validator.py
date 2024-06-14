@@ -775,11 +775,16 @@ class Validator:
                 validator_uids=vali_uids,
             )
 
+        # Tokenize the data into batches for use in evaluation.
+        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
         tokenizer = ft.model.load_tokenizer(
             competition, cache_dir=self.config.model_dir
         )
+        batches = cortex_data.tokenize(
+            tokenizer, competition.constraints.sequence_length
+        )
 
-        # Prepare evaluation
+        # Prepare evaluation.
         kwargs = competition.constraints.kwargs.copy()
         kwargs["torch_dtype"] = (
             torch.bfloat16 if self.config.dtype == "bfloat16" else torch.float16
@@ -820,10 +825,6 @@ class Validator:
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
-
-                    batches = cortex_data.tokenize(
-                        tokenizer, competition.constraints.sequence_length
-                    )
 
                     with compute_loss_perf.sample():
                         losses = ft.validation.compute_losses(
