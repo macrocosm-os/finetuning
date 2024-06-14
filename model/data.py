@@ -15,7 +15,7 @@ SHA256_BASE_64_LENGTH = 44
 MAX_COMPETITION_ID_LENGTH = 2
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ModelId:
     """Uniquely identifies a trained model"""
 

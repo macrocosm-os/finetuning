@@ -28,16 +28,13 @@ import bittensor as bt
 import torch
 import wandb
 from dotenv import load_dotenv
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from transformers import PreTrainedModel
 
 import constants
 import finetune as ft
 from competitions import utils as competition_utils
 from competitions.data import CompetitionId
-from finetune.mining import Actions
-from model.model_updater import ModelUpdater
-from model.storage.hugging_face.hugging_face_model_store import \
-    HuggingFaceModelStore
+from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from utilities import utils
 
 load_dotenv()  # take environment variables from .env.
@@ -73,6 +70,11 @@ def get_config():
         "--hf_repo_id",
         type=str,
         help="The hugging face repo id, which should include the org or user and repo name. E.g. jdoe/finetuned",
+    )
+    parser.add_argument(
+        "--update_repo_visibility",
+        action="store_false",
+        help="If true, the repo will be made public after uploading.",
     )
     parser.add_argument(
         "--avg_loss_upload_threshold",
@@ -172,9 +174,7 @@ def get_config():
 
 
 async def load_starting_model(
-    actions: Actions,
     config: bt.config,
-    subtensor: bt.subtensor,
     metagraph: bt.metagraph,
     kwargs: typing.Dict[typing.Any],
 ) -> PreTrainedModel:
@@ -182,23 +182,19 @@ async def load_starting_model(
 
     # Initialize the model based on the best on the network.
     if config.load_best:
-        # Get the best UID by incentive and load it.
-        best_uid = ft.graph.best_uid(config.competition_id, metagraph=metagraph, subtensor=subtensor)
-        if not best_uid:
-            raise RuntimeError(f"No miner found for competition {config.competition_id}")
-        model = await actions.load_remote_model(
-            best_uid, metagraph, config.model_dir
+        model = await ft.mining.load_best_model(
+            config.competition_id, config.model_dir, metagraph=metagraph
         )
         bt.logging.success(
-            f"Training with model from best uid: {best_uid}. Model={str(model)}"
+            f"Training with best model from competition: {config.competition_id}. Model={str(model)}"
         )
         return model
 
     # Initialize the model based on a passed uid.
     if config.load_uid is not None:
         # Sync the state from the passed uid.
-        model = await actions.load_remote_model(
-            config.load_uid, metagraph, config.model_dir
+        model = await ft.mining.load_remote_model(
+            config.load_uid, config.model_dir, metagraph=metagraph
         )
         bt.logging.success(
             f"Training with model from uid: {config.load_uid}. Model={str(model)}"
@@ -207,9 +203,7 @@ async def load_starting_model(
 
     # Check if we should load a model from a local directory.
     if config.load_model_dir:
-        model = actions.load_local_model(
-            config.load_model_dir, kwargs
-        )
+        model = ft.mining.load_local_model(config.load_model_dir, kwargs)
         bt.logging.success(f"Training with model from disk. Model={str(model)}")
         return model
 
@@ -232,9 +226,6 @@ async def main(config: bt.config):
         my_uid = utils.assert_registered(wallet, metagraph)
         HuggingFaceModelStore.assert_access_token_exists()
 
-    # Configure the stores and miner actions.
-    miner_actions = ft.mining.Actions.create(config, wallet, subtensor)
-
     # Create a unique run id for this run.
     run_id = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     model_dir = ft.mining.model_path(config.model_dir, run_id)
@@ -252,21 +243,20 @@ async def main(config: bt.config):
     competition = competition_utils.get_competition(config.competition_id)
     if not competition:
         raise RuntimeError(f"No competition found for {config.competition_id}")
-    competition.constraints.kwargs["torch_dtype"] = (
+    kwargs = competition.constraints.kwargs.copy()
+    kwargs["torch_dtype"] = (
         torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
     )
-    competition.constraints.kwargs["attn_implementation"] = config.attn_implementation
+    kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
     tokenizer = ft.model.load_tokenizer(competition, cache_dir=config.model_dir)
-    model = await load_starting_model(
-        miner_actions, config, subtensor, metagraph, competition.constraints.kwargs
-    )
+    model = await load_starting_model(config, metagraph, kwargs)
     model = model.train()
     model = model.to(config.device)
 
     bt.logging.success(f"Saving model to path: {model_dir}.")
-    miner_actions.save(model, tokenizer, model_dir)
+    ft.mining.save(model, model_dir)
 
     # Build optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=0.01)
@@ -323,7 +313,9 @@ async def main(config: bt.config):
                 steps=config.cortex_steps,
                 page_size=config.cortex_steps,
             )
-            batches = loader.tokenize(tokenizer, competition.constraints.sequence_length)
+            batches = loader.tokenize(
+                tokenizer, competition.constraints.sequence_length
+            )
 
             # Enumerate over the data loader
             n_batches = 0
@@ -373,7 +365,7 @@ async def main(config: bt.config):
 
                 # Save the model to your mining dir.
                 bt.logging.success(f"Saving model to path: {model_dir}.")
-                miner_actions.save(model, tokenizer, model_dir)
+                ft.mining.save(model, model_dir)
 
         bt.logging.success("Finished training")
         # Push the model to your run.
@@ -384,11 +376,15 @@ async def main(config: bt.config):
                 )
 
                 # First, reload the best model from the training run.
-                model_to_upload = miner_actions.load_local_model(
+                model_to_upload = ft.mining.load_local_model(
                     model_dir, competition.constraints.kwargs
                 )
-                await miner_actions.push(
-                    model_to_upload, competition
+                await ft.mining.push(
+                    model_to_upload,
+                    config.hf_repo_id,
+                    competition,
+                    wallet,
+                    update_repo_visibility=config.update_repo_visibility,
                 )
             else:
                 bt.logging.success(
