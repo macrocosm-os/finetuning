@@ -2,22 +2,32 @@ import asyncio
 import os
 import shutil
 import unittest
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 import bittensor as bt
+import torch
+from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedModel
 
-from competitions.data import CompetitionId
 import finetune as ft
+from competitions import utils as competition_utils
+from competitions.data import CompetitionId
 from model.data import Model, ModelId
 from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
 from tests.utils import assert_model_equality
-from transformers import PreTrainedModel, LlamaForCausalLM, LlamaConfig
 
 
 class TestMining(unittest.TestCase):
     def _get_model(self) -> PreTrainedModel:
         return LlamaForCausalLM(LlamaConfig(num_hidden_layers=2))
+
+    def _create_metagraph(self) -> bt.metagraph:
+        mock_metagraph = mock.MagicMock()
+        mock_metagraph.n = 3
+        mock_metagraph.I = torch.tensor([0, 5, 10], dtype=torch.float32)
+        mock_metagraph.hotkeys = [f"hotkey_{i}" for i in range(3)]
+        return mock_metagraph
 
     def setUp(self):
         self.remote_store = FakeRemoteModelStore()
@@ -134,6 +144,52 @@ class TestMining(unittest.TestCase):
             ),
             "https://huggingface.co/namespace/name/tree/commit",
         )
+
+    async def test_load_best_model(self):
+        metagraph = self._create_metagraph()
+
+        # Submit some metadata for the miners with incentive.
+        metadata_store = FakeModelMetadataStore()
+        miner_1_model_id = (
+            ModelId(
+                namespace="hf", name="model1", competition_id=CompetitionId.SN9_MODEL
+            ),
+        )
+        await metadata_store.store_model_metadata(
+            "hotkey_1",
+            miner_1_model_id,
+        )
+        await metadata_store.store_model_metadata(
+            "hotkey_2",
+            ModelId(
+                namespace="hf",
+                name="model2",
+                competition_id=CompetitionId.COMPETITION_2,
+            ),
+        )
+
+        # Upload the model for miner 1.
+        model_store = FakeRemoteModelStore()
+        model = self._get_model()
+        await model_store.upload_model(
+            Model(
+                id=miner_1_model_id,
+                pt_model=model,
+            ),
+            competition=competition_utils.get_competition(CompetitionId.SN9_MODEL),
+        )
+
+        # Verify that miner 1's model is loaded.
+        with TemporaryDirectory() as model_dir:
+            loaded_model = await ft.mining.load_best_model(
+                model_dir,
+                # Choose the competition that doesn't have the most incentive.
+                competition_id=CompetitionId.SN9_MODEL,
+                metagraph=metagraph,
+                metadata_store=metadata_store,
+                remote_model_store=model_store,
+            )
+            self.assertEqual(loaded_model, model)
 
 
 if __name__ == "__main__":

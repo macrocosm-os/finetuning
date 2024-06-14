@@ -214,7 +214,22 @@ async def load_remote_model(
     return model.pt_model
 
 
-async def load_best_model(download_dir: str, competition_id: CompetitionId):
+async def load_best_model(
+    download_dir: str,
+    competition_id: CompetitionId,
+    metagraph: Optional[bt.metagraph] = None,
+    metadata_store: Optional[ModelMetadataStore] = None,
+    remote_model_store: Optional[RemoteModelStore] = None,
+) -> PreTrainedModel:
     """Loads the model from the best performing miner to download_dir"""
     best_uid = ft.graph.best_uid(competition_id=competition_id)
-    return await load_remote_model(best_uid, download_dir, competition_id)
+    if best_uid is None:
+        raise ValueError(f"No best models found for {competition_id}")
+
+    return await load_remote_model(
+        best_uid,
+        download_dir,
+        metagraph,
+        metadata_store,
+        remote_model_store,
+    )
