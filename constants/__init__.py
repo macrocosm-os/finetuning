@@ -3,8 +3,15 @@ import math
 from pathlib import Path
 from typing import List
 
-from transformers import LlamaForCausalLM
-
+from transformers import (
+    MistralForCausalLM,
+    LlamaForCausalLM,
+    BartForCausalLM,
+    FalconForCausalLM,
+    GPTNeoXForCausalLM,
+    PhiForCausalLM,
+    GemmaForCausalLM,
+)
 from competitions.data import CompetitionId, Competition, ModelConstraints
 
 # ---------------------------------
@@ -52,7 +59,15 @@ COMPETITION_SCHEDULE: List[Competition] = [
         constraints=ModelConstraints(
             max_model_parameter_size=6_900_000_000,
             sequence_length=4096,
-            allowed_architectures=[LlamaForCausalLM],
+            allowed_architectures=[
+                MistralForCausalLM,
+                LlamaForCausalLM,
+                BartForCausalLM,
+                FalconForCausalLM,
+                GPTNeoXForCausalLM,
+                PhiForCausalLM,
+                GemmaForCausalLM,
+            ],
             tokenizer="Xenova/gpt-4",
             kwargs={
                 "torch_dtype": "bfloat16",
