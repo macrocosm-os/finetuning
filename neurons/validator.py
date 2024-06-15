@@ -161,23 +161,23 @@ class Validator:
 
         # Check if the version has changed since we last restarted.
         previous_version = utils.get_version(self.version_filepath)
-        utils.save_version(self.version_filepath, constants.__spec_version__)
+        utils.save_version(self.version_filepath, constants.VALIDATOR_STATE_VERSION)
 
         # If this is an upgrade, blow away state so that everything is re-evaluated.
-        if previous_version != constants.__spec_version__:
+        if previous_version != constants.VALIDATOR_STATE_VERSION:
             bt.logging.info(
-                f"Validator updated. Previous version={previous_version}. Current version={constants.__spec_version__}"
+                f"Validator updated. Previous version={previous_version}. Current version={constants.VALIDATOR_STATE_VERSION}"
             )
             if os.path.exists(self.uids_filepath):
                 bt.logging.info(
                     f"Because the validator updated, deleting {self.uids_filepath} so everything is re-evaluated."
                 )
                 os.remove(self.uids_filepath)
-            if os.path.exists(self.tracker_filepath):
+            if os.path.exists(self.model_tracker_filepath):
                 bt.logging.info(
-                    f"Because the validator updated, deleting {self.tracker_filepath} so everything is re-evaluated."
+                    f"Because the validator updated, deleting {self.model_tracker_filepath} so everything is re-evaluated."
                 )
-                os.remove(self.tracker_filepath)
+                os.remove(self.model_tracker_filepath)
 
         # Initialize the model tracker.
         if not os.path.exists(self.model_tracker_filepath):
@@ -283,7 +283,7 @@ class Validator:
                 "uid": self.uid,
                 "hotkey": self.wallet.hotkey.ss58_address,
                 "run_name": run_id,
-                "version": ft.__version__,
+                "version": constants.__version__,
                 "type": "validator",
             },
             allow_val_change=True,

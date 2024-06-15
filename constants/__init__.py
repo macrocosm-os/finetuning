@@ -11,13 +11,17 @@ from competitions.data import CompetitionId, Competition, ModelConstraints
 # Project Constants.
 # ---------------------------------
 
-__version__ = "0.2.7"
+__version__ = "1.0.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
     + (10 * int(version_split[1]))
     + (1 * int(version_split[2]))
 )
+
+# The version of the validator state. When incremented, causes validators
+# to start from a fresh state.
+VALIDATOR_STATE_VERSION = 1
 
 # The validator WANDB project.
 # TODO: Update these.
