@@ -32,8 +32,8 @@ VALIDATOR_STATE_VERSION = 1
 
 # The validator WANDB project.
 # TODO: Update these.
-WANDB_PROJECT = "finetuning-subnet"
-WANDB_ENTITY = ""
+WANDB_PROJECT = "finetuning"
+WANDB_ENTITY = "rusticluftig"
 # The uid for this subnet.
 SUBNET_UID = 6
 # The uid for the Cortex subnet.

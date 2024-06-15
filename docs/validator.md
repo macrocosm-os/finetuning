@@ -1,16 +1,21 @@
 # Validator 
 
-Validators download the models from 🤗 Hugging Face for each miner based on the Bittensor chain metadata and continuously evaluate them, setting weights based on the performance of each model against the data generated on the [Cortex.t subnet](https://taostats.io/subnets/netuid-18/).
+Validators download the models from 🤗 Hugging Face for each miner based on the Bittensor chain metadata and continuously evaluate them against, setting weights based on the performance of each model against the competition dataset. They also log results to [wandb](https://wandb.ai/rusticluftig/pretraining).
 
 You can view the entire validation system by reading the code in `neurons/validator.py`. Pseudocode for the validation system is as follows:
 ```python
     weights = zeros(256)
     while True:
+        # Choose the next competition in the schedule to evaluate.
+        competition = constants.COMPETITION_SCHEDULE[
+            self.global_step % len(constants.COMPETITION_SCHEDULE)
+        ]
+
         # Fetch random sample of batches to evaluate models on
-        batches = get_random_sample_of_batches_from_coretex_subnet()
+        batches = get_batches_for_competition(competition.id)
         
         # Fetch and or update models.
-        models = get_and_update_models_from_miners()
+        models = get_and_update_models_from_miners_for_competition(competition.id)
 
         # Compute losses for each batch and each model
         model_losses = {}
@@ -31,14 +36,19 @@ You can view the entire validation system by reading the code in `neurons/valida
         # End epoch.
         # Weights are computed based on the ratio of wins a model attains during the epoch.
         for model_i in models:
-            weights[ model_i ] += model_wins[ model_i ] / sum( model_wins.values() )
-        weights = softmax( weights / temperature, dim=0 )
+            competition_weights[ model_i ] += model_wins[ model_i ] / sum( model_wins.values() )
+        
+        # Track weights per competition.
+        competition_tracker.record_competition_weights(
+            competition.id, competition_weights
+        )
 
-        # Set weights on the chain.
-        set_weights( weight )
+        # Set weights on the chain based on relative weights for each competition.
+        subnet_weights = competition_tracker.get_subnet_weights()
+        set_weights( subnet_weights )
 ```
 
-The behaviour of `iswin( loss_a, loss_b, block_a, block_b)` function intentionally skews the win function to reward models which have been hosted earlier such that newer models are only better than others iff their loss is `epsilon` percent lower accoring to the following function. Currently `epsilon` is set to 1% and is a hyper parameter of the mechanism
+The behaviour of `iswin( loss_a, loss_b, block_a, block_b)` function intentionally skews the win function to reward models which have been hosted earlier such that newer models are only better than others iff their loss is `epsilon` percent lower accoring to the following function. Currently `epsilon` is set to 0.5% and is a hyper parameter of the mechanism
 
 ```python
 def iswin( loss_a, loss_b, block_a, block_b ):
@@ -47,35 +57,40 @@ def iswin( loss_a, loss_b, block_a, block_b ):
     return loss_a < loss_b
 ```
 
-It is important to note that this affects the game theoretics of the incentive landscape since miners should only update their model (thus updating their timestamp to a newer date) if they have achieved an `epsilon` better loss on average on the [Cortex.t subnet](https://taostats.io/subnets/netuid-18/) dataset than their previous model. This undermines the obvious optimal strategy for miners to copy the publicly available models from other miners. They **can** and should copy other miners, but they will always obtain fewer wins compared to them until they also decrease their loss by `epsilon`.
+It is important to note that this affects the game theoretics of the incentive landscape since miners should only update their model (thus updating their timestamp to a newer date) if they have achieved an `epsilon` better loss on average on the competition dataset than their previous model. This undermines the obvious optimal strategy for miners to copy the publicly available models from other miners. They **can** and should copy other miners, but they will always obtain fewer wins compared to them until they also decrease their loss by `epsilon`.
 
 # System Requirements
 
-Validators will need enough disk space to store the model of every miner in the subnet. Each model (As of Jan 1st, 2024) is limited to 15 GB and 7B parameters, and the validator has cleanup logic to remove old models. It is recommended to have at least 3 TB of disk space.
+Validators will need enough disk space to store the model of every miner in the subnet. Each model (As of Jun 15th, 2024) is limited to 15 GB and 7B parameters, and the validator has cleanup logic to remove old models. It is recommended to have at least 3 TB of disk space.
 
-Validators will need enough processing power to evaluate their model. As of Jan 1st, 2024 it is required to have a GPU with atleast 24 GB of VRAM.
+Validators will need enough processing power to evaluate their model. As of Jun 15th, 2024 it is required to have a GPU that supports [flash attention 2](https://github.com/Dao-AILab/flash-attention) with atleast 48 GB of VRAM and at least 38 TFLOPs for half precision (bfloat 16) operations.
 
 # Getting Started
 
 ## Prerequisites
 
-1. Clone the repo
+1. Get a Wandb Account:
+Miners and validators use Wandb to download data from [subnet 18](https://github.com/corcel-api/cortex.t/). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
+
+By default this will also be used to host validator logs for this subnet [here](https://wandb.ai/rusticluftig/pretraining).
+
+2. Clone the repo
 
 ```shell
-git clone https://github.com/NousResearch/finetuning-subnet.git
+git clone https://github.com/TODO.git
 ```
 
-2. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
+3. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
 
-3. Install the requirements. From your virtual environment, run
+4. Install the requirements. From your virtual environment, run
 ```shell
-cd finetuning-subnet
+cd finetuning
 python -m pip install -e .
 ```
 
-4. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
+5. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
 
-5. (Optional) Run a Subtensor instance:
+6. (Optional) Run a Subtensor instance:
 
 Your node will run better if you are connecting to a local Bittensor chain entrypoint node rather than using Opentensor's. 
 We recommend running a local node as follows and passing the ```--subtensor.network local``` flag to your running miners/validators. 
@@ -89,6 +104,15 @@ docker compose up --detach
 
 # Running the Validator
 
+## Env File
+
+The Validator requires a .env file with your Wandb access token in order to download evaluation data from [subnet 18](https://github.com/corcel-api/cortex.t/) and upload logs to this subnets wandb.
+
+Create a `.env` file in the `finetuning` directory and add the following to it:
+```shell
+WANDB_ACCESS_TOKEN="YOUR_WANDB_ACCESS_TOKEN"
+```
+
 ## With auto-updates
 
 We highly recommend running the validator with auto-updates. This will help ensure your validator is always running the latest release, helping to maintain a high vtrust.
@@ -98,7 +122,7 @@ Prerequisites:
 2. Make sure your virtual environment is activated. This is important because the auto-updater will automatically update the package dependencies with pip.
 3. Make sure you're using the main branch: `git checkout main`.
 
-From the finetuning-subnet folder:
+From the finetuning folder:
 ```shell
 pm2 start --name finetune-vali-updater --interpreter python scripts/start_validator.py -- --pm2_name finetune-vali --wallet.name coldkey --wallet.hotkey hotkey [other vali flags]
 ```
@@ -109,7 +133,7 @@ This will start a process called `finetune-vali-updater`. This process periodica
 
 If you'd prefer to manage your own validator updates...
 
-From the `finetuning-subnet` folder:
+From the `finetuning` folder:
 ```shell
 pm2 start python -- ./neurons/validator.py --wallet.name coldkey --wallet.hotkey hotkey
 ```
@@ -119,7 +143,6 @@ pm2 start python -- ./neurons/validator.py --wallet.name coldkey --wallet.hotkey
 ## Flags
 
 The Validator offers some flags to customize properties, such as the device to evaluate on and the number of models to evaluate each step.
-Of particular note is the `--attn_implementation` flag, which specifies the attention implementation. Those using newer CUDA-capable GPUs, installing [Flash Attention](https://github.com/Dao-AILab/flash-attention) with `pip install flash-attn` and passing `--attn_implementation flash_attention_2` will speed up model evaluation and reduce GPU memory usage.
 
 You can view the full set of flags by running
 ```shell
