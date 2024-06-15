@@ -53,8 +53,6 @@ class DiskModelStore(LocalModelStore):
             revision=model_id.commit,
             local_files_only=True,
             use_safetensors=True,
-            # TODO: Enforce bfloat 16?
-            # Flash attention?
             **kwargs,
         )
 

@@ -32,10 +32,13 @@ class TestData(unittest.TestCase):
         roundtrip_model_id = ModelId.from_compressed_str(model_id.to_compressed_str())
 
         self.assertEqual(model_id, roundtrip_model_id)
-        
+
     def test_model_id_from_compressed_string_invalid_competition(self):
         """Verifies a model_id with an invalid id raises an assertion."""
-        self.assertRaises(BaseException, lambda: ModelId.from_compressed_str("namespace:name:commit:hash:12"))
+        self.assertRaises(
+            BaseException,
+            lambda: ModelId.from_compressed_str("namespace:name:commit:hash:12"),
+        )
 
 
 if __name__ == "__main__":

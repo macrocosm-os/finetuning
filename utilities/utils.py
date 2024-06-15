@@ -1,7 +1,9 @@
 import concurrent
+from datetime import datetime, timedelta
 import functools
 import multiprocessing
 import os
+import random
 from typing import Any, List, Optional, Set, Tuple
 
 import bittensor as bt
@@ -190,3 +192,28 @@ def save_version(filepath: str, version: int):
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, "w") as f:
         f.write(str(version))
+
+
+def random_date(start: datetime, end: datetime, seed: int = None) -> datetime:
+    """Return a random datetime between two datetimes.
+
+    Args:
+        start (datetime): Start of the range, inclusive.
+        end (datetime): End of the range, inclusive.
+        seed (int): Optional Seed for the random number generator.
+    """
+
+    if start.tzinfo != end.tzinfo:
+        raise ValueError("Start and end must have the same timezone.")
+
+    if start >= end:
+        raise ValueError("Start must be before end.")
+
+    if seed:
+        random.seed(seed)
+
+    # Choose a random point between the 2 datetimes.
+    random_seconds = random.randint(0, int((end - start).total_seconds()))
+
+    # Add the random seconds to the start time
+    return start + timedelta(seconds=random_seconds)

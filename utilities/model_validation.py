@@ -89,8 +89,7 @@ def main():
 
     with pull_data_perf.sample():
         cortex_data = CortexSubsetLoader(
-            latest=True,
-            running=True,
+            use_latest_data=True,
             random_seed=random.randint(0, sys.maxsize),
             max_samples=args.latest_cortex_samples,
             steps=args.latest_cortex_steps,

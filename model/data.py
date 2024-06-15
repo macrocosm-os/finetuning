@@ -48,14 +48,13 @@ class ModelId:
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.namespace}:{self.name}:{self.commit}:{self.secure_hash}:{self.competition_id.value}"
+        return f"{self.namespace}:{self.name}:{self.commit}:{self.secure_hash}:{self.competition_id}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ModelId"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        competition_id = int(tokens[4])
-        assert competition_id in [c.value for c in CompetitionId]
+        competition_id = CompetitionId(int(tokens[4]))
 
         return cls(
             namespace=tokens[0],

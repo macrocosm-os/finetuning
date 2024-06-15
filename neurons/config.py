@@ -2,7 +2,9 @@ import argparse
 import os
 
 import bittensor as bt
+import torch
 
+from competitions.data import CompetitionId
 import constants
 
 
@@ -55,13 +57,10 @@ def validator_config():
         default=5,
         help="Number of uids to keep after evaluating a competition.",
     )
-    # TODO: Consider having a per competition limit instead of sharing across competitions.
-    # As it is now, with 2 competitions, each will have 5 reserved slots but one could have all 20 new slots.
-    # TODO: Also consider starting at 30 and reducing by sample min per competition. Less 'correct' at 1 or 6+.
     parser.add_argument(
         "--updated_models_limit",
         type=int,
-        default=15 * len(constants.COMPETITION_SCHEDULE),
+        default=15,
         help="Max number of uids that can be either pending eval or currently being evaluated.",
     )
     parser.add_argument(
@@ -88,4 +87,129 @@ def validator_config():
     bt.wallet.add_args(parser)
     bt.axon.add_args(parser)
     config = bt.config(parser)
+    return config
+
+
+def miner_config():
+    """
+    Returns the miner configuration.
+    """
+
+    # Initialize an argument parser
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Does not launch a wandb run, does not send model to wandb, does not check if registered",
+    )
+    parser.add_argument(
+        "--wandb_project", type=str, help="The wandb project to log to."
+    )
+    parser.add_argument("--wandb_entity", type=str, help="The wandb entity to log to.")
+    parser.add_argument(
+        "--hf_repo_id",
+        type=str,
+        help="The hugging face repo id, which should include the org or user and repo name. E.g. jdoe/finetuned",
+    )
+    parser.add_argument(
+        "--update_repo_visibility",
+        action="store_false",
+        help="If true, the repo will be made public after uploading.",
+    )
+    parser.add_argument(
+        "--avg_loss_upload_threshold",
+        type=float,
+        default=0,  # Default to never uploading.
+        help="The threshold for avg_loss the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
+    )
+    parser.add_argument(
+        "--model_dir",
+        default=os.path.join(constants.ROOT_DIR, "local-models/"),
+        help="Where to download/save models for training",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="The device on which to run. cpu or cuda",
+    )
+    parser.add_argument(
+        "--load_best",
+        action="store_true",
+        help="If set, the miner loads the best model from wandb to train off.",
+    )
+    parser.add_argument(
+        "--load_uid",
+        type=int,
+        default=None,
+        help="If passed loads the model under the specified uid.",
+    )
+    parser.add_argument(
+        "--load_model_dir",
+        type=str,
+        default=None,
+        help="If provided, loads a previously trained HF model from the specified directory",
+    )
+    parser.add_argument(
+        "--num_epochs",
+        type=int,
+        default=-1,
+        help="Number of training epochs (-1 is infinite)",
+    )
+    parser.add_argument("--lr", type=float, default=0.00001, help="Learning rate.")
+    parser.add_argument(
+        "--accumulation_steps",
+        type=int,
+        default=32,
+        help="The number of training accumulation steps.",
+    )
+    parser.add_argument(
+        "--cortex_steps",
+        type=int,
+        default=5,
+        help="Number of Cortex steps to sample data from",
+    )
+    parser.add_argument(
+        "--cortex_samples_per_epoch",
+        type=int,
+        default=4096,
+        help="Number of samples trained on per epoch",
+    )
+    parser.add_argument(
+        "--attn_implementation",
+        default="flash_attention_2",
+        help="Implementation of attention to use",
+    )
+    parser.add_argument(
+        "--netuid",
+        type=str,
+        default=constants.SUBNET_UID,
+        help="The subnet UID.",
+    )
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="bfloat16",
+        help="datatype to load model in, either bfloat16 or float16",
+    )
+    parser.add_argument(
+        "--competition_id",
+        type=CompetitionId,
+        default=CompetitionId.SN9_MODEL,
+        choices=[CompetitionId.SN9_MODEL],
+        help="competition to mine for (use --list-competitions to get all competitions)",
+    )
+    parser.add_argument(
+        "--list_competitions", action="store_true", help="Print out all competitions"
+    )
+
+    # Include wallet and logging arguments from bittensor
+    bt.wallet.add_args(parser)
+    bt.subtensor.add_args(parser)
+    bt.logging.add_args(parser)
+
+    # Parse the arguments and create a configuration namespace
+    config = bt.config(parser)
+
     return config

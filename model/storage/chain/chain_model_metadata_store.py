@@ -18,20 +18,19 @@ class ChainModelMetadataStore(ModelMetadataStore):
     def __init__(
         self,
         subtensor: bt.subtensor,
-        subnet_uid: int = constants.SUBNET_UID,
+        # Wallet is only needed to write to the chain, not to read.
         wallet: Optional[bt.wallet] = None,
+        subnet_uid: int = constants.SUBNET_UID,
     ):
         self.subtensor = subtensor
-        self.wallet = (
-            wallet  # Wallet is only needed to write to the chain, not to read.
-        )
+        self.wallet = wallet
         self.subnet_uid = subnet_uid
 
     async def store_model_metadata(
         self,
         hotkey: str,
         model_id: ModelId,
-        wait_for_inclusion: bool = False,
+        wait_for_inclusion: bool = True,
         wait_for_finalization: bool = True,
     ):
         """Stores model metadata on this subnet for a specific wallet."""
@@ -40,9 +39,14 @@ class ChainModelMetadataStore(ModelMetadataStore):
 
         data = model_id.to_compressed_str()
 
+        bt.logging.warning(
+            f"Storing model metadata on chain for hotkey {self.wallet.hotkey}."
+        )
+
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
         partial = functools.partial(
             bt.extrinsics.serving.publish_metadata,
+            self.subtensor,
             self.wallet,
             self.subnet_uid,
             f"Raw{len(data)}",

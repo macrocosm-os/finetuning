@@ -103,7 +103,6 @@ class ModelUpdater:
                 f"Sync for hotkey {hotkey} failed. Hash of content downloaded from hugging face does not match chain metadata. {metadata}"
             )
 
-        # TODO: Is this the right place to check the model against the competition constraints? Or should it be in the validator eval loop?
         if not ModelUpdater.verify_model_satisfies_parameters(model):
             raise ValueError(
                 f"Sync for hotkey {hotkey} failed, model does not satisfy parameters for competition {competition.id}"

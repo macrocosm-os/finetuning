@@ -11,7 +11,7 @@ class ModelMetadataStore(abc.ABC):
         self,
         hotkey: str,
         model_id: ModelId,
-        wait_for_inclusion: bool = False,
+        wait_for_inclusion: bool = True,
         wait_for_finalization: bool = True,
     ):
         """Stores model metadata on this subnet for a specific miner."""

@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 from typing import List
 
+import torch
 from transformers import (
     MistralForCausalLM,
     LlamaForCausalLM,
@@ -74,7 +75,7 @@ COMPETITION_SCHEDULE: List[Competition] = [
             ],
             tokenizer="Xenova/gpt-4",
             kwargs={
-                "torch_dtype": "bfloat16",
+                "torch_dtype": torch.bfloat16,
                 "attn_implementation": "flash_attention_2",
             },
         ),
