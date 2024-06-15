@@ -8,9 +8,9 @@ The communication between a miner and a validator happens asynchronously chain a
 
 # System Requirements
 
-Miners will need enough disk space to store their model as they work on. Each uploaded model (As of Jan 1st, 2024) may not be more than 15 GB. It is recommended to have at least 25 GB of disk space.
+Miners will need enough disk space to store their model as they work on. Each uploaded model (As of Jun 15th, 2024) may not be more than 15 GB. It is recommended to have at least 50 GB of disk space.
 
-Miners will need enough processing power to train their model. The device the model is trained on is recommended to be a large GPU with atleast 48 GB of VRAM.
+Miners will need enough processing power to train their model. The device the model is trained on is recommended to be a large GPU with atleast 48 GB of VRAM. To be competitive you will likely need clusters of GPUs.
 
 # Getting started
 
@@ -18,27 +18,30 @@ Miners will need enough processing power to train their model. The device the mo
 
 1. Get a Hugging Face Account: 
 
-Miner and validators use 🤗 Hugging Face in order to share model state information. Miners will be uploading to 🤗 Hugging Face and therefore must attain a account from [🤗 Hugging Face](https://huggingface.co/) along with a user access token which can be found by following the instructions [here](https://huggingface.co/docs/hub/security-tokens).
+Miners and validators use 🤗 Hugging Face in order to share model state information. Miners will be uploading to 🤗 Hugging Face and therefore must attain a account from [🤗 Hugging Face](https://huggingface.co/) along with a user access token which can be found by following the instructions [here](https://huggingface.co/docs/hub/security-tokens).
 
 Make sure that any repo you create for uploading is public so that the validators can download from it for evaluation.
 
-2. Clone the repo
+2. Get a Wandb Account:
+Miners and validators use Wandb to download data from [subnet 18](https://github.com/corcel-api/cortex.t/). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
+
+3. Clone the repo
 
 ```shell
-git clone https://github.com/NousResearch/finetuning-subnet.git
+git clone https://github.com/TODO.git
 ```
 
-3. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
+4. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
 
-4. Install the requirements. From your virtual environment, run
+5. Install the requirements. From your virtual environment, run
 ```shell
-cd finetuning-subnet
+cd finetuning
 python -m pip install -e .
 ```
 
-5. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
+6. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
 
-6. (Optional) Run a Subtensor instance:
+7. (Optional) Run a Subtensor instance:
 
 Your node will run better if you are connecting to a local Bittensor chain entrypoint node rather than using Opentensor's. 
 We recommend running a local node as follows and passing the ```--subtensor.network local``` flag to your running miners/validators. 
@@ -52,17 +55,18 @@ docker compose up --detach
 
 # Running the Miner
 
-The mining script uploads a model to 🤗 Hugging Face which will be evaluated by validators.
+The mining script downloads data from wandb to train and uploads the final model to 🤗 Hugging Face which will be evaluated by validators.
 
-See [Validator Psuedocode](docs/validator.md#validator) for more information on how they the evaluation occurs.
+See [Validator Psuedocode](docs/validator.md#validator) for more information on how the evaluation occurs.
 
 ## Env File
 
-The Miner requires a .env file with your 🤗 Hugging Face access token in order to upload models.
+The Miner requires a .env file with your 🤗 Hugging Face access token in order to upload models and a Wandb access token in order to download training data from [subnet 18](https://github.com/corcel-api/cortex.t/).
 
-Create a `.env` file in the `finetuning-subnet` directory and add the following to it:
+Create a `.env` file in the `finetuning` directory and add the following to it:
 ```shell
 HF_ACCESS_TOKEN="YOUR_HF_ACCESS_TOKEN"
+WANDB_ACCESS_TOKEN="YOUR_WANDB_ACCESS_TOKEN"
 ```
 
 ## Starting the Miner
@@ -122,16 +126,14 @@ python scripts/upload_model.py --load_model_dir <path to model> --hf_repo_id my-
 
 ## Running a custom Miner
 
-As of March 1st, 2024 the subnet works with mistral models supported by [LlamaForCausalLM](https://huggingface.co/docs/transformers/v4.37.2/en/model_doc/llama2#transformers.LlamaForCausalLM) or the Gemma model subject to the following constraints:
-1. Has less than 7B parameters.
-2. Total size of the repo is less than 15 Gigabytes.
-3. 2K max token sequence length.
-4. Utilizes the default chat format of the model selected.
+As of Jun 15th, 2024 for the current competition the subnet works with models matching the [subnet 9](https://github.com/macrocosm-os/pretraining/) outputs and evaluates them against synthetic data from [subnet 18](https://github.com/corcel-api/cortex.t/).
+
+The specific requirements for each competition can be found [here](./constants/__init__.py).
 
 The `finetune/mining.py` file has several methods that you may find useful. Example below.
-
+TODO - Update below to match.
 ```python
-import pretrainas ft
+import pretrain as ft
 import bittensor as bt
 from transformers import PreTrainedModel
 
