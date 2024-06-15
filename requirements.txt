@@ -1,4 +1,4 @@
-bittensor==7.2.0
+bittensor==6.9.3
 flash-attn==2.5.8
 huggingface_hub
 numpy
