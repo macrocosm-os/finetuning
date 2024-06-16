@@ -85,37 +85,57 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
+        # The subtensor for the dataset subnets should always point to the prod chain.
+        self.dataset_subtensor = bt.subtensor() 
         self.dendrite = bt.dendrite(wallet=self.wallet)
         torch.backends.cudnn.benchmark = True
 
-        # Setup metagraph syncer
-        self.metagraph_syncer = MetagraphSyncer(
+        # Setup metagraph syncer for the subnet based on config.
+        self.subnet_metagraph_syncer = MetagraphSyncer(
             self.subtensor,
             config={
-                constants.SUBNET_UID: dt.timedelta(minutes=20).total_seconds(),
-                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
+                self.config.netuid: dt.timedelta(minutes=20).total_seconds(),
             },
         )
         # Perform an initial sync of all tracked metagraphs.
-        self.metagraph_syncer.do_initial_sync()
-        self.metagraph_syncer.start()
+        self.subnet_metagraph_syncer.do_initial_sync()
+        self.subnet_metagraph_syncer.start()
+
+        # Setup metagraph syncer for dataset subnets that always point to prod chain + subnet uids.
+        self.dataset_metagraph_syncer = MetagraphSyncer(
+            self.dataset_subtensor,
+            config={
+                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
+            },
+        )
+
+        self.dataset_metagraph_syncer.do_initial_sync()
+        self.dataset_metagraph_syncer.start()
 
         # Create metagraph locks to avoid cross thread access issues in the update loop.
         self.metagraph_lock = threading.RLock()
         self.cortex_metagraph_lock = threading.RLock()
 
-        self.metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
-            constants.SUBNET_UID
+        # Get initial metagraphs.
+        self.metagraph: bt.metagraph = self.subnet_metagraph_syncer.get_metagraph(
+            self.config.netuid
         )
-        self.cortex_metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
-            constants.CORTEX_SUBNET_UID
+        self.cortex_metagraph: bt.metagraph = (
+            self.dataset_metagraph_syncer.get_metagraph(constants.CORTEX_SUBNET_UID)
         )
-        self.metagraph_syncer.register_listener(
-            self._on_metagraph_updated,
-            netuids=[constants.SUBNET_UID, constants.CORTEX_SUBNET_UID],
-        )
+
         bt.logging.info(f"Metagraph: {self.metagraph}.")
         bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
+
+        # Register a listener for the subnet and dataset metagraph syncers.
+        self.subnet_metagraph_syncer.register_listener(
+            self._on_subnet_metagraph_updated,
+            netuids=[self.config.netuid],
+        )
+        self.dataset_metagraph_syncer.register_listener(
+            self._on_dataset_metagraph_updated,
+            netuids=[constants.CORTEX_SUBNET_UID],
+        )
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -558,16 +578,26 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
-    def _on_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
-        """Processes an update to the metagraph"""
-        if netuid == constants.SUBNET_UID:
+    def _on_subnet_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
+        """Processes an update to the metagraph for the subnet."""
+        if netuid == self.config.netuid:
             with self.metagraph_lock:
                 self.metagraph = copy.deepcopy(metagraph)
                 self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+        else:
+            bt.logging.error(
+                f"Unexpected subnet uid in subnet metagraph syncer: {netuid}"
+            )
 
-        elif netuid == constants.CORTEX_SUBNET_UID:
+    def _on_dataset_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
+        """Processes an update to the metagraph for the dataset subnets."""
+        if netuid == constants.CORTEX_SUBNET_UID:
             with self.cortex_metagraph:
                 self.cortex_metagraph = copy.deepcopy(metagraph)
+        else:
+            bt.logging.error(
+                f"Unexpected subnet uid in dataset metagraph syncer: {netuid}"
+            )
 
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
