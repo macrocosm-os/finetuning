@@ -141,4 +141,7 @@ def generate_output(
         model.to(device)
         model.eval()
         input_ids = input_ids.to(device)
-        return model.generate(input_ids=input_ids, generation_config=generation_config)
+        output = model.generate(
+            input_ids=input_ids, generation_config=generation_config
+        )
+        return output
