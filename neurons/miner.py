@@ -100,7 +100,7 @@ async def main(config: bt.config):
     chain_metadata_store = ChainModelMetadataStore(
         subtensor, wallet, subnet_uid=config.netuid
     )
-wandb_utils
+
     # If running online, make sure the miner is registered, has a hugging face access token, and has provided a repo id.
     my_uid = None
     if not config.offline:
