@@ -517,8 +517,10 @@ class Validator:
                 # Find all hotkeys that are currently being evaluated or pending eval.
                 uids_to_keep = set()
                 with self.pending_uids_to_eval_lock:
-                    for _, uids in self.pending_uids_to_eval.items():
-                        uids_to_keep.update(uids)
+                    for pending_uids in self.pending_uids_to_eval.values():
+                        uids_to_keep.update(pending_uids)
+                    for eval_uids in self.uids_to_eval.values():
+                        uids_to_keep.update(eval_uids)
 
                 hotkeys_to_keep = set()
                 with self.metagraph_lock:
