@@ -552,6 +552,7 @@ class Validator:
         async def _try_set_weights():
             with self.metagraph_lock:
                 uids = self.metagraph.uids
+                block = self.metagraph.block.item()
             try:
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
@@ -561,6 +562,8 @@ class Validator:
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
+                # We only update the last epoch when we successfully set weights.
+                self.last_epoch = block
             except:
                 bt.logging.warning("Failed to set weights. Trying again later.")
 
@@ -1094,19 +1097,24 @@ class Validator:
 
         while True:
             try:
+
+                # First run a step.
+                await self.try_run_step(ttl=60 * 60)
+                self.global_step += 1
+
                 with self.metagraph_lock:
                     block = self.metagraph.block.item()
-                while block - self.last_epoch < self.config.blocks_per_epoch:
-                    await self.try_run_step(ttl=60 * 20)
-                    bt.logging.debug(
-                        f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
-                    )
-                    self.global_step += 1
 
+                # Then check if we should set weights and do so if needed.
                 if not self.config.offline:
-                    await self.try_set_weights(ttl=60)
-                self.last_epoch = block
-                self.epoch_step += 1
+                    blocks_until_epoch = block - self.last_epoch
+
+                    if blocks_until_epoch >= self.config.blocks_per_epoch:
+                        await self.try_set_weights(ttl=60)
+                    else:
+                        bt.logging.debug(
+                            f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+                        )
 
             except KeyboardInterrupt:
                 bt.logging.info(
