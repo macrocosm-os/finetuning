@@ -137,8 +137,18 @@ def generate_output(
     Returns:
         typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
     """
+    # TODO remove excess logging here.
+    bt.logging.trace("generate_output: entering inference mode")
     with torch.inference_mode():
         model.to(device)
         model.eval()
+        bt.logging.trace("generate_output: model to device and entering inference mode")
         input_ids = input_ids.to(device)
-        return model.generate(input_ids=input_ids, generation_config=generation_config)
+        bt.logging.trace("generate_output: input ids to device")
+        output = model.generate(
+            input_ids=input_ids, generation_config=generation_config
+        )
+        bt.logging.trace("Produced output: {output}")
+        output = output.to("cpu")
+        bt.logging.trace("Moved output to cpu: {output}")
+        return output

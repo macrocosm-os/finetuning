@@ -742,45 +742,53 @@ class Validator:
                         )
 
                     if self.config.do_sample:
-                        prompt, truth = cortex_data.get_sample()
-                        bt.logging.trace(
-                            f"Generating sample for uid: {uid_i} using prompt: {prompt} and truth {truth}."
-                        )
-                        conversation = [{"role": "user", "content": prompt}]
-                        input_ids = tokenizer.apply_chat_template(
-                            conversation,
-                            truncation=True,
-                            return_tensors="pt",
-                            max_length=competition.constraints.sequence_length,
-                            add_generation_prompt=True,
-                        )
-                        generation_config = GenerationConfig(
-                            max_length=competition.constraints.sequence_length,
-                            do_sample=True,
-                            temperature=0.8,
-                            top_p=0.95,
-                            top_k=40,
-                            repetition_penalty=1.1,
-                            eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.eos_token_id,
-                        )
-                        # Run each generation in a subprocess so that the GPU is reset between each model.
-                        output = utils.run_in_subprocess(
-                            functools.partial(
-                                ft.validation.generate_output,
-                                model_i.pt_model,
-                                input_ids,
-                                generation_config,
-                                self.config.device,
-                            ),
-                            ttl=360,
-                            mode="spawn",
-                        )
-                        response = tokenizer.decode(
-                            output[0][len(input_ids[0]) :], skip_special_tokens=True
-                        )
-                        sample = (prompt, response, truth)
-                        sample_per_uid[uid_i] = sample
+                        try:
+                            prompt, truth = cortex_data.get_sample()
+                            conversation = [{"role": "user", "content": prompt}]
+                            input_ids = tokenizer.apply_chat_template(
+                                conversation,
+                                truncation=True,
+                                return_tensors="pt",
+                                max_length=competition.constraints.sequence_length,
+                                add_generation_prompt=True,
+                            )
+                            generation_config = GenerationConfig(
+                                max_length=competition.constraints.sequence_length,
+                                do_sample=True,
+                                temperature=0.8,
+                                top_p=0.95,
+                                top_k=40,
+                                repetition_penalty=1.1,
+                                eos_token_id=tokenizer.eos_token_id,
+                                pad_token_id=tokenizer.eos_token_id,
+                            )
+                            # Run each generation in a subprocess so that the GPU is reset between each model.
+                            # TODO remove log.
+                            bt.logging.trace("About to generate output.")
+                            output = utils.run_in_subprocess(
+                                functools.partial(
+                                    ft.validation.generate_output,
+                                    model_i.pt_model,
+                                    input_ids,
+                                    generation_config,
+                                    self.config.device,
+                                ),
+                                ttl=360,
+                                mode="spawn",
+                            )
+                            response = tokenizer.decode(
+                                output[0][len(input_ids[0]) :], skip_special_tokens=True
+                            )
+                            sample = (prompt, response, truth)
+                            bt.logging.trace(
+                                f"Generated sample for uid: {uid_i} sample (prompt, response, truth): {sample}"
+                            )
+                            sample_per_uid[uid_i] = sample
+                        except Exception as e:
+                            bt.logging.error(
+                                f"Error in eval loop during sample generation: {e}."
+                            )
+                            traceback.print_exc()  # Print the stack trace
 
                     del model_i
                 except Exception as e:
