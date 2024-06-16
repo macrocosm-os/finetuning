@@ -820,6 +820,7 @@ class Validator:
             competition.competition_id,
             uids,
             uid_to_block,
+            self._get_uids_to_competition_ids(),
             list(cortex_data.get_selected_sample_ids()),
             wins,
             win_rate,
@@ -838,6 +839,7 @@ class Validator:
         competition_id: CompetitionId,
         uids: typing.List[int],
         uid_to_block: typing.Dict[int, int],
+        uid_to_competition_id: typing.Dict[int, typing.Optional[CompetitionId]],
         samples_ids: typing.List[str],
         wins: typing.Dict[int, int],
         win_rate: typing.Dict[int, float],
@@ -861,6 +863,7 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
+                "competition_id": uid_to_competition_id[uid],
                 "average_loss": (sum(losses_per_uid[uid]) / len(losses_per_uid[uid])),
                 "perplexity": (
                     float(
@@ -945,7 +948,7 @@ class Validator:
                 block = self.metagraph.block.item()
             graphed_data = {
                 "time": time.time(),
-                "competition_id": competition_id,
+                "step_competition_id": competition_id,
                 "block": block,
                 "uid_data": {
                     str(uid): uid_data[str(uid)]["average_loss"] for uid in uids
@@ -969,6 +972,11 @@ class Validator:
                     str(uid): uid_data[str(uid)]["sample_truth"] for uid in uids
                 },
                 "weight_data": {str(uid): self.weights[uid].item() for uid in uids},
+                "competition_id": {
+                    str(uid): uid_to_competition_id[uid]
+                    for uid in uids
+                    if uid_to_competition_id[uid] is not None
+                },
                 "load_model_perf": {
                     "min": load_model_perf.min(),
                     "median": load_model_perf.median(),
@@ -1014,6 +1022,24 @@ class Validator:
         )
 
         bt.logging.debug(f"Started a new wandb run: {name}")
+
+    def _get_uids_to_competition_ids(
+        self,
+    ) -> typing.Dict[int, typing.Optional[CompetitionId]]:
+        """Returns a mapping of uids to competition ids, based on the validator's current state"""
+        hotkey_to_metadata = (
+            self.model_tracker.get_miner_hotkey_to_model_metadata_dict()
+        )
+        with self.metagraph_lock:
+            uids_to_competition_ids = {}
+            for uid in range(len(hotkey_to_metadata)):
+                hotkey = self.metagraph.hotkeys[uid]
+                metadata = hotkey_to_metadata.get(hotkey, None)
+                uids_to_competition_ids[uid] = (
+                    metadata.id.competition_id if metadata else None
+                )
+
+            return uids_to_competition_ids
 
     async def run(self):
         """Runs the validator loop, which continuously evaluates models and sets weights."""
