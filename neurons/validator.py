@@ -815,11 +815,11 @@ class Validator:
         )
 
         # Get ids for all competitions in the schedule.
-        active_competitions = set([comp.id for comp in constants.COMPETITION_SCHEDULE])
+        active_competition_ids = set([comp.id for comp in constants.COMPETITION_SCHEDULE])
         # Align competition_tracker to only track active competitions.
-        self.competition_tracker.reset_competitions(active_competitions)
+        self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(active_competitions)
+        self.weights = self.competition_tracker.get_subnet_weights(constants.COMPETITION_SCHEDULE)
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
