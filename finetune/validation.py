@@ -149,4 +149,6 @@ def generate_output(
             input_ids=input_ids, generation_config=generation_config
         )
         bt.logging.trace("Produced output: {output}")
+        output = output.to("cpu")
+        bt.logging.trace("Moved output to cpu: {output}")
         return output

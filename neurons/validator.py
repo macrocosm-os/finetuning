@@ -763,6 +763,8 @@ class Validator:
                                 pad_token_id=tokenizer.eos_token_id,
                             )
                             # Run each generation in a subprocess so that the GPU is reset between each model.
+                            # TODO remove log.
+                            bt.logging.trace("About to generate output.")
                             output = utils.run_in_subprocess(
                                 functools.partial(
                                     ft.validation.generate_output,
