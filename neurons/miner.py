@@ -16,7 +16,6 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import argparse
 import asyncio
 import datetime as dt
 import math
@@ -33,157 +32,33 @@ from transformers import PreTrainedModel
 import constants
 import finetune as ft
 from competitions import utils as competition_utils
-from competitions.data import CompetitionId
+from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
+from model.storage.model_metadata_store import ModelMetadataStore
+from neurons import config as neuron_config
 from utilities import utils
+from utilities import wandb as wandb_utils
 
 load_dotenv()  # take environment variables from .env.
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 
-# === Config ===
-def get_config():
-    """
-    Set up and parse the command-line arguments to configure the system.
-
-    The configuration is responsible for setting up the environment including
-    the model path, device to use, and the bittensor wallet and logging configurations.
-
-    Returns:
-        A namespace object containing the configuration parameters.
-    """
-
-    # Initialize an argument parser
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--offline",
-        action="store_true",
-        help="Does not launch a wandb run, does not send model to wandb, does not check if registered",
-    )
-    parser.add_argument(
-        "--wandb_project", type=str, help="The wandb project to log to."
-    )
-    parser.add_argument("--wandb_entity", type=str, help="The wandb entity to log to.")
-    parser.add_argument(
-        "--hf_repo_id",
-        type=str,
-        help="The hugging face repo id, which should include the org or user and repo name. E.g. jdoe/finetuned",
-    )
-    parser.add_argument(
-        "--update_repo_visibility",
-        action="store_false",
-        help="If true, the repo will be made public after uploading.",
-    )
-    parser.add_argument(
-        "--avg_loss_upload_threshold",
-        type=float,
-        default=0,  # Default to never uploading.
-        help="The threshold for avg_loss the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
-    )
-    parser.add_argument(
-        "--model_dir",
-        default=os.path.join(constants.ROOT_DIR, "local-models/"),
-        help="Where to download/save models for training",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="The device on which to run. cpu or cuda",
-    )
-    parser.add_argument(
-        "--load_best",
-        action="store_true",
-        help="If set, the miner loads the best model from wandb to train off.",
-    )
-    parser.add_argument(
-        "--load_uid",
-        type=int,
-        default=None,
-        help="If passed loads the model under the specified uid.",
-    )
-    parser.add_argument(
-        "--load_model_dir",
-        type=str,
-        default=None,
-        help="If provided, loads a previously trained HF model from the specified directory",
-    )
-    parser.add_argument(
-        "--num_epochs",
-        type=int,
-        default=-1,
-        help="Number of training epochs (-1 is infinite)",
-    )
-    parser.add_argument("--lr", type=float, default=0.00001, help="Learning rate.")
-    parser.add_argument(
-        "--accumulation_steps",
-        type=int,
-        default=32,
-        help="The number of training accumulation steps.",
-    )
-    parser.add_argument(
-        "--cortex_steps",
-        type=int,
-        default=5,
-        help="Number of Cortex steps to sample data from",
-    )
-    parser.add_argument(
-        "--cortex_samples_per_epoch",
-        type=int,
-        default=4096,
-        help="Number of samples trained on per epoch",
-    )
-    parser.add_argument(
-        "--attn_implementation",
-        default="flash_attention_2",
-        help="Implementation of attention to use",
-    )
-    parser.add_argument(
-        "--netuid",
-        type=str,
-        default=constants.SUBNET_UID,
-        help="The subnet UID.",
-    )
-    parser.add_argument(
-        "--dtype",
-        type=str,
-        default="bfloat16",
-        help="datatype to load model in, either bfloat16 or float16",
-    )
-    parser.add_argument(
-        "--competition_id",
-        type=CompetitionId,
-        default=CompetitionId.SN9_MODEL,
-        help="competition to mine for (use --list-competitions to get all competitions)",
-    )
-    parser.add_argument(
-        "--list_competitions", action="store_true", help="Print out all competitions"
-    )
-
-    # Include wallet and logging arguments from bittensor
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
-
-    # Parse the arguments and create a configuration namespace
-    config = bt.config(parser)
-
-    return config
-
-
 async def load_starting_model(
     config: bt.config,
     metagraph: bt.metagraph,
-    kwargs: typing.Dict[typing.Any],
+    metadata_store: ModelMetadataStore,
+    kwargs: typing.Dict[str, typing.Any],
 ) -> PreTrainedModel:
     """Loads the model to train based on the provided config."""
 
     # Initialize the model based on the best on the network.
     if config.load_best:
         model = await ft.mining.load_best_model(
-            config.competition_id, config.model_dir, metagraph=metagraph
+            config.competition_id,
+            config.model_dir,
+            metagraph=metagraph,
+            metadata_store=metadata_store,
         )
         bt.logging.success(
             f"Training with best model from competition: {config.competition_id}. Model={str(model)}"
@@ -194,7 +69,10 @@ async def load_starting_model(
     if config.load_uid is not None:
         # Sync the state from the passed uid.
         model = await ft.mining.load_remote_model(
-            config.load_uid, config.model_dir, metagraph=metagraph
+            config.load_uid,
+            config.model_dir,
+            metagraph=metagraph,
+            metadata_store=metadata_store,
         )
         bt.logging.success(
             f"Training with model from uid: {config.load_uid}. Model={str(model)}"
@@ -219,12 +97,18 @@ async def main(config: bt.config):
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
     metagraph = subtensor.metagraph(config.netuid)
+    chain_metadata_store = ChainModelMetadataStore(
+        subtensor, wallet, subnet_uid=config.netuid
+    )
 
     # If running online, make sure the miner is registered, has a hugging face access token, and has provided a repo id.
     my_uid = None
     if not config.offline:
         my_uid = utils.assert_registered(wallet, metagraph)
         HuggingFaceModelStore.assert_access_token_exists()
+
+    # Data comes from Subnet 18's wandb project. Make sure we're logged in
+    wandb_utils.login()
 
     # Create a unique run id for this run.
     run_id = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -251,7 +135,7 @@ async def main(config: bt.config):
 
     # Init model.
     tokenizer = ft.model.load_tokenizer(competition, cache_dir=config.model_dir)
-    model = await load_starting_model(config, metagraph, kwargs)
+    model = await load_starting_model(config, metagraph, chain_metadata_store, kwargs)
     model = model.train()
     model = model.to(config.device)
 
@@ -280,7 +164,7 @@ async def main(config: bt.config):
                 "uid": my_uid,
                 "hotkey": wallet.hotkey.ss58_address,
                 "run_name": run_id,
-                "version": ft.__version__,
+                "version": constants.__version__,
                 "type": "miner",
             },
             allow_val_change=True,
@@ -303,16 +187,17 @@ async def main(config: bt.config):
             epoch_loss = 0.0
 
             # Prepare the data loader with random pages for each epoch
-            bt.logging.success(
+            bt.logging.debug(
                 f"Loading {config.cortex_samples_per_epoch} pages for training this epoch"
             )
             loader = ft.dataset.CortexSubsetLoader(
-                latest=False,
+                use_latest_data=False,
                 random_seed=random.randint(0, 100000000),
                 max_samples=config.cortex_samples_per_epoch,
                 steps=config.cortex_steps,
                 page_size=config.cortex_steps,
             )
+            bt.logging.debug("Finished loading data")
             batches = loader.tokenize(
                 tokenizer, competition.constraints.sequence_length
             )
@@ -382,9 +267,10 @@ async def main(config: bt.config):
                 await ft.mining.push(
                     model_to_upload,
                     config.hf_repo_id,
-                    competition,
+                    competition.id,
                     wallet,
                     update_repo_visibility=config.update_repo_visibility,
+                    metadata_store=chain_metadata_store,
                 )
             else:
                 bt.logging.success(
@@ -403,7 +289,8 @@ async def main(config: bt.config):
 
 if __name__ == "__main__":
     # Parse and print configuration
-    config = get_config()
+    config = neuron_config.miner_config()
+
     if config.list_competitions:
         print(constants.COMPETITION_SCHEDULE)
     else:

@@ -18,18 +18,18 @@
 import datetime as dt
 import random
 import time
+import traceback
 import typing
 
 import bittensor as bt
-import numpy as np
 import torch
 import wandb
-from torch.utils.data import IterableDataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
 from wandb.apis.public.history import HistoryScan
 
 import constants
+from utilities import utils
 
 UNWANTED_PHRASES = [
     "text-based AI language model",
@@ -217,30 +217,32 @@ UNWANTED_PHRASES = [
     "GPT",
 ]
 
+# The date of the earliest wandb run to fetch.
+EARLIEST_DATE = dt.datetime(2024, 2, 1, tzinfo=dt.timezone.utc)
 
-class CortexSubsetLoader(IterableDataset):
-    def __init__(
-        self,
-        latest=True,
-        random_seed: typing.Optional[int] = None,
-        max_samples=300,
-        steps: typing.Optional[int] = 1,
-        progress=False,
-        retry_limit=10,
-        page_size=100,
-        running: typing.Optional[bool] = False,
-        cortex_project=constants.CORTEX_WANDB_PROJECT,
-        cortex_type=constants.CORTEX_WANDB_TYPE,
-        max_run_age: typing.Optional[dt.timedelta] = None,
-        min_score: typing.Optional[float] = None,
-        validator_hotkeys: typing.Optional[typing.Set[str]] = None,
-    ):
-        api = wandb.Api(timeout=100)
 
-        filters_and = [{"config.type": cortex_type}]
+class CortexSubsetLoader:
+    def _get_filters(
+        self, use_latest_data, random_seed, validator_hotkeys
+    ) -> typing.Dict[str, typing.List[str]]:
+        filters_and = [{"config.type": constants.CORTEX_WANDB_TYPE}]
         filters_or = []
-        if running:
+
+        if use_latest_data:
             filters_and.append({"state": "running"})
+        else:
+            # If we're not fetching the latest data, then pick a random timepoint and iterate through runs
+            # from that timepoint. We do this instead of randomly picking runs across time because wandb's
+            # library processes runs serially. i.e., if you ask for run[N] it has to first fetch all N-1 runs.
+            # createdAt is is in UTC, so make sure we use UTC tz-aware datetimes.
+            random_date = utils.random_date(
+                EARLIEST_DATE,
+                dt.datetime.now(tz=dt.timezone.utc) - dt.timedelta(days=1),
+                random_seed,
+            )
+            filters_and.append(
+                {"createdAt": {"$gte": random_date.strftime("%Y-%m-%d %H:%M:%S")}}
+            )
         if validator_hotkeys:
             # 'IN' is not supported in the query language so we add a series of 'OR'.
             for hotkey in validator_hotkeys:
@@ -251,19 +253,62 @@ class CortexSubsetLoader(IterableDataset):
         if len(filters_or) > 0:
             filters["$or"] = filters_or
 
-        runs = api.runs(cortex_project, filters)
+        return filters
+
+    def __init__(
+        self,
+        use_latest_data: bool = False,
+        random_seed: typing.Optional[int] = None,
+        max_samples: int = 300,
+        steps: int = 5,
+        progress: bool = False,
+        retry_limit: int = 10,
+        page_size: int = 100,
+        cortex_project: str = constants.CORTEX_WANDB_PROJECT,
+        max_run_age: typing.Optional[dt.timedelta] = None,
+        min_score: typing.Optional[float] = None,
+        validator_hotkeys: typing.Optional[typing.Set[str]] = None,
+    ):
+        """Loads prompt/response data from Subnet 18.
+
+        Args:
+            use_latest_data (bool, optional): When true, loads data from actively running runs and gets data from the run's latest step.
+            random_seed (typing.Optional[int], optional): Seed to use for all random operations.
+            max_samples (int, optional): The number of prompt/response samples to load.
+            steps (int, optional): Within a run, how many steps to look for samples.
+            progress (bool, optional): Whether to log progress of the data loading.
+            retry_limit (int, optional): How many times to retry, given any failure.
+            page_size (int, optional): The number of steps to fetch from a run at a time. Recommended to be >= steps.
+            cortex_project (_type_, optional): The wandb project used for subnet 18. Defaults to constants.CORTEX_WANDB_PROJECT.
+            max_run_age (typing.Optional[dt.timedelta], optional): If set, only considers data from runs that were created within the past `max_run_age`
+            min_score (typing.Optional[float], optional): If set, only prompt/responses that were scored (by a subbnet 18 validator) higher than 'min_score' are included in the dataset.
+            validator_hotkeys (typing.Optional[typing.Set[str]], optional): If provided, only considers data from one of these validators.
+        """
+        api = wandb.Api(timeout=100)
+
+        filters = self._get_filters(use_latest_data, random_seed, validator_hotkeys)
+
+        bt.logging.debug(f"Fetching runs using filters {filters}")
+
+        # Get the runs, oldest first.
+        runs = api.runs(cortex_project, filters, order="+created_at")
+
+        if random_seed is not None:
+            random.seed(random_seed)
 
         retry_delay = 5  # Seconds to wait between retries
         attempt = 0
-
-        generator = np.random.default_rng(seed=random_seed) if random_seed else None
 
         while attempt < retry_limit:
             try:
                 run_order = list(range(len(runs)))
 
-                if generator is not None:
-                    generator.shuffle(run_order)
+                # If we're only using the latest data, there are a small enough set of runs
+                # that it's okay for us to randomize the order. For cases where we're not using
+                # the latest data, we've already randomly picked data by choosing a random
+                # timestamp to get runs from.
+                if use_latest_data:
+                    random.shuffle(run_order)
 
                 self.buffer: typing.List[typing.Tuple[str, str]] = []
                 self.selected_runs: typing.List[int] = []
@@ -294,14 +339,15 @@ class CortexSubsetLoader(IterableDataset):
                             )
                             continue
 
-                    if latest:
+                    if use_latest_data:
                         last_step: int = run.lastHistoryStep
-                    elif generator is not None:
-                        last_step = int(generator.random() * run.lastHistoryStep)
                     else:
-                        last_step = 0
+                        last_step = random.randint(
+                            min(steps, run.lastHistoryStep), run.lastHistoryStep
+                        )
                     max_step = last_step + 1
-                    min_step = max(0, max_step - steps) if steps is not None else 0
+                    min_step = max(0, max_step - steps)
+
                     history_scan = HistoryScan(
                         run.client, run, min_step, max_step, page_size=page_size
                     )
@@ -364,8 +410,8 @@ class CortexSubsetLoader(IterableDataset):
                 return
             except Exception:
                 attempt += 1
-                bt.logging.warning(
-                    f"Failed to fetch data, retrying. Attempt {attempt}/{retry_limit}"
+                print(
+                    f"Failed to fetch data. {traceback.format_exc()}, retrying. Attempt {attempt}/{retry_limit}"
                 )
                 if attempt < retry_limit:
                     time.sleep(retry_delay)  # Wait before the next retry
@@ -399,9 +445,7 @@ class CortexSubsetLoader(IterableDataset):
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:
-        return self.buffer[
-            random.randint(0, len(self.buffer))
-        ]
+        return self.buffer[random.randint(0, len(self.buffer))]
 
     def __iter__(self):
         return self.buffer.__iter__()

@@ -50,6 +50,7 @@ from model.storage.disk.disk_model_store import DiskModelStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from neurons import config as neuron_config
 from utilities import utils
+from utilities import wandb as wandb_utils
 from utilities.metagraph_syncer import MetagraphSyncer
 from utilities.miner_iterator import MinerIterator
 from utilities.perf_monitor import PerfMonitor
@@ -657,8 +658,7 @@ class Validator:
         pull_data_perf = PerfMonitor("Eval: Pull data")
         with pull_data_perf.sample():
             cortex_data = ft.dataset.CortexSubsetLoader(
-                latest=True,
-                running=True,
+                use_latest_data=True,
                 random_seed=random.randint(0, sys.maxsize),
                 max_samples=self.config.latest_cortex_samples,
                 steps=self.config.latest_cortex_steps,
@@ -1034,4 +1034,7 @@ class Validator:
 
 
 if __name__ == "__main__":
+    # Data comes from Subnet 18's wandb project. Make sure we're logged in
+    wandb_utils.login()
+
     asyncio.run(Validator().run())

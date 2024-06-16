@@ -18,6 +18,7 @@
 from dataclasses import replace
 import os
 import time
+import traceback
 from typing import Any, Dict, Optional
 
 import bittensor as bt
@@ -109,7 +110,10 @@ async def push(
                 wallet.hotkey.ss58_address
             )
 
-            if not model_metadata or model_metadata.id != model_id:
+            if (
+                not model_metadata
+                or model_metadata.id.to_compressed_str() != model_id.to_compressed_str()
+            ):
                 bt.logging.error(
                     f"Failed to read back model metadata from the chain. Expected: {model_id}, got: {model_metadata}"
                 )
@@ -120,14 +124,20 @@ async def push(
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:
-            bt.logging.error(f"Failed to advertise model on the chain: {e}")
+            bt.logging.error(
+                f"Failed to advertise model on the chain: {traceback.format_exc()}"
+            )
             bt.logging.error(f"Retrying in {retry_delay_secs} seconds...")
             time.sleep(retry_delay_secs)
 
-        if update_repo_visibility:
-            bt.logging.debug("Making repo public.")
-            huggingface_hub.update_repo_visibility(repo, private=False)
-            bt.logging.success("Model set to public")
+    if update_repo_visibility:
+        bt.logging.debug("Making repo public.")
+        huggingface_hub.update_repo_visibility(
+            repo,
+            private=False,
+            token=HuggingFaceModelStore.assert_access_token_exists(),
+        )
+        bt.logging.success("Model set to public")
 
 
 def save(model: PreTrainedModel, model_dir: str):

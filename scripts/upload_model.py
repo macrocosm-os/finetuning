@@ -20,6 +20,7 @@ import constants
 import finetune as ft
 from competitions import utils as competition_utils
 from competitions.data import CompetitionId
+from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from utilities import utils
 
@@ -58,6 +59,11 @@ def get_config():
     parser.add_argument(
         "--list_competitions", action="store_true", help="Print out all competitions"
     )
+    parser.add_argument(
+        "--update_repo_visibility",
+        action="store_false",
+        help="If true, the repo will be made public after uploading.",
+    )
 
     # Include wallet and logging arguments from bittensor
     bt.wallet.add_args(parser)
@@ -77,6 +83,9 @@ async def main(config: bt.config):
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
     metagraph: bt.metagraph = subtensor.metagraph(config.netuid)
+    chain_metadata_store = ChainModelMetadataStore(
+        subtensor, wallet, subnet_uid=config.netuid
+    )
 
     # Make sure we're registered and have a HuggingFace token.
     utils.assert_registered(wallet, metagraph)
@@ -93,7 +102,14 @@ async def main(config: bt.config):
     model = ft.mining.load_local_model(
         config.load_model_dir, competition.constraints.kwargs
     )
-    await ft.mining.push(model, config.hf_repo_id, competition, wallet)
+    await ft.mining.push(
+        model,
+        config.hf_repo_id,
+        competition.id,
+        wallet,
+        metadata_store=chain_metadata_store,
+        update_repo_visibility=config.update_repo_visibility,
+    )
 
 
 if __name__ == "__main__":
