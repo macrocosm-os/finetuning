@@ -1,10 +1,10 @@
 bittensor==6.9.3
 flash-attn==2.5.8
 huggingface_hub
-numpy
+numpy==1.26.4
 python-dotenv
 rich
 safetensors
-torch
+torch==2.3.1
 transformers==4.41.2
-wandb
+wandb==0.17.1
