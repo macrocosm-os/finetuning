@@ -217,7 +217,7 @@ UNWANTED_PHRASES = [
     "GPT",
 ]
 
-
+# The date of the earliest wandb run to fetch.
 EARLIEST_DATE = dt.datetime(2024, 2, 1, tzinfo=dt.timezone.utc)
 
 
@@ -225,7 +225,6 @@ class CortexSubsetLoader:
     def _get_filters(
         self, use_latest_data, random_seed, validator_hotkeys
     ) -> typing.Dict[str, typing.List[str]]:
-        # createdAt is given in UTC.
         filters_and = [{"config.type": constants.CORTEX_WANDB_TYPE}]
         filters_or = []
 
@@ -234,7 +233,8 @@ class CortexSubsetLoader:
         else:
             # If we're not fetching the latest data, then pick a random timepoint and iterate through runs
             # from that timepoint. We do this instead of randomly picking runs across time because wandb's
-            # library processes runs serially. As such, if you ask for run[N] it has to first fetch all N-1 runs.
+            # library processes runs serially. i.e., if you ask for run[N] it has to first fetch all N-1 runs.
+            # createdAt is is in UTC, so make sure we use UTC tz-aware datetimes.
             random_date = utils.random_date(
                 EARLIEST_DATE,
                 dt.datetime.now(tz=dt.timezone.utc) - dt.timedelta(days=1),
@@ -257,18 +257,33 @@ class CortexSubsetLoader:
 
     def __init__(
         self,
-        use_latest_data=False,
+        use_latest_data: bool = False,
         random_seed: typing.Optional[int] = None,
-        max_samples=300,
+        max_samples: int = 300,
         steps: int = 5,
-        progress=False,
-        retry_limit=10,
-        page_size=100,
-        cortex_project=constants.CORTEX_WANDB_PROJECT,
+        progress: bool = False,
+        retry_limit: int = 10,
+        page_size: int = 100,
+        cortex_project: str = constants.CORTEX_WANDB_PROJECT,
         max_run_age: typing.Optional[dt.timedelta] = None,
         min_score: typing.Optional[float] = None,
         validator_hotkeys: typing.Optional[typing.Set[str]] = None,
     ):
+        """Loads prompt/response data from Subnet 18.
+
+        Args:
+            use_latest_data (bool, optional): When true, loads data from actively running runs and gets data from the run's latest step.
+            random_seed (typing.Optional[int], optional): Seed to use for all random operations.
+            max_samples (int, optional): The number of prompt/response samples to load.
+            steps (int, optional): Within a run, how many steps to look for samples.
+            progress (bool, optional): Whether to log progress of the data loading.
+            retry_limit (int, optional): How many times to retry, given any failure.
+            page_size (int, optional): The number of steps to fetch from a run at a time. Recommended to be >= steps.
+            cortex_project (_type_, optional): The wandb project used for subnet 18. Defaults to constants.CORTEX_WANDB_PROJECT.
+            max_run_age (typing.Optional[dt.timedelta], optional): If set, only considers data from runs that were created within the past `max_run_age`
+            min_score (typing.Optional[float], optional): If set, only prompt/responses that were scored (by a subbnet 18 validator) higher than 'min_score' are included in the dataset.
+            validator_hotkeys (typing.Optional[typing.Set[str]], optional): If provided, only considers data from one of these validators.
+        """
         api = wandb.Api(timeout=100)
 
         filters = self._get_filters(use_latest_data, random_seed, validator_hotkeys)

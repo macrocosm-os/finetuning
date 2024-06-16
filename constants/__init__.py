@@ -5,15 +5,16 @@ from typing import List
 
 import torch
 from transformers import (
-    MistralForCausalLM,
-    LlamaForCausalLM,
     BartForCausalLM,
     FalconForCausalLM,
-    GPTNeoXForCausalLM,
-    PhiForCausalLM,
     GemmaForCausalLM,
+    GPTNeoXForCausalLM,
+    LlamaForCausalLM,
+    MistralForCausalLM,
+    PhiForCausalLM,
 )
-from competitions.data import CompetitionId, Competition, ModelConstraints
+
+from competitions.data import Competition, CompetitionId, ModelConstraints
 
 # ---------------------------------
 # Project Constants.

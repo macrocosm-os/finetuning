@@ -104,7 +104,6 @@ async def main(config: bt.config):
     # If running online, make sure the miner is registered, has a hugging face access token, and has provided a repo id.
     my_uid = None
     if not config.offline:
-        bt.logging.warning("Running online. Checking registration and access token.")
         my_uid = utils.assert_registered(wallet, metagraph)
         HuggingFaceModelStore.assert_access_token_exists()
 
@@ -174,7 +173,6 @@ async def main(config: bt.config):
         bt.logging.warning(
             "Not posting run to wandb. Either --offline is specified or the wandb settings are missing."
         )
-        bt.logging.success(f"Mic check. Mic check. Success")
 
     # Start the training loop
     epoch_step = 0
@@ -189,7 +187,7 @@ async def main(config: bt.config):
             epoch_loss = 0.0
 
             # Prepare the data loader with random pages for each epoch
-            bt.logging.success(
+            bt.logging.debug(
                 f"Loading {config.cortex_samples_per_epoch} pages for training this epoch"
             )
             loader = ft.dataset.CortexSubsetLoader(
@@ -199,11 +197,10 @@ async def main(config: bt.config):
                 steps=config.cortex_steps,
                 page_size=config.cortex_steps,
             )
-            bt.logging.success(f"Loaded data for training.")
+            bt.logging.debug("Finished loading data")
             batches = loader.tokenize(
                 tokenizer, competition.constraints.sequence_length
             )
-            bt.logging.success(f"Tokenized the data.")
 
             # Enumerate over the data loader
             n_batches = 0
@@ -293,7 +290,6 @@ async def main(config: bt.config):
 if __name__ == "__main__":
     # Parse and print configuration
     config = neuron_config.miner_config()
-    bt.logging.info("Mic check")
 
     if config.list_competitions:
         print(constants.COMPETITION_SCHEDULE)

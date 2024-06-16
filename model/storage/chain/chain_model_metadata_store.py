@@ -39,10 +39,6 @@ class ChainModelMetadataStore(ModelMetadataStore):
 
         data = model_id.to_compressed_str()
 
-        bt.logging.warning(
-            f"Storing model metadata on chain for hotkey {self.wallet.hotkey}."
-        )
-
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
         partial = functools.partial(
             bt.extrinsics.serving.publish_metadata,
