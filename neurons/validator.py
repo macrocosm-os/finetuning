@@ -741,6 +741,9 @@ class Validator:
 
                     if self.config.do_sample:
                         prompt, truth = cortex_data.get_sample()
+                        bt.logging.trace(
+                            f"Generating sample for uid: {uid_i} using prompt: {prompt} and truth {truth}."
+                        )
                         conversation = [{"role": "user", "content": prompt}]
                         input_ids = tokenizer.apply_chat_template(
                             conversation,
