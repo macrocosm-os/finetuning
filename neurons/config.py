@@ -37,7 +37,7 @@ def validator_config():
     parser.add_argument(
         "--blocks_per_epoch",
         type=int,
-        default=100,
+        default=50,
         help="Number of blocks to wait before setting weights.",
     )
     parser.add_argument(

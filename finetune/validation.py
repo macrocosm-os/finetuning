@@ -137,6 +137,7 @@ def generate_output(
     Returns:
         typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
     """
+    bt.logging.trace(f"Generating output for model on device: {device}.")
     with torch.inference_mode():
         model.to(device)
         model.eval()

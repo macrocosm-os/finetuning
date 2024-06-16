@@ -86,7 +86,7 @@ class Validator:
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
         # The subtensor for the dataset subnets should always point to the prod chain.
-        self.dataset_subtensor = bt.subtensor() 
+        self.dataset_subtensor = bt.subtensor()
         self.dendrite = bt.dendrite(wallet=self.wallet)
         torch.backends.cudnn.benchmark = True
 
@@ -815,11 +815,15 @@ class Validator:
         )
 
         # Get ids for all competitions in the schedule.
-        active_competitions = set([comp.id for comp in constants.COMPETITION_SCHEDULE])
+        active_competition_ids = set(
+            [comp.id for comp in constants.COMPETITION_SCHEDULE]
+        )
         # Align competition_tracker to only track active competitions.
-        self.competition_tracker.reset_competitions(active_competitions)
+        self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(active_competitions)
+        self.weights = self.competition_tracker.get_subnet_weights(
+            constants.COMPETITION_SCHEDULE
+        )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
@@ -834,7 +838,7 @@ class Validator:
             for uid, wr in win_rate.items()
         }
         with self.pending_uids_to_eval_lock:
-            self.uids_to_eval[competition.competition_id] = set(
+            self.uids_to_eval[competition.id] = set(
                 sorted(
                     model_prioritization, key=model_prioritization.get, reverse=True
                 )[: self.config.sample_min]
@@ -850,7 +854,7 @@ class Validator:
 
         # Log to screen and wandb.
         self.log_step(
-            competition.competition_id,
+            competition.id,
             uids,
             uid_to_block,
             self._get_uids_to_competition_ids(),
