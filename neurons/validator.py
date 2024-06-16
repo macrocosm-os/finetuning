@@ -35,6 +35,7 @@ from collections import defaultdict
 import bittensor as bt
 import torch
 import wandb
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 from transformers import GenerationConfig
@@ -54,6 +55,8 @@ from utilities import wandb as wandb_utils
 from utilities.metagraph_syncer import MetagraphSyncer
 from utilities.miner_iterator import MinerIterator
 from utilities.perf_monitor import PerfMonitor
+
+load_dotenv()  # take environment variables from .env.
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
