@@ -14,6 +14,7 @@ from finetune.dataset import CortexSubsetLoader
 from finetune.validation import compute_losses
 from model.data import Model, ModelId
 from model.model_updater import ModelUpdater
+from utilities.enum_action import IntEnumAction
 from utilities.perf_monitor import PerfMonitor
 
 
@@ -57,8 +58,9 @@ def main():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL,
-        help="competition to validate against (use --list-competitions to get all competitions)",
+        default=CompetitionId.SN9_MODEL.value,
+        action=IntEnumAction,
+        help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
         "--list_competitions", action="store_true", help="Print out all competitions"
