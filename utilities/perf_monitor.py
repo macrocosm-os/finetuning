@@ -1,4 +1,5 @@
 import time
+
 import numpy as np
 
 
@@ -32,9 +33,28 @@ class PerfMonitor:
         self.name = name
         self.samples = []
 
+    def set_samples_for_testing(self, samples):
+        self.samples = samples
+
     def sample(self) -> PerfSample:
         """Returns a context manager that will record the duration of the block it wraps."""
         return PerfSample(self)
+
+    def min(self) -> float:
+        """Returns the minimum duration recorded by the tracker in seconds."""
+        return self._ns_to_s(np.min(self.samples))
+
+    def max(self) -> float:
+        """Returns the maximum duration recorded by the tracker in seconds."""
+        return self._ns_to_s(np.max(self.samples))
+
+    def median(self) -> float:
+        """Returns the median duration recorded by the tracker in seconds."""
+        return self._ns_to_s(np.median(self.samples))
+
+    def percentile(self, p: float) -> float:
+        """Returns the pth percentile duration recorded by the tracker in seconds."""
+        return self._ns_to_s(np.percentile(self.samples, p))
 
     def summary_str(self) -> str:
         """Returns a string summarizing the performance of the tracked operation."""
@@ -65,3 +85,6 @@ class PerfMonitor:
                 return f"{duration_ns/divisor:.2f} {unit}"
 
         return f"{duration_ns:.2f} ns"
+
+    def _ns_to_s(self, duration_ns: int) -> float:
+        return duration_ns / 1_000_000_000

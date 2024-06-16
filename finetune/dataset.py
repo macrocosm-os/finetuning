@@ -311,13 +311,12 @@ class CortexSubsetLoader:
                     random.shuffle(run_order)
 
                 self.buffer: typing.List[typing.Tuple[str, str]] = []
-                self.selected_runs: typing.List[int] = []
+                self.selected_samples: typing.Set[str] = set()
 
                 for run_index in tqdm(
                     run_order, desc="Run", leave=False, disable=not progress
                 ):
                     run = runs[run_index]
-                    self.selected_runs.append(run_index)
 
                     # Validator hotkeys are used to ensure the authenticity of the run.
                     if validator_hotkeys:
@@ -398,6 +397,10 @@ class CortexSubsetLoader:
                                                 x in response for x in UNWANTED_PHRASES
                                             ):
                                                 self.buffer.append((prompt, response))
+                                                step = sample.get("_step", "Unknown")
+                                                self.selected_samples.add(
+                                                    f"{run.id}_{step}"
+                                                )
                                                 if len(self.buffer) == max_samples:
                                                     return
                                 except KeyError:
@@ -446,6 +449,10 @@ class CortexSubsetLoader:
 
     def get_sample(self) -> typing.Tuple[str, str]:
         return self.buffer[random.randint(0, len(self.buffer))]
+
+    def get_selected_sample_ids(self) -> typing.Set[str]:
+        """Returns the set of run_id steps that data was selected from."""
+        return self.selected_samples
 
     def __iter__(self):
         return self.buffer.__iter__()

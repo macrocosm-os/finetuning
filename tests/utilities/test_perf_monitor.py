@@ -39,6 +39,34 @@ class TestPerfMonitor(unittest.TestCase):
             r"TestOfTime performance: N=2 \| Min=1.[0-9]{2} s \| Max=4.[0-9]{2} s \| Median=2.[0-9]{2} s \| P90=3.[0-9]{2} s",
         )
 
+    def test_perf_monitor_min(self):
+        """Performs basic validation of the min method."""
+
+        tracker = PerfMonitor("TestMin")
+        tracker.set_samples_for_testing([1_000_000_000, 4_000_000_000])
+
+        self.assertEqual(tracker.min(), 1.0)
+
+    def test_perf_monitor_max(self):
+        """Performs basic validation of the max method."""
+        tracker = PerfMonitor("TestMax")
+        tracker.set_samples_for_testing([1_000_000_000, 4_000_000_000])
+        self.assertEqual(tracker.max(), 4.0)
+
+    def test_perf_monitor_median(self):
+        """Performs basic validation of the median method."""
+        tracker = PerfMonitor("TestMedian")
+        tracker.set_samples_for_testing([1_000_000_000, 2_000_000_000, 3_000_000_000])
+        self.assertEqual(tracker.median(), 2.0)
+
+    def test_perf_monitor_percentile(self):
+        """Performs basic validation of the percentile method."""
+        tracker = PerfMonitor("TestPercentile")
+        tracker.set_samples_for_testing(
+            [1_000_000_000, 2_000_000_000, 3_000_000_000, 4_000_000_000]
+        )
+        self.assertEqual(tracker.percentile(90), 3.7)
+
 
 if __name__ == "__main__":
     unittest.main()
