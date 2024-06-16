@@ -1,6 +1,7 @@
 import os
 import tempfile
 from dataclasses import replace
+from typing import Optional
 
 from huggingface_hub import HfApi
 from transformers import AutoModelForCausalLM
@@ -19,6 +20,11 @@ class HuggingFaceModelStore(RemoteModelStore):
         """Asserts that the access token exists."""
         if not os.getenv("HF_ACCESS_TOKEN"):
             raise ValueError("No Hugging Face access token found to write to the hub.")
+        return os.getenv("HF_ACCESS_TOKEN")
+
+    @classmethod
+    def get_access_token_if_exists(cls) -> Optional[str]:
+        """Returns the access token if it exists."""
         return os.getenv("HF_ACCESS_TOKEN")
 
     async def upload_model(self, model: Model, competition: Competition) -> ModelId:
@@ -54,11 +60,16 @@ class HuggingFaceModelStore(RemoteModelStore):
             raise ValueError("No Hugging Face commit id found to read from the hub.")
 
         repo_id = model_id.namespace + "/" + model_id.name
+        token = HuggingFaceModelStore.get_access_token_if_exists()
 
         # Check ModelInfo for the size of model.safetensors file before downloading.
         api = HfApi()
         model_info = api.model_info(
-            repo_id=repo_id, revision=model_id.commit, timeout=10, files_metadata=True
+            repo_id=repo_id,
+            revision=model_id.commit,
+            timeout=10,
+            files_metadata=True,
+            token=token,
         )
         size = sum(repo_file.size for repo_file in model_info.siblings)
         if size > MAX_HUGGING_FACE_BYTES:
@@ -72,6 +83,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             revision=model_id.commit,
             cache_dir=local_path,
             use_safetensors=True,
+            token=token,
             **competition.constraints.kwargs,
         )
 

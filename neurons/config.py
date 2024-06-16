@@ -6,6 +6,7 @@ import torch
 
 from competitions.data import CompetitionId
 import constants
+from utilities.enum_action import IntEnumAction
 
 
 def validator_config():
@@ -196,8 +197,8 @@ def miner_config():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL,
-        choices=[CompetitionId.SN9_MODEL],
+        default=CompetitionId.SN9_MODEL.value,
+        action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(

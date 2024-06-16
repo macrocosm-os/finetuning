@@ -23,6 +23,7 @@ from competitions.data import CompetitionId
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from utilities import utils
+from utilities.enum_action import IntEnumAction
 
 load_dotenv()  # take environment variables from .env.
 
@@ -53,7 +54,8 @@ def get_config():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL,
+        default=CompetitionId.SN9_MODEL.value,
+        action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
     parser.add_argument(
