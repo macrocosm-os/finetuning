@@ -144,4 +144,6 @@ def generate_output(
         output = model.generate(
             input_ids=input_ids, generation_config=generation_config
         )
+        # TODO remove this log as we will keep the tokenized one in the validator.
+        bt.logging.trace("Produced output: {output}")
         return output
