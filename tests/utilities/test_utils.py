@@ -213,7 +213,7 @@ class TestUtils(unittest.TestCase):
             utils.get_top_miners(
                 metagraph, min_vali_stake=30, min_miner_weight_percent=0.1
             ),
-            [0],
+            {0},
         )
 
     def test_get_top_miners_multiple_miners(self):
@@ -230,7 +230,7 @@ class TestUtils(unittest.TestCase):
             metagraph, min_vali_stake=30, min_miner_weight_percent=0.1
         )
         self.assertEqual(len(top_miners), 2)
-        self.assertEqual(set(top_miners), set([0, 2]))
+        self.assertEqual(top_miners, {0, 2})
 
     def test_get_top_miners_multiple_weights_set(self):
         """Tests get_top_miners, when validators assign multiple weights"""
@@ -248,7 +248,7 @@ class TestUtils(unittest.TestCase):
             utils.get_top_miners(
                 metagraph, min_vali_stake=30, min_miner_weight_percent=0.1
             ),
-            [0, 2],
+            {0, 2},
         )
 
     def test_save_and_load_version(self):
