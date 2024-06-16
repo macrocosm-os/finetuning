@@ -124,31 +124,29 @@ def generate_output(
     input_ids: torch.Tensor,
     generation_config: transformers.GenerationConfig,
     device: str,
+    tokenizer: transformers.PreTrainedTokenizer,
 ) -> typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]:
     """
-    Generates the un-tokenized output for a model given a tokenized input and generation config.
+    Generates the tokenized output for a model given a tokenized input and generation config.
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
         input_ids (torch.Tensor): Input tokens to generate a response to.
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
 
     Returns:
         typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
     """
-    # TODO remove excess logging here.
-    bt.logging.trace("generate_output: entering inference mode")
     with torch.inference_mode():
         model.to(device)
         model.eval()
-        bt.logging.trace("generate_output: model to device and entering inference mode")
         input_ids = input_ids.to(device)
-        bt.logging.trace("generate_output: input ids to device")
         output = model.generate(
             input_ids=input_ids, generation_config=generation_config
         )
-        bt.logging.trace("Produced output: {output}")
-        output = output.to("cpu")
-        bt.logging.trace("Moved output to cpu: {output}")
-        return output
+        response = tokenizer.decode(
+            output[0][len(input_ids[0]) :], skip_special_tokens=True
+        )
+        return response

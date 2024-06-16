@@ -765,19 +765,17 @@ class Validator:
                             # Run each generation in a subprocess so that the GPU is reset between each model.
                             # TODO remove log.
                             bt.logging.trace("About to generate output.")
-                            output = utils.run_in_subprocess(
+                            response = utils.run_in_subprocess(
                                 functools.partial(
                                     ft.validation.generate_output,
                                     model_i.pt_model,
                                     input_ids,
                                     generation_config,
                                     self.config.device,
+                                    tokenizer,
                                 ),
                                 ttl=360,
                                 mode="spawn",
-                            )
-                            response = tokenizer.decode(
-                                output[0][len(input_ids[0]) :], skip_special_tokens=True
                             )
                             sample = (prompt, response, truth)
                             bt.logging.trace(
