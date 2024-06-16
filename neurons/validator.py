@@ -727,6 +727,8 @@ class Validator:
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
+                    # TODO remove
+                    bt.logging.trace(f"model after retrieve model is: {model_i}")
 
                     with compute_loss_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
@@ -743,6 +745,15 @@ class Validator:
 
                     if self.config.do_sample:
                         try:
+                            # TODO remove. Try reload model next. Else seems like we may need to do same subprocess.
+                            bt.logging.trace(f"model after compute loss is: {model_i}")
+                            model_i = self.local_store.retrieve_model(
+                                hotkey, model_i_metadata.id, kwargs
+                            )
+                            bt.logging.trace(
+                                f"model after second retrieve model is: {model_i}"
+                            )
+
                             prompt, truth = cortex_data.get_sample()
                             conversation = [{"role": "user", "content": prompt}]
                             input_ids = tokenizer.apply_chat_template(
