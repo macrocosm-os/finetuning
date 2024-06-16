@@ -123,7 +123,7 @@ class Validator:
 
         # Dont log to wandb if offline.
         if not self.config.offline and self.config.wandb_project:
-            self.new_wandb_run()
+            self._new_wandb_run()
 
         # === Running args ===
         self.weights = torch.zeros_like(self.metagraph.S)
@@ -270,27 +270,6 @@ class Validator:
             self.stop_event.set()
             self.update_thread.join()
             self.clean_thread.join()
-
-    def new_wandb_run(self):
-        """Creates a new wandb run to save information to."""
-        # Create a unique run id for this run.
-        run_id = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        name = "validator-" + str(self.uid) + "-" + run_id
-        self.wandb_run = wandb.init(
-            name=name,
-            project=self.config.wandb_project,
-            entity=self.config.wandb_entity,
-            config={
-                "uid": self.uid,
-                "hotkey": self.wallet.hotkey.ss58_address,
-                "run_name": run_id,
-                "version": constants.__version__,
-                "type": "validator",
-            },
-            allow_val_change=True,
-        )
-
-        bt.logging.debug(f"Started a new wandb run: {name}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
@@ -655,8 +634,8 @@ class Validator:
             )
 
         cortex_data = None
-        pull_data_perf = PerfMonitor("Eval: Pull data")
-        with pull_data_perf.sample():
+        load_data_perf = PerfMonitor("Eval: Load data")
+        with load_data_perf.sample():
             cortex_data = ft.dataset.CortexSubsetLoader(
                 use_latest_data=True,
                 random_seed=random.randint(0, sys.maxsize),
@@ -832,7 +811,7 @@ class Validator:
         self.save_state()
 
         # Log the performance of the eval loop.
-        bt.logging.debug(pull_data_perf.summary_str())
+        bt.logging.debug(load_data_perf.summary_str())
         bt.logging.debug(load_model_perf.summary_str())
         bt.logging.debug(compute_loss_perf.summary_str())
 
@@ -841,14 +820,15 @@ class Validator:
             competition.competition_id,
             uids,
             uid_to_block,
-            cortex_data.selected_runs,
+            self._get_uids_to_competition_ids(),
+            list(cortex_data.get_selected_sample_ids()),
             wins,
             win_rate,
             losses_per_uid,
             sample_per_uid,
-            load_model_perf.summary_str(),
-            compute_loss_perf.summary_str(),
-            pull_data_perf.summary_str(),
+            load_model_perf,
+            compute_loss_perf,
+            load_data_perf,
         )
 
         # Increment the number of completed run steps by 1
@@ -856,17 +836,18 @@ class Validator:
 
     def log_step(
         self,
-        competition_id,
-        uids,
-        uid_to_block,
-        pages,
-        wins,
-        win_rate,
-        losses_per_uid,
-        sample_per_uid,
-        load_model_perf_str,
-        compute_loss_perf_str,
-        pull_data_perf_str,
+        competition_id: CompetitionId,
+        uids: typing.List[int],
+        uid_to_block: typing.Dict[int, int],
+        uid_to_competition_id: typing.Dict[int, typing.Optional[CompetitionId]],
+        samples_ids: typing.List[str],
+        wins: typing.Dict[int, int],
+        win_rate: typing.Dict[int, float],
+        losses_per_uid: typing.Dict[int, typing.List[float]],
+        sample_per_uid: typing.Dict[str, typing.Tuple[str, str, str]],
+        load_model_perf: PerfMonitor,
+        compute_loss_perf: PerfMonitor,
+        load_data_perf: PerfMonitor,
     ):
         """Logs the results of the step to the console and wandb (if enabled)."""
 
@@ -874,14 +855,15 @@ class Validator:
         step_log = {
             "timestamp": time.time(),
             "competition_id": competition_id,
-            "pages": pages,
+            "sample_ids": samples_ids,
             "uids": uids,
             "uid_data": {},
         }
-        for i, uid in enumerate(uids):
+        for uid in uids:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
+                "competition_id": uid_to_competition_id[uid],
                 "average_loss": (sum(losses_per_uid[uid]) / len(losses_per_uid[uid])),
                 "perplexity": (
                     float(
@@ -955,7 +937,7 @@ class Validator:
                     f"Validator has completed {self.run_step_count} run steps. Creating a new wandb run."
                 )
                 self.wandb_run.finish()
-                self.new_wandb_run()
+                self._new_wandb_run()
 
             original_format_json = json.dumps(step_log)
             uids = step_log["uids"]
@@ -966,7 +948,7 @@ class Validator:
                 block = self.metagraph.block.item()
             graphed_data = {
                 "time": time.time(),
-                "competition_id": competition_id,
+                "step_competition_id": competition_id,
                 "block": block,
                 "uid_data": {
                     str(uid): uid_data[str(uid)]["average_loss"] for uid in uids
@@ -990,15 +972,74 @@ class Validator:
                     str(uid): uid_data[str(uid)]["sample_truth"] for uid in uids
                 },
                 "weight_data": {str(uid): self.weights[uid].item() for uid in uids},
-                "load_model_perf_log": load_model_perf_str,
-                "compute_model_perf_log": compute_loss_perf_str,
-                "pull_data_perf_log": pull_data_perf_str,
+                "competition_id": {
+                    str(uid): uid_to_competition_id[uid]
+                    for uid in uids
+                    if uid_to_competition_id[uid] is not None
+                },
+                "load_model_perf": {
+                    "min": load_model_perf.min(),
+                    "median": load_model_perf.median(),
+                    "max": load_model_perf.max(),
+                    "P90": load_model_perf.percentile(90),
+                },
+                "compute_model_perf": {
+                    "min": compute_loss_perf.min(),
+                    "median": compute_loss_perf.median(),
+                    "max": compute_loss_perf.max(),
+                    "P90": compute_loss_perf.percentile(90),
+                },
+                "load_data_perf": {
+                    "min": load_data_perf.min(),
+                    "median": load_data_perf.median(),
+                    "max": load_data_perf.max(),
+                    "P90": load_data_perf.percentile(90),
+                },
             }
             bt.logging.trace("Logging to Wandb")
             self.wandb_run.log(
                 {**graphed_data, "original_format_json": original_format_json},
                 step=self.global_step,
             )
+
+    def _new_wandb_run(self):
+        """Creates a new wandb run to save information to."""
+        # Create a unique run id for this run.
+        run_id = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        name = "validator-" + str(self.uid) + "-" + run_id
+        self.wandb_run = wandb.init(
+            name=name,
+            project=self.config.wandb_project,
+            entity=self.config.wandb_entity,
+            config={
+                "uid": self.uid,
+                "hotkey": self.wallet.hotkey.ss58_address,
+                "run_name": run_id,
+                "version": constants.__version__,
+                "type": "validator",
+            },
+            allow_val_change=True,
+        )
+
+        bt.logging.debug(f"Started a new wandb run: {name}")
+
+    def _get_uids_to_competition_ids(
+        self,
+    ) -> typing.Dict[int, typing.Optional[CompetitionId]]:
+        """Returns a mapping of uids to competition ids, based on the validator's current state"""
+        hotkey_to_metadata = (
+            self.model_tracker.get_miner_hotkey_to_model_metadata_dict()
+        )
+        with self.metagraph_lock:
+            uids_to_competition_ids = {}
+            for uid in range(len(hotkey_to_metadata)):
+                hotkey = self.metagraph.hotkeys[uid]
+                metadata = hotkey_to_metadata.get(hotkey, None)
+                uids_to_competition_ids[uid] = (
+                    metadata.id.competition_id if metadata else None
+                )
+
+            return uids_to_competition_ids
 
     async def run(self):
         """Runs the validator loop, which continuously evaluates models and sets weights."""
