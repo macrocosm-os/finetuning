@@ -1,3 +1,13 @@
+<picture>
+    <source srcset="./assets/macrocosmos-white.png"  media="(prefers-color-scheme: dark)">
+    <img src="macrocosmos-white.png">
+</picture>
+
+<picture>
+    <source srcset="./assets/macrocosmos-black.png"  media="(prefers-color-scheme: light)">
+    <img src="macrocosmos-black.png">
+</picture>
+
 <div align="center">
 
 # **Finetuning Subnet** <!-- omit in toc -->
@@ -19,12 +29,12 @@
 > **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
 
 
-The Finetuning subnet rewards miners for fine-tuning Large Language Models (LLMs) competiting within a competition. At launch the first competition is evaluated with data generated from a continuous stream of synthetic data provided by [subnet 18](https://github.com/corcel-api/cortex.t/). It is a continuous fine-tuning benchmark, with new data generated daily.
+The Finetuning subnet rewards miners for **fine-tuning Large Language Models (LLMs)**. At launch the first competition is evaluated with data generated from a continuous stream of synthetic data provided by [subnet 18](https://github.com/corcel-api/cortex.t/). It is a continuous fine-tuning benchmark, with new data generated daily.
 
 The mechanism works like this:
 
     1. Miners train and periodically publish models to 🤗 Hugging Face and commit the metadata for that model to the Bittensor chain to sign up for a specific competition and prove the time of training.
-    2. Validators download the models from 🤗 Hugging Face for each miner based on the Bittensor chain metadata and continuously evaluate them against the synthetic data. For each competition, only the top model will receive weights. They also log results to [wandb](https://wandb.ai/rusticluftig/pretraining).
+    2. Validators download the models from 🤗 Hugging Face for each miner based on the Bittensor chain metadata and continuously evaluate them against the synthetic data. For each competition, only the top model will receive nonzero weights. They also log results to [wandb](https://wandb.ai/opentensor-dev/finetuning).
     3. The Bittensor chain aggregates weights from all active validators using Yuma Consensus to determine the proportion of TAO emission rewarded to miners and validators.
 
 See the [Miner](docs/miner.md) and [Validator](docs/validator.md) docs for more information about how they work, as well as setup instructions.
@@ -59,7 +69,7 @@ See [Validator Setup](docs/validator.md#getting-started) to learn how to setup a
 
 We welcome feedback!
 
-If you have a suggestion, please reach out on the Discord channel, or file an Issue.
+If you have a suggestion, please reach out on the Discord channel, or create an Issue in this repo.
 
 ---
 
