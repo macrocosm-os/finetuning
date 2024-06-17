@@ -7,7 +7,6 @@ from unittest import mock
 
 import bittensor as bt
 import torch
-from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedModel
 
 import finetune as ft
 from competitions import utils as competition_utils
@@ -15,13 +14,10 @@ from competitions.data import CompetitionId
 from model.data import Model, ModelId
 from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
-from tests.utils import assert_model_equality
+from tests.utils import assert_model_equality, get_test_model
 
 
 class TestMining(unittest.TestCase):
-    def _get_model(self) -> PreTrainedModel:
-        return LlamaForCausalLM(LlamaConfig(num_hidden_layers=2))
-
     def _create_metagraph(self) -> bt.metagraph:
         mock_metagraph = mock.MagicMock()
         mock_metagraph.n = 3
@@ -36,7 +32,7 @@ class TestMining(unittest.TestCase):
         self.wallet.create_if_non_existent(
             coldkey_use_password=False, hotkey_use_password=False
         )
-        self.tiny_model = self._get_model()
+        self.tiny_model = get_test_model()
 
         self.model_dir = "test-models/test-mining"
         os.makedirs(name=self.model_dir, exist_ok=True)
