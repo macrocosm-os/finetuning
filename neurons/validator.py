@@ -85,7 +85,7 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
-        # If running on testnet, default to using finney for the dataset subtensor. 
+        # If running on testnet, default to using finney for the dataset subtensor.
         if self.config.using_test_subtensor:
             self.dataset_subtensor = bt.subtensor()
         else:
@@ -93,12 +93,13 @@ class Validator:
         self.dendrite = bt.dendrite(wallet=self.wallet)
         torch.backends.cudnn.benchmark = True
 
-        # Setup metagraph syncer for the subnet based on config.
+        # Setup metagraph syncer for the subnet based on config. This is non-lite for getting weights by vali.
         self.subnet_metagraph_syncer = MetagraphSyncer(
             self.subtensor,
             config={
                 self.config.netuid: dt.timedelta(minutes=20).total_seconds(),
             },
+            lite=False,
         )
         # Perform an initial sync of all tracked metagraphs.
         self.subnet_metagraph_syncer.do_initial_sync()
@@ -153,7 +154,6 @@ class Validator:
 
         # === Running args ===
         self.weights = torch.zeros_like(self.metagraph.S)
-        self.epoch_step = 0
         self.global_step = 0
         self.last_epoch = self.metagraph.block.item()
 
@@ -1114,7 +1114,7 @@ class Validator:
                         await self.try_set_weights(ttl=60)
                     else:
                         bt.logging.debug(
-                            f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+                            f"{blocks_until_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
                         )
 
             except KeyboardInterrupt:
