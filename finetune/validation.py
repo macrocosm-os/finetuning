@@ -125,7 +125,7 @@ def generate_output(
     generation_config: transformers.GenerationConfig,
     device: str,
     tokenizer: transformers.PreTrainedTokenizer,
-) -> typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]:
+) -> str:
     """
     Generates the tokenized output for a model given a tokenized input and generation config.
 
@@ -137,7 +137,7 @@ def generate_output(
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
 
     Returns:
-        typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
+        str: Generated tokenized output from the model.
     """
     with torch.inference_mode():
         model.to(device)
