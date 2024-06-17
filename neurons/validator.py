@@ -404,7 +404,7 @@ class Validator:
                                 )
                                 if top_model_metadata is not None:
                                     bt.logging.trace(
-                                        f"Retrying evaluation for previously discarded model with incentive for UID={uid}"
+                                        f"Shortcutting to top model or retrying evaluation for previously discarded top model with incentive for UID={uid}"
                                     )
                                     with self.pending_uids_to_eval_lock:
                                         self.pending_uids_to_eval[
