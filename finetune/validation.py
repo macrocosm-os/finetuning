@@ -124,21 +124,29 @@ def generate_output(
     input_ids: torch.Tensor,
     generation_config: transformers.GenerationConfig,
     device: str,
-) -> typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]:
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> str:
     """
-    Generates the un-tokenized output for a model given a tokenized input and generation config.
+    Generates the tokenized output for a model given a tokenized input and generation config.
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
         input_ids (torch.Tensor): Input tokens to generate a response to.
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
 
     Returns:
-        typing.Union[transformers.generation.utils.GenerateOutput, torch.LongTensor]: Generated output from the model.
+        str: Generated tokenized output from the model.
     """
     with torch.inference_mode():
         model.to(device)
         model.eval()
-        input_ids.to(device)
-        return model.generate(input_ids=input_ids, generation_config=generation_config)
+        input_ids = input_ids.to(device)
+        output = model.generate(
+            input_ids=input_ids, generation_config=generation_config
+        )
+        response = tokenizer.decode(
+            output[0][len(input_ids[0]) :], skip_special_tokens=True
+        )
+        return response

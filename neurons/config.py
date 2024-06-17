@@ -82,6 +82,11 @@ def validator_config():
         action="store_true",
         help="Sample a response from each model (for leaderboard)",
     )
+    parser.add_argument(
+        "--using_test_subtensor",
+        action="store_true",
+        help="If using a test subtensor, then default to finney for datasource subnets.",
+    )
 
     bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)

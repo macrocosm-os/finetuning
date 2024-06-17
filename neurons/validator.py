@@ -35,6 +35,7 @@ from collections import defaultdict
 import bittensor as bt
 import torch
 import wandb
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 from transformers import GenerationConfig
@@ -54,6 +55,8 @@ from utilities import wandb as wandb_utils
 from utilities.metagraph_syncer import MetagraphSyncer
 from utilities.miner_iterator import MinerIterator
 from utilities.perf_monitor import PerfMonitor
+
+load_dotenv()  # take environment variables from .env.
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
@@ -82,37 +85,60 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
+        # If running on testnet, default to using finney for the dataset subtensor. 
+        if self.config.using_test_subtensor:
+            self.dataset_subtensor = bt.subtensor()
+        else:
+            self.dataset_subtensor = bt.subtensor(config=self.config)
         self.dendrite = bt.dendrite(wallet=self.wallet)
         torch.backends.cudnn.benchmark = True
 
-        # Setup metagraph syncer
-        self.metagraph_syncer = MetagraphSyncer(
+        # Setup metagraph syncer for the subnet based on config.
+        self.subnet_metagraph_syncer = MetagraphSyncer(
             self.subtensor,
             config={
-                constants.SUBNET_UID: dt.timedelta(minutes=20).total_seconds,
-                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds,
+                self.config.netuid: dt.timedelta(minutes=20).total_seconds(),
             },
         )
         # Perform an initial sync of all tracked metagraphs.
-        self.metagraph_syncer.do_initial_sync()
-        self.metagraph_syncer.start()
+        self.subnet_metagraph_syncer.do_initial_sync()
+        self.subnet_metagraph_syncer.start()
+
+        # Setup metagraph syncer for dataset subnets that always point to prod chain + subnet uids.
+        self.dataset_metagraph_syncer = MetagraphSyncer(
+            self.dataset_subtensor,
+            config={
+                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
+            },
+        )
+
+        self.dataset_metagraph_syncer.do_initial_sync()
+        self.dataset_metagraph_syncer.start()
 
         # Create metagraph locks to avoid cross thread access issues in the update loop.
         self.metagraph_lock = threading.RLock()
         self.cortex_metagraph_lock = threading.RLock()
 
-        self.metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
-            constants.SUBNET_UID
+        # Get initial metagraphs.
+        self.metagraph: bt.metagraph = self.subnet_metagraph_syncer.get_metagraph(
+            self.config.netuid
         )
-        self.cortex_metagraph: bt.metagraph = self.metagraph_syncer.get_metagraph(
-            constants.CORTEX_SUBNET_UID
+        self.cortex_metagraph: bt.metagraph = (
+            self.dataset_metagraph_syncer.get_metagraph(constants.CORTEX_SUBNET_UID)
         )
-        self.metagraph_syncer.register_listener(
-            self._on_metagraph_updated,
-            netuids=[constants.SUBNET_UID, constants.CORTEX_SUBNET_UID],
-        )
+
         bt.logging.info(f"Metagraph: {self.metagraph}.")
         bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
+
+        # Register a listener for the subnet and dataset metagraph syncers.
+        self.subnet_metagraph_syncer.register_listener(
+            self._on_subnet_metagraph_updated,
+            netuids=[self.config.netuid],
+        )
+        self.dataset_metagraph_syncer.register_listener(
+            self._on_dataset_metagraph_updated,
+            netuids=[constants.CORTEX_SUBNET_UID],
+        )
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -494,8 +520,10 @@ class Validator:
                 # Find all hotkeys that are currently being evaluated or pending eval.
                 uids_to_keep = set()
                 with self.pending_uids_to_eval_lock:
-                    for _, uids in self.pending_uids_to_eval.items():
-                        uids_to_keep.update(uids)
+                    for pending_uids in self.pending_uids_to_eval.values():
+                        uids_to_keep.update(pending_uids)
+                    for eval_uids in self.uids_to_eval.values():
+                        uids_to_keep.update(eval_uids)
 
                 hotkeys_to_keep = set()
                 with self.metagraph_lock:
@@ -527,6 +555,7 @@ class Validator:
         async def _try_set_weights():
             with self.metagraph_lock:
                 uids = self.metagraph.uids
+                block = self.metagraph.block.item()
             try:
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
@@ -536,6 +565,8 @@ class Validator:
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
+                # We only update the last epoch when we successfully set weights.
+                self.last_epoch = block
             except:
                 bt.logging.warning("Failed to set weights. Trying again later.")
 
@@ -555,16 +586,26 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
-    def _on_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
-        """Processes an update to the metagraph"""
-        if netuid == constants.SUBNET_UID:
+    def _on_subnet_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
+        """Processes an update to the metagraph for the subnet."""
+        if netuid == self.config.netuid:
             with self.metagraph_lock:
                 self.metagraph = copy.deepcopy(metagraph)
                 self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+        else:
+            bt.logging.error(
+                f"Unexpected subnet uid in subnet metagraph syncer: {netuid}"
+            )
 
-        elif netuid == constants.CORTEX_SUBNET_UID:
+    def _on_dataset_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
+        """Processes an update to the metagraph for the dataset subnets."""
+        if netuid == constants.CORTEX_SUBNET_UID:
             with self.cortex_metagraph:
                 self.cortex_metagraph = copy.deepcopy(metagraph)
+        else:
+            bt.logging.error(
+                f"Unexpected subnet uid in dataset metagraph syncer: {netuid}"
+            )
 
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
@@ -707,42 +748,49 @@ class Validator:
                         )
 
                     if self.config.do_sample:
-                        prompt, truth = cortex_data.get_sample()
-                        conversation = [{"role": "user", "content": prompt}]
-                        input_ids = tokenizer.apply_chat_template(
-                            conversation,
-                            truncation=True,
-                            return_tensors="pt",
-                            max_length=competition.constraints.sequence_length,
-                            add_generation_prompt=True,
-                        )
-                        generation_config = GenerationConfig(
-                            max_length=competition.constraints.sequence_length,
-                            do_sample=True,
-                            temperature=0.8,
-                            top_p=0.95,
-                            top_k=40,
-                            repetition_penalty=1.1,
-                            eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.eos_token_id,
-                        )
-                        # Run each generation in a subprocess so that the GPU is reset between each model.
-                        output = utils.run_in_subprocess(
-                            functools.partial(
-                                ft.validation.generate_output,
-                                model_i.pt_model,
-                                input_ids,
-                                generation_config,
-                                self.config.device,
-                            ),
-                            ttl=360,
-                            mode="spawn",
-                        )
-                        response = tokenizer.decode(
-                            output[0][len(input_ids[0]) :], skip_special_tokens=True
-                        )
-                        sample = (prompt, response, truth)
-                        sample_per_uid[uid_i] = sample
+                        try:
+                            prompt, truth = cortex_data.get_sample()
+                            conversation = [{"role": "user", "content": prompt}]
+                            input_ids = tokenizer.apply_chat_template(
+                                conversation,
+                                truncation=True,
+                                return_tensors="pt",
+                                max_length=competition.constraints.sequence_length,
+                                add_generation_prompt=True,
+                            )
+                            generation_config = GenerationConfig(
+                                max_length=competition.constraints.sequence_length,
+                                do_sample=True,
+                                temperature=0.8,
+                                top_p=0.95,
+                                top_k=40,
+                                repetition_penalty=1.1,
+                                eos_token_id=tokenizer.eos_token_id,
+                                pad_token_id=tokenizer.eos_token_id,
+                            )
+                            # Run each generation in a subprocess so that the GPU is reset between each model.
+                            response = utils.run_in_subprocess(
+                                functools.partial(
+                                    ft.validation.generate_output,
+                                    model_i.pt_model,
+                                    input_ids,
+                                    generation_config,
+                                    self.config.device,
+                                    tokenizer,
+                                ),
+                                ttl=360,
+                                mode="spawn",
+                            )
+                            sample = (prompt, response, truth)
+                            bt.logging.trace(
+                                f"Generated sample for uid: {uid_i} sample (prompt, response, truth): {sample}"
+                            )
+                            sample_per_uid[uid_i] = sample
+                        except Exception as e:
+                            bt.logging.error(
+                                f"Error in eval loop during sample generation: {e}."
+                            )
+                            traceback.print_exc()  # Print the stack trace
 
                     del model_i
                 except Exception as e:
@@ -782,11 +830,15 @@ class Validator:
         )
 
         # Get ids for all competitions in the schedule.
-        active_competitions = set([comp.id for comp in constants.COMPETITION_SCHEDULE])
+        active_competition_ids = set(
+            [comp.id for comp in constants.COMPETITION_SCHEDULE]
+        )
         # Align competition_tracker to only track active competitions.
-        self.competition_tracker.reset_competitions(active_competitions)
+        self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(active_competitions)
+        self.weights = self.competition_tracker.get_subnet_weights(
+            constants.COMPETITION_SCHEDULE
+        )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
@@ -801,7 +853,7 @@ class Validator:
             for uid, wr in win_rate.items()
         }
         with self.pending_uids_to_eval_lock:
-            self.uids_to_eval[competition.competition_id] = set(
+            self.uids_to_eval[competition.id] = set(
                 sorted(
                     model_prioritization, key=model_prioritization.get, reverse=True
                 )[: self.config.sample_min]
@@ -817,7 +869,7 @@ class Validator:
 
         # Log to screen and wandb.
         self.log_step(
-            competition.competition_id,
+            competition.id,
             uids,
             uid_to_block,
             self._get_uids_to_competition_ids(),
@@ -1046,19 +1098,24 @@ class Validator:
 
         while True:
             try:
+
+                # First run a step.
+                await self.try_run_step(ttl=60 * 60)
+                self.global_step += 1
+
                 with self.metagraph_lock:
                     block = self.metagraph.block.item()
-                while block - self.last_epoch < self.config.blocks_per_epoch:
-                    await self.try_run_step(ttl=60 * 20)
-                    bt.logging.debug(
-                        f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
-                    )
-                    self.global_step += 1
 
+                # Then check if we should set weights and do so if needed.
                 if not self.config.offline:
-                    await self.try_set_weights(ttl=60)
-                self.last_epoch = block
-                self.epoch_step += 1
+                    blocks_until_epoch = block - self.last_epoch
+
+                    if blocks_until_epoch >= self.config.blocks_per_epoch:
+                        await self.try_set_weights(ttl=60)
+                    else:
+                        bt.logging.debug(
+                            f"{block - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+                        )
 
             except KeyboardInterrupt:
                 bt.logging.info(

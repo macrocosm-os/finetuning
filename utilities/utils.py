@@ -57,7 +57,7 @@ def get_top_miners(
             if weight >= threshold:
                 top_miners.add(uid)
 
-    return list(top_miners)
+    return top_miners
 
 
 def get_high_stake_validators(metagraph: bt.metagraph, min_stake: int) -> Set[int]:
