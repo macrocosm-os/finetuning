@@ -1103,6 +1103,7 @@ class Validator:
                 await self.try_run_step(ttl=60 * 60)
                 self.global_step += 1
 
+                # Note we currently sync metagraph every ~100 blocks and so the granularity here is only to that point.
                 with self.metagraph_lock:
                     block = self.metagraph.block.item()
 
