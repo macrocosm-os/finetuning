@@ -8,11 +8,11 @@ from utilities.metagraph_syncer import MetagraphSyncer
 
 class TestMetagraphSyncer(unittest.TestCase):
     def test_do_initial_sync(self):
-        # Mock sub9tensor.metagraph() function
+        # Mock subtensor.metagraph() function
         metagraph1 = bt.metagraph(netuid=1, sync=False)
         metagraph2 = bt.metagraph(netuid=2, sync=False)
 
-        def get_metagraph(netuid) -> bt.metagraph:
+        def get_metagraph(netuid, lite) -> bt.metagraph:
             if netuid == 1:
                 return metagraph1
             elif netuid == 2:
@@ -41,7 +41,7 @@ class TestMetagraphSyncer(unittest.TestCase):
         metagraph1 = bt.metagraph(netuid=1, sync=False)
         metagraph2 = bt.metagraph(netuid=2, sync=False)
 
-        def get_metagraph(netuid) -> bt.metagraph:
+        def get_metagraph(netuid, lite) -> bt.metagraph:
             if netuid == 1:
                 return metagraph1
             elif netuid == 2:
@@ -71,6 +71,57 @@ class TestMetagraphSyncer(unittest.TestCase):
 
         # Since we sync every 1 second, verify the listener is called within 5 seconds.
         event.wait(5)
+
+    def test_lite_metagraph(self):
+        # Mock subtensor.metagraph() function
+        metagraph1 = bt.metagraph(netuid=1, sync=False)
+
+        def get_metagraph(netuid, lite) -> bt.metagraph:
+            if netuid == 1 and lite == True:
+                return metagraph1
+            else:
+                raise Exception("Invalid netuid")
+
+        mock_subtensor = mock.MagicMock(spec=bt.subtensor)
+        metagraph_mock = mock.MagicMock(side_effect=get_metagraph)
+        mock_subtensor.metagraph = metagraph_mock
+
+        # Create MetagraphSyncer instance with mock subtensor
+        metagraph_syncer = MetagraphSyncer(
+            mock_subtensor,
+            {
+                1: 1,
+            },
+        )
+
+        # Call do_initial_sync method
+        metagraph_syncer.do_initial_sync()
+
+        # Verify get_metagraph() returns the expected metagraph.
+        self.assertEqual(metagraph_syncer.get_metagraph(1).netuid, metagraph1.netuid)
+
+    def test_non_lite_metagraph(self):
+        # Mock subtensor.metagraph() function
+        metagraph1 = bt.metagraph(netuid=1, sync=False)
+
+        def get_metagraph(netuid, lite) -> bt.metagraph:
+            if netuid == 1 and lite == False:
+                return metagraph1
+            else:
+                raise Exception("Invalid netuid")
+
+        mock_subtensor = mock.MagicMock(spec=bt.subtensor)
+        metagraph_mock = mock.MagicMock(side_effect=get_metagraph)
+        mock_subtensor.metagraph = metagraph_mock
+
+        # Create MetagraphSyncer instance with mock subtensor
+        metagraph_syncer = MetagraphSyncer(mock_subtensor, {1: 1}, lite=False)
+
+        # Call do_initial_sync method
+        metagraph_syncer.do_initial_sync()
+
+        # Verify get_metagraph() returns the expected metagraph.
+        self.assertEqual(metagraph_syncer.get_metagraph(1).netuid, metagraph1.netuid)
 
 
 if __name__ == "__main__":

@@ -18,15 +18,19 @@ class MetagraphSyncer:
         last_synced_time: Optional[datetime] = None
         listeners: List = field(default_factory=list)
 
-    def __init__(self, subtensor: bt.subtensor, config: Dict[int, int]):
+    def __init__(
+        self, subtensor: bt.subtensor, config: Dict[int, int], lite: bool = True
+    ):
         """Constructs a new MetagraphSyncer, that periodically refreshes metagraph defined in the config.
 
         Args:
             subtensor (bt.subtensor): The subtensor used to fetch the metagraphs.
             config (Dict[int, int]): A mapping of netuid to the cadence (in seconds) to sync the metagraph.
+            lite (bool): If the metagraphs should be synced as a lite metagraph (without detailed Weights).
         """
         self.subtensor = subtensor
         self.config = config
+        self.lite = lite
         self.metagraph_map: Dict[int, MetagraphSyncer._State] = {
             netuid: MetagraphSyncer._State() for netuid in config.keys()
         }
@@ -44,14 +48,16 @@ class MetagraphSyncer:
         bt.logging.debug("Metagraph syncer do_initial_sync called")
 
         for netuid in self.config.keys():
-            fn = functools.partial(self.subtensor.metagraph, netuid)
+            fn = functools.partial(self.subtensor.metagraph, netuid, self.lite)
             metagraph = utils.run_in_thread(fn, ttl=120, name=f"InitalSync-{netuid}")
             with self.lock:
                 state = self.metagraph_map[netuid]
                 state.metagraph = metagraph
                 state.last_synced_time = datetime.now()
 
-            bt.logging.debug(f"Successfully loaded metagraph for {netuid}")
+            bt.logging.debug(
+                f"Successfully loaded metagraph for {netuid} with lite: {self.lite}."
+            )
 
         self.done_initial_sync = True
 
@@ -75,11 +81,13 @@ class MetagraphSyncer:
                 # sync 1 metagraph at a time.
                 bt.logging.trace(f"Syncing metagraph for {netuid}.")
                 metagraph = utils.run_in_thread(
-                    functools.partial(self.subtensor.metagraph, netuid),
+                    functools.partial(self.subtensor.metagraph, netuid, self.lite),
                     ttl=120,
                     name=f"Sync-{netuid}",
                 )
-                bt.logging.trace(f"Successfully synced metagraph for {netuid}.")
+                bt.logging.trace(
+                    f"Successfully synced metagraph for {netuid} with lite: {self.lite}."
+                )
                 state = None
                 with self.lock:
                     # Store metagraph and sync time
