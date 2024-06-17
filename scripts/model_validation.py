@@ -1,9 +1,12 @@
+"""This script evaluates a local model using the same process as a Validator.
+
+It can be used to estimate the performance of a model before submitting it."""
+
 import argparse
 import math
 import random
 import sys
 
-import torch
 from transformers import AutoModelForCausalLM
 
 import constants
