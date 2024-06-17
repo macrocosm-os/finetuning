@@ -194,6 +194,12 @@ class TestModelUpdater(unittest.TestCase):
 
         self.assertIn("Hash", str(context.exception))
 
+        # Also assert that the model tracker is tracking the model even after the exception above.
+        self.assertEqual(
+            self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey),
+            model_metadata,
+        )
+
     # TODO: Create separate tests for size, architecture, and eps.
     def test_sync_model_wrong_parameters(self):
         hotkey = "test_hotkey"
@@ -232,6 +238,12 @@ class TestModelUpdater(unittest.TestCase):
             asyncio.run(self.model_updater.sync_model(hotkey))
 
         self.assertIn("does not satisfy parameters", str(context.exception))
+
+        # Also assert that the model tracker is tracking the model even after the exception above.
+        self.assertEqual(
+            self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey),
+            model_metadata,
+        )
 
 
 if __name__ == "__main__":

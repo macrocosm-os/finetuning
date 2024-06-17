@@ -93,6 +93,9 @@ class ModelUpdater:
         # Otherwise we need to download the new model based on the metadata.
         model = await self.remote_store.download_model(metadata.id, path, competition)
 
+        # Update the tracker even if the model fails the following checks to avoid redownloading without new metadata.
+        self.model_tracker.on_miner_model_updated(hotkey, metadata)
+
         # Check that the hash of the downloaded content matches.
         secure_hash = get_hash_of_two_strings(model.id.hash, hotkey)
         if secure_hash != metadata.id.secure_hash:
@@ -107,9 +110,6 @@ class ModelUpdater:
             raise ValueError(
                 f"Sync for hotkey {hotkey} failed, model does not satisfy parameters for competition {competition.id}"
             )
-
-        # Update the tracker
-        self.model_tracker.on_miner_model_updated(hotkey, metadata)
 
         return True
 
