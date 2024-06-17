@@ -7,7 +7,6 @@ from unittest import mock
 
 import bittensor as bt
 import torch
-from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedModel
 
 import finetune as ft
 from competitions import utils as competition_utils
