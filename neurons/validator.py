@@ -85,8 +85,11 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
-        # The subtensor for the dataset subnets should always point to the prod chain.
-        self.dataset_subtensor = bt.subtensor()
+        # If running on testnet, default to using finney for the dataset subtensor. 
+        if self.config.using_test_subtensor:
+            self.dataset_subtensor = bt.subtensor()
+        else:
+            self.dataset_subtensor = bt.subtensor(config=self.config)
         self.dendrite = bt.dendrite(wallet=self.wallet)
         torch.backends.cudnn.benchmark = True
 
