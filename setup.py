@@ -66,7 +66,7 @@ setup(
     description="finetuning bittensor subnet",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="TODO",
+    url="https://github.com/macrocosm-os/finetuning",
     author="taoverse",
     packages=find_packages(),
     include_package_data=True,

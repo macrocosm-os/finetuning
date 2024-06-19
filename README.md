@@ -15,7 +15,7 @@
 
 ---
 
-[Bittensor Discord](https://discord.gg/bittensor) • [Network](https://taostats.io/TODO) • [Research](https://bittensor.com/whitepaper) 
+[Bittensor Discord](https://discord.gg/bittensor) • [Network](https://x.taostats.io/subnet/37) • [Research](https://bittensor.com/whitepaper) 
 
 ---
 
@@ -29,7 +29,7 @@
 > **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
 
 
-The Finetuning subnet rewards miners for **fine-tuning Large Language Models (LLMs)**. At launch the first competition is evaluated with data generated from a continuous stream of synthetic data provided by [subnet 18](https://github.com/corcel-api/cortex.t/). It is a continuous fine-tuning benchmark, with new data generated daily.
+The Finetuning subnet 37 rewards miners for **fine-tuning Large Language Models (LLMs)**. At launch the first competition is evaluated with data generated from a continuous stream of synthetic data provided by [subnet 18](https://github.com/corcel-api/cortex.t/). It is a continuous fine-tuning benchmark, with new data generated daily.
 
 The mechanism works like this:
 
@@ -55,9 +55,9 @@ Note that competitions are specified independently [here](./constants/__init__.p
 
 TL;DR:
 1. [Chat](https://discord.gg/bittensor)
-2. [Leaderboard](TODO)
+2. [Leaderboard](https://huggingface.co/spaces/macrocosm-os/finetuning-leaderboard)
 
-This repo's main conversation is carried out in the Bittensor [Discord](https://discord.gg/bittensor). Visit the TODO channel to ask questions and get real time feedback. You can view the ongoing running of the incentive mechanism, the best miners (see 'incentive'), the most in-consensus validators (see 'vtrust') using this [taostats link](https://taostats.io/subnets/netuid-TODO/). The table shows all 256 participant UIDs with corresponding YC stats and earnings. 
+This repo's main conversation is carried out in the Bittensor [Discord](https://discord.gg/bittensor). Visit the [subnet 37 channel](https://discord.com/channels/799672011265015819/1249845979780223117) to ask questions and get real time feedback. You can view the ongoing running of the incentive mechanism, the best miners (see 'incentive'), the most in-consensus validators (see 'vtrust') using this [taostats link](https://x.taostats.io/subnet/37). The table shows all 256 participant UIDs with corresponding YC stats and earnings. 
 
 See [Miner Setup](docs/miner.md#getting-started) to learn how to setup a Miner.
 
