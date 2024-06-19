@@ -10,7 +10,7 @@ The communication between a miner and a validator happens asynchronously chain a
 
 Miners will need enough disk space to store their model as they work on. Each uploaded model (As of Jun 15th, 2024) may not be more than 15 GB. It is recommended to have at least 50 GB of disk space.
 
-Miners will need enough processing power to train their model. The device the model is trained on is recommended to be a large GPU with atleast 48 GB of VRAM. To be competitive you will likely need clusters of GPUs.
+Miners will need enough processing power to train their model. The device the model is trained on is recommended to be a large GPU with at least 48 GB of VRAM. To be competitive you will likely need clusters of GPUs.
 
 # Getting started
 
@@ -28,7 +28,7 @@ Miners and validators use Wandb to download data from [subnet 18](https://github
 3. Clone the repo
 
 ```shell
-git clone https://github.com/TODO.git
+git clone https://github.com/macrocosm-os/finetuning.git
 ```
 
 4. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
@@ -130,28 +130,4 @@ As of Jun 15th, 2024 for the current competition the subnet works with models ma
 
 The specific requirements for each competition can be found [here](./constants/__init__.py).
 
-The `finetune/mining.py` file has several methods that you may find useful. Example below.
-TODO - Update below to match.
-```python
-import pretrain as ft
-import bittensor as bt
-from transformers import PreTrainedModel
-
-config = bt.config(...)
-wallet = bt.wallet()
-metagraph = bt.metagraph(netuid=6)
-
-actions = ft.mining.actions.Actions.create(config, wallet)
-
-# Load a model from another miner.
-model: PreTrainedModel = actions.load_remote_model(uid=123, metagraph=metagraph, download_dir="mydir")
-
-# Save the model to local file.
-actions.save(model, "model-foo/")
-
-# Load the model from disk.
-actions.load_local_model("model-foo/")
-
-# Publish the model for validator evaluation.
-actions.push(model)
-```
+The `finetune/mining.py` file has several methods that you may find useful. See the [examples](./examples.ipynb) Jupyter notebook for some example uses.

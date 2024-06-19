@@ -77,7 +77,7 @@ By default this will also be used to host validator logs for this subnet [here](
 2. Clone the repo
 
 ```shell
-git clone https://github.com/TODO.git
+git clone https://github.com/macrocosm-os/finetuning.git
 ```
 
 3. Setup your python [virtual environment](https://docs.python.org/3/library/venv.html) or [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands).
@@ -151,12 +151,12 @@ python ./neurons/validator.py -h
 
 ## Test Running Validation
 
-Test running validation:
+You can also test a validator by running it in offline mode. In offline mode, it won't set weights, nor upload data to wandb.
+
 ```shell
 python neurons/validator.py 
     --wallet.name YOUR_WALLET_NAME
     --wallet.hotkey YOUR_WALLET_HOTKEY 
-    --device YOUR_CUDA DEVICE
     --wandb.off
     --offline
 ```
