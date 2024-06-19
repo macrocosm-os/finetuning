@@ -33,11 +33,10 @@ __spec_version__ = (
 VALIDATOR_STATE_VERSION = 1
 
 # The validator WANDB project.
-# TODO: Update these.
 WANDB_PROJECT = "finetuning"
 WANDB_ENTITY = "rusticluftig"
 # The uid for this subnet.
-SUBNET_UID = 6
+SUBNET_UID = 37
 # The uid for the Cortex subnet.
 CORTEX_SUBNET_UID = 18
 # The Cortex.t validator WANDB project and filters
