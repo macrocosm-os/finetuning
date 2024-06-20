@@ -703,7 +703,6 @@ class Validator:
         # Compute model losses on batches.
         bt.logging.debug(f"Computing losses on {uids} for competition {competition.id}")
         losses_per_uid = {muid: None for muid in uids}
-        sample_per_uid = {muid: None for muid in uids}
 
         load_model_perf = PerfMonitor("Eval: Load model")
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
@@ -782,10 +781,9 @@ class Validator:
                                 mode="spawn",
                             )
                             sample = (prompt, response, truth)
-                            bt.logging.trace(
-                                f"Generated sample for uid: {uid_i} sample (prompt, response, truth): {sample}"
+                            bt.logging.success(
+                                f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
                             )
-                            sample_per_uid[uid_i] = sample
                         except Exception as e:
                             bt.logging.error(
                                 f"Error in eval loop during sample generation: {e}."
@@ -877,7 +875,6 @@ class Validator:
             wins,
             win_rate,
             losses_per_uid,
-            sample_per_uid,
             load_model_perf,
             compute_loss_perf,
             load_data_perf,
@@ -896,7 +893,6 @@ class Validator:
         wins: typing.Dict[int, int],
         win_rate: typing.Dict[int, float],
         losses_per_uid: typing.Dict[int, typing.List[float]],
-        sample_per_uid: typing.Dict[str, typing.Tuple[str, str, str]],
         load_model_perf: PerfMonitor,
         compute_loss_perf: PerfMonitor,
         load_data_perf: PerfMonitor,
@@ -931,15 +927,6 @@ class Validator:
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
                 "weight": self.weights[uid].item(),
-                "sample_prompt": (
-                    sample_per_uid[uid][0] if sample_per_uid[uid] is not None else None
-                ),
-                "sample_response": (
-                    sample_per_uid[uid][1] if sample_per_uid[uid] is not None else None
-                ),
-                "sample_truth": (
-                    sample_per_uid[uid][2] if sample_per_uid[uid] is not None else None
-                ),
             }
         table = Table(title="Step")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
@@ -1013,15 +1000,6 @@ class Validator:
                 },
                 "win_total_data": {
                     str(uid): uid_data[str(uid)]["win_total"] for uid in uids
-                },
-                "sample_prompt_data": {
-                    str(uid): uid_data[str(uid)]["sample_prompt"] for uid in uids
-                },
-                "sample_response_data": {
-                    str(uid): uid_data[str(uid)]["sample_response"] for uid in uids
-                },
-                "sample_truth_data": {
-                    str(uid): uid_data[str(uid)]["sample_truth"] for uid in uids
                 },
                 "weight_data": {str(uid): self.weights[uid].item() for uid in uids},
                 "competition_id": {

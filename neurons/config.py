@@ -80,7 +80,7 @@ def validator_config():
     parser.add_argument(
         "--do_sample",
         action="store_true",
-        help="Sample a response from each model (for leaderboard)",
+        help="Sample a response from each model and log them.",
     )
     parser.add_argument(
         "--using_test_subtensor",
