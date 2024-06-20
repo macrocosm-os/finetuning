@@ -57,7 +57,7 @@ TL;DR:
 1. [Chat](https://discord.gg/bittensor)
 2. [Leaderboard](https://huggingface.co/spaces/macrocosm-os/finetuning-leaderboard)
 
-This repo's main conversation is carried out in the Bittensor [Discord](https://discord.gg/bittensor). Visit the [subnet 37 channel](https://discord.com/channels/799672011265015819/1249845979780223117) to ask questions and get real time feedback. You can view the ongoing running of the incentive mechanism, the best miners (see 'incentive'), the most in-consensus validators (see 'vtrust') using this [taostats link](https://x.taostats.io/subnet/37). The table shows all 256 participant UIDs with corresponding YC stats and earnings. 
+This repo's main conversation is carried out in the Bittensor [Discord](https://discord.gg/bittensor). Visit the [subnet 37 channel](https://discord.com/channels/799672011265015819/1253448873305964626) to ask questions and get real time feedback. You can view the ongoing running of the incentive mechanism, the best miners (see 'incentive'), the most in-consensus validators (see 'vtrust') using this [taostats link](https://x.taostats.io/subnet/37). The table shows all 256 participant UIDs with corresponding YC stats and earnings. 
 
 See [Miner Setup](docs/miner.md#getting-started) to learn how to setup a Miner.
 
