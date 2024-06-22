@@ -88,6 +88,13 @@ cd finetuning
 python -m pip install -e .
 ```
 
+Note: flash-attn may not have their dependencies set up correctly. If you run into issues try installing those requirements separately first:
+```shell
+pip install packaging
+pip install wheel
+pip install torch
+```
+
 5. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
 
 6. (Optional) Run a Subtensor instance:
