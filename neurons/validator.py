@@ -44,6 +44,7 @@ import constants
 import finetune as ft
 from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
@@ -677,7 +678,7 @@ class Validator:
         cortex_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
         with load_data_perf.sample():
-            cortex_data = ft.dataset.CortexSubsetLoader(
+            cortex_data = CortexSubsetLoader(
                 use_latest_data=True,
                 random_seed=random.randint(0, sys.maxsize),
                 max_samples=self.config.latest_cortex_samples,

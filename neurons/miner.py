@@ -32,6 +32,7 @@ from transformers import PreTrainedModel
 import constants
 import finetune as ft
 from competitions import utils as competition_utils
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from model.storage.model_metadata_store import ModelMetadataStore
@@ -190,7 +191,7 @@ async def main(config: bt.config):
             bt.logging.debug(
                 f"Loading {config.cortex_samples_per_epoch} pages for training this epoch"
             )
-            loader = ft.dataset.CortexSubsetLoader(
+            loader = CortexSubsetLoader(
                 use_latest_data=False,
                 random_seed=random.randint(0, 100000000),
                 max_samples=config.cortex_samples_per_epoch,

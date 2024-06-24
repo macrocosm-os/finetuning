@@ -13,7 +13,7 @@ import constants
 import finetune as ft
 from competitions import utils as competition_utils
 from competitions.data import Competition, CompetitionId
-from finetune.dataset import CortexSubsetLoader
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from finetune.validation import compute_losses
 from model.data import Model, ModelId
 from model.model_updater import ModelUpdater
