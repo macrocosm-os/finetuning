@@ -11,7 +11,11 @@ class TestHuggingFaceSubsetLoader(unittest.TestCase):
 
     def test_load_falcon_data(self):
         """Tests we can load data from the hugging face falcon dataset."""
+        # Set up the tokenizer along with a pad token for batch generation.
         tokenizer = AutoTokenizer.from_pretrained("Xenova/gpt-4")
+        tokenizer.pad_token = tokenizer.eos_token
+
+        # Load the first two 'pages' of 100 rows each from falcon.
         batches = list(
             HuggingFaceSubsetLoader(
                 dataset_name="tiiuae/falcon-refinedweb",
@@ -23,4 +27,5 @@ class TestHuggingFaceSubsetLoader(unittest.TestCase):
             )
         )
 
-        self.assertEqual(len(batches), 155)
+        # Due to truncation/padding we expect two pages of 100 rows each should have exactly 200 batches.
+        self.assertEqual(len(batches), 200)

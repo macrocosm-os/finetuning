@@ -64,9 +64,13 @@ class HuggingFaceSubsetLoader(IterableDataset):
                 response.raise_for_status()  # This will raise an HTTPError if the HTTP request returned an unsuccessful status code
                 for row in response.json()["rows"]:
                     content = row["row"]["content"]
-                    # TODO: Consider padding="max_length" as an alternative to eos tokens.
-                    self.buffer += self.tokenizer(content, truncation=True)["input_ids"]
-                    self.buffer += [self.tokenizer.eos_token_id]
+                    # Truncate/Pad the content to the desired sequence length. This avoid context breaks.
+                    self.buffer += self.tokenizer(
+                        content,
+                        truncation=True,
+                        padding="max_length",
+                        max_length=self.sequence_length,
+                    )["input_ids"]
                 break  # If the request was successful, break out of the retry loop
             except requests.exceptions.RequestException as e:
                 attempt += 1
