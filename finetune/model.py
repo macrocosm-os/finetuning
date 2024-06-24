@@ -1,12 +1,12 @@
 from transformers import AutoTokenizer, PreTrainedTokenizer
 
-from competitions.data import Competition
+from competitions.data import ModelConstraints
 
 
 def load_tokenizer(
-    competition: Competition, cache_dir: str = None
+    model_constraints: ModelConstraints, cache_dir: str = None
 ) -> PreTrainedTokenizer:
-    """Returns the fixed tokenizer for the given competition."""
+    """Returns the fixed tokenizer for the given model constraints."""
     return AutoTokenizer.from_pretrained(
-        competition.constraints.tokenizer, cache_dir=cache_dir
+        model_constraints.tokenizer, cache_dir=cache_dir
     )

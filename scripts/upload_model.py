@@ -94,20 +94,18 @@ async def main(config: bt.config):
     HuggingFaceModelStore.assert_access_token_exists()
 
     # Get current model parameters
-    competition = competition_utils.get_competition(config.competition_id)
-    if competition is None:
+    model_constraints = competition_utils.get_model_constraints(config.competition_id)
+    if model_constraints is None:
         raise RuntimeError(
             f"Could not find current competition for id: {config.competition_id}"
         )
 
     # Load the model from disk and push it to the chain and Hugging Face.
-    model = ft.mining.load_local_model(
-        config.load_model_dir, competition.constraints.kwargs
-    )
+    model = ft.mining.load_local_model(config.load_model_dir, model_constraints.kwargs)
     await ft.mining.push(
         model,
         config.hf_repo_id,
-        competition.id,
+        config.competition_id,
         wallet,
         metadata_store=chain_metadata_store,
         update_repo_visibility=config.update_repo_visibility,
@@ -118,7 +116,7 @@ if __name__ == "__main__":
     # Parse and print configuration
     config = get_config()
     if config.list_competitions:
-        print(constants.COMPETITION_SCHEDULE)
+        print(constants.COMPETITION_SCHEDULE_BY_BLOCK)
     else:
         print(config)
         asyncio.run(main(config))

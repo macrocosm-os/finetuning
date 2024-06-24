@@ -44,6 +44,7 @@ import constants
 import finetune as ft
 from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
+from competitions.utils import utils as competition_utils
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
@@ -632,8 +633,15 @@ class Validator:
             7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
         """
 
-        competition = constants.COMPETITION_SCHEDULE[
-            self.global_step % len(constants.COMPETITION_SCHEDULE)
+        # Note that block on the metagraph only updates on sync operations.
+        # Therefore validators may not start evaluating on a new competition schedule immediately.
+        with self.metagraph_lock:
+            block = self.metagraph.block.item()
+        competition_schedule = competition_utils.get_competition_schedule_for_block(
+            block
+        )
+        competition = competition_schedule[
+            self.global_step % len(competition_schedule)
         ]
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
@@ -829,13 +837,13 @@ class Validator:
 
         # Get ids for all competitions in the schedule.
         active_competition_ids = set(
-            [comp.id for comp in constants.COMPETITION_SCHEDULE]
+            [comp.id for comp in competition_schedule]
         )
         # Align competition_tracker to only track active competitions.
         self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
         self.weights = self.competition_tracker.get_subnet_weights(
-            constants.COMPETITION_SCHEDULE
+            competition_schedule
         )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
