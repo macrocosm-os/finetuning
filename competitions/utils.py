@@ -6,9 +6,7 @@ from competitions.data import Competition, CompetitionId, ModelConstraints
 
 def get_model_constraints(id: CompetitionId) -> Optional[ModelConstraints]:
     """Returns the model constraints for the given id, or None if it does not exist."""
-    if id in constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID:
-        return constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID[id]
-    return None
+    return constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(id, None)
 
 
 def get_competition_for_block(id: CompetitionId, block: int) -> Optional[Competition]:
