@@ -132,7 +132,8 @@ class TestModelUpdater(unittest.TestCase):
         )
         asyncio.run(
             self.remote_store.upload_model(
-                model, competition_utils.get_competition(CompetitionId.SN9_MODEL)
+                model,
+                competition_utils.get_model_constraints(CompetitionId.SN9_MODEL),
             )
         )
 
@@ -229,7 +230,8 @@ class TestModelUpdater(unittest.TestCase):
         )
         asyncio.run(
             self.remote_store.upload_model(
-                model, competition_utils.get_competition(CompetitionId.SN9_MODEL)
+                model,
+                competition_utils.get_model_constraints(CompetitionId.SN9_MODEL),
             ),
         )
 
@@ -245,6 +247,7 @@ class TestModelUpdater(unittest.TestCase):
             model_metadata,
         )
 
+    # TODO: Create test for valid competition at too early of a block once added.
 
 if __name__ == "__main__":
     unittest.main()

@@ -76,15 +76,15 @@ async def push(
     if remote_model_store is None:
         remote_model_store = HuggingFaceModelStore()
 
-    competition = competition_utils.get_competition(competition_id)
-    if not competition:
+    model_constraints = competition_utils.get_model_constraints(competition_id)
+    if not model_constraints:
         raise ValueError("Invalid competition_id")
 
     # First upload the model to HuggingFace.
     namespace, name = utils.validate_hf_repo_id(repo)
     model_id = ModelId(namespace=namespace, name=name, competition_id=competition_id)
     model_id = await remote_model_store.upload_model(
-        Model(id=model_id, pt_model=model), competition
+        Model(id=model_id, pt_model=model), model_constraints
     )
 
     bt.logging.success("Uploaded model to hugging face.")
@@ -213,13 +213,15 @@ async def load_remote_model(
     if not model_metadata:
         raise ValueError(f"No model metadata found for miner {uid}")
 
-    competition = competition_utils.get_competition(model_metadata.id.competition_id)
-    if not competition:
+    model_constraints = competition_utils.get_model_constraints(
+        model_metadata.id.competition_id
+    )
+    if not model_constraints:
         raise ValueError("Invalid competition_id")
 
     bt.logging.success(f"Fetched model metadata: {model_metadata}")
     model: Model = await remote_model_store.download_model(
-        model_metadata.id, download_dir, competition
+        model_metadata.id, download_dir, model_constraints
     )
     return model.pt_model
 

@@ -70,19 +70,19 @@ def main():
     )
     args = parser.parse_args()
     if args.list_competitions:
-        print(constants.COMPETITION_SCHEDULE)
+        print(constants.COMPETITION_SCHEDULE_BY_BLOCK)
         return
 
-    competition = competition_utils.get_competition(args.competition_id)
-    if competition is None:
+    model_constraints = competition_utils.get_model_constraints(args.competition_id)
+    if model_constraints is None:
         raise AssertionError("Competition for {args.competition_id} not found")
 
-    competition.constraints.kwargs["use_cache"] = True
+    model_constraints.kwargs["use_cache"] = True
 
     print(f"Loading model for competition {args.competition_id}")
     load_model_perf = PerfMonitor("Eval: Load model")
     with load_model_perf.sample():
-        model = load_model(args.model_path, competition)
+        model = load_model(args.model_path, model_constraints)
     print(load_model_perf.summary_str())
 
     if not ModelUpdater.verify_model_satisfies_parameters(model):
@@ -103,8 +103,8 @@ def main():
     print(pull_data_perf.summary_str())
 
     print("Tokenizing cortex data")
-    tokenizer = ft.model.load_tokenizer(competition)
-    batches = cortex_data.tokenize(tokenizer, competition.constraints.sequence_length)
+    tokenizer = ft.model.load_tokenizer(model_constraints)
+    batches = cortex_data.tokenize(tokenizer, model_constraints.sequence_length)
 
     print("Calculating losses")
     compute_loss_perf = PerfMonitor("Eval: Compute loss")
