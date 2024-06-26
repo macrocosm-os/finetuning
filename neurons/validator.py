@@ -44,7 +44,7 @@ import constants
 import finetune as ft
 from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
-from competitions.utils import utils as competition_utils
+from competitions import utils as competition_utils
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
