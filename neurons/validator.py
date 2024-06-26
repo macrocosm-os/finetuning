@@ -1070,7 +1070,8 @@ class Validator:
         )
         with self.metagraph_lock:
             uids_to_competition_ids = {}
-            for uid in range(len(hotkey_to_metadata)):
+            # Check all uids currently registered as we default to None if they don't have metadata.
+            for uid in range(len(self.metagraph.uids)):
                 hotkey = self.metagraph.hotkeys[uid]
                 metadata = hotkey_to_metadata.get(hotkey, None)
                 uids_to_competition_ids[uid] = (
