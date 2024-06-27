@@ -44,7 +44,7 @@ import constants
 import finetune as ft
 from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
-from competitions.utils import utils as competition_utils
+from competitions import utils as competition_utils
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
@@ -640,9 +640,7 @@ class Validator:
         competition_schedule = competition_utils.get_competition_schedule_for_block(
             block
         )
-        competition = competition_schedule[
-            self.global_step % len(competition_schedule)
-        ]
+        competition = competition_schedule[self.global_step % len(competition_schedule)]
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
@@ -698,7 +696,7 @@ class Validator:
         # Tokenize the data into batches for use in evaluation.
         # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
         tokenizer = ft.model.load_tokenizer(
-            competition, cache_dir=self.config.model_dir
+            competition.constraints, cache_dir=self.config.model_dir
         )
         batches = cortex_data.tokenize(
             tokenizer, competition.constraints.sequence_length
@@ -836,15 +834,11 @@ class Validator:
         )
 
         # Get ids for all competitions in the schedule.
-        active_competition_ids = set(
-            [comp.id for comp in competition_schedule]
-        )
+        active_competition_ids = set([comp.id for comp in competition_schedule])
         # Align competition_tracker to only track active competitions.
         self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(
-            competition_schedule
-        )
+        self.weights = self.competition_tracker.get_subnet_weights(competition_schedule)
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
@@ -1070,7 +1064,8 @@ class Validator:
         )
         with self.metagraph_lock:
             uids_to_competition_ids = {}
-            for uid in range(len(hotkey_to_metadata)):
+            # Check all uids currently registered as we default to None if they don't have metadata.
+            for uid in range(len(self.metagraph.uids)):
                 hotkey = self.metagraph.hotkeys[uid]
                 metadata = hotkey_to_metadata.get(hotkey, None)
                 uids_to_competition_ids[uid] = (
