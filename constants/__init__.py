@@ -75,6 +75,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             "torch_dtype": torch.bfloat16,
             "attn_implementation": "flash_attention_2",
         },
+        eval_block_delay=7200,  # ~1 day.
     ),
 }
 

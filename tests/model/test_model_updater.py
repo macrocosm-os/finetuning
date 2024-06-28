@@ -74,7 +74,7 @@ class TestModelUpdater(unittest.TestCase):
 
         # FakeRemoteModelStore raises a KeyError but HuggingFace may raise other exceptions.
         with self.assertRaises(Exception):
-            asyncio.run(self.model_updater.sync_model(hotkey))
+            asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
     def test_sync_model_same_metadata(self):
         hotkey = "test_hotkey"
@@ -101,7 +101,7 @@ class TestModelUpdater(unittest.TestCase):
 
         self.model_tracker.on_miner_model_updated(hotkey, model_metadata)
 
-        asyncio.run(self.model_updater.sync_model(hotkey))
+        asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         # Tracker information did not change.
         self.assertEqual(
@@ -145,7 +145,7 @@ class TestModelUpdater(unittest.TestCase):
         with self.assertRaises(Exception):
             self.local_store.retrieve_model(hotkey, model_id, kwargs={})
 
-        asyncio.run(self.model_updater.sync_model(hotkey))
+        asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         self.assertEqual(
             self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey),
@@ -154,6 +154,46 @@ class TestModelUpdater(unittest.TestCase):
         self.assertEqual(
             str(self.local_store.retrieve_model(hotkey, model_id, kwargs={})),
             str(model),
+        )
+
+    def test_sync_model_new_metadata_under_block_delay(self):
+        hotkey = "test_hotkey"
+        model_hash = "TestHash1"
+        model_id = ModelId(
+            namespace="TestPath",
+            name="TestModel",
+            competition_id=CompetitionId.SN9_MODEL,
+            hash=model_hash,
+            secure_hash=utils.get_hash_of_two_strings(model_hash, hotkey),
+            commit="TestCommit",
+        )
+        model_metadata = ModelMetadata(id=model_id, block=1)
+
+        pt_model = self.tiny_model
+
+        model = Model(id=model_id, pt_model=pt_model)
+
+        # Setup the metadata and remote store but not local or the model_tracker.
+        asyncio.run(
+            self.metadata_store.store_model_metadata_exact(hotkey, model_metadata)
+        )
+        asyncio.run(
+            self.remote_store.upload_model(
+                model,
+                competition_utils.get_model_constraints(CompetitionId.SN9_MODEL),
+            )
+        )
+
+        self.assertIsNone(
+            self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey)
+        )
+
+        updated = asyncio.run(self.model_updater.sync_model(hotkey, curr_block=1))
+
+        # Tracker information did not change.
+        self.assertFalse(updated)
+        self.assertIsNone(
+            self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey)
         )
 
     def test_sync_model_bad_hash(self):
@@ -191,7 +231,7 @@ class TestModelUpdater(unittest.TestCase):
 
         # Assert we fail due to the hash mismatch between the model in remote store and the metadata on chain.
         with self.assertRaises(ValueError) as context:
-            asyncio.run(self.model_updater.sync_model(hotkey))
+            asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         self.assertIn("Hash", str(context.exception))
 
@@ -237,7 +277,7 @@ class TestModelUpdater(unittest.TestCase):
 
         # Assert we fail due to not meeting the competition parameters.
         with self.assertRaises(ValueError) as context:
-            asyncio.run(self.model_updater.sync_model(hotkey))
+            asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         self.assertIn("does not satisfy parameters", str(context.exception))
 
@@ -248,6 +288,7 @@ class TestModelUpdater(unittest.TestCase):
         )
 
     # TODO: Create test for valid competition at too early of a block once added.
+
 
 if __name__ == "__main__":
     unittest.main()
