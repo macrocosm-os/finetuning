@@ -172,7 +172,9 @@ class TestMining(unittest.TestCase):
                 id=miner_1_model_id,
                 pt_model=model,
             ),
-            competition=competition_utils.get_competition(CompetitionId.SN9_MODEL),
+            model_constraints=competition_utils.get_model_constraints(
+                CompetitionId.SN9_MODEL
+            ),
         )
 
         # Verify that miner 1's model is loaded.

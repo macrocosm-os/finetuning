@@ -6,7 +6,7 @@ from typing import Optional
 from huggingface_hub import HfApi
 from transformers import AutoModelForCausalLM
 
-from constants import MAX_HUGGING_FACE_BYTES, Competition
+from constants import MAX_HUGGING_FACE_BYTES, ModelConstraints
 from model.data import Model, ModelId
 from model.storage.disk import utils
 from model.storage.remote_model_store import RemoteModelStore
@@ -27,7 +27,9 @@ class HuggingFaceModelStore(RemoteModelStore):
         """Returns the access token if it exists."""
         return os.getenv("HF_ACCESS_TOKEN")
 
-    async def upload_model(self, model: Model, competition: Competition) -> ModelId:
+    async def upload_model(
+        self, model: Model, model_constraints: ModelConstraints
+    ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
         token = HuggingFaceModelStore.assert_access_token_exists()
 
@@ -44,7 +46,7 @@ class HuggingFaceModelStore(RemoteModelStore):
         # local tmp directory after which it can be deleted.
         with tempfile.TemporaryDirectory() as temp_dir:
             model_with_hash = await self.download_model(
-                model_id_with_commit, temp_dir, competition
+                model_id_with_commit, temp_dir, model_constraints
             )
             # Return a ModelId with both the correct commit and hash.
             return model_with_hash.id
@@ -53,7 +55,7 @@ class HuggingFaceModelStore(RemoteModelStore):
         self,
         model_id: ModelId,
         local_path: str,
-        competition: Competition,
+        model_constraints: ModelConstraints,
     ) -> Model:
         """Retrieves a trained model from Hugging Face."""
         if not model_id.commit:
@@ -84,7 +86,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             cache_dir=local_path,
             use_safetensors=True,
             token=token,
-            **competition.constraints.kwargs,
+            **model_constraints.kwargs,
         )
 
         # Get the directory the model was stored to.

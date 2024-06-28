@@ -124,17 +124,17 @@ async def main(config: bt.config):
         else:
             use_wandb = True
 
-    competition = competition_utils.get_competition(config.competition_id)
-    if not competition:
+    model_constraints = competition_utils.get_model_constraints(config.competition_id)
+    if not model_constraints:
         raise RuntimeError(f"No competition found for {config.competition_id}")
-    kwargs = competition.constraints.kwargs.copy()
+    kwargs = model_constraints.kwargs.copy()
     kwargs["torch_dtype"] = (
         torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
     )
     kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
-    tokenizer = ft.model.load_tokenizer(competition, cache_dir=config.model_dir)
+    tokenizer = ft.model.load_tokenizer(model_constraints, cache_dir=config.model_dir)
     model = await load_starting_model(config, metagraph, chain_metadata_store, kwargs)
     model = model.train()
     model = model.to(config.device)
@@ -198,9 +198,7 @@ async def main(config: bt.config):
                 page_size=config.cortex_steps,
             )
             bt.logging.debug("Finished loading data")
-            batches = loader.tokenize(
-                tokenizer, competition.constraints.sequence_length
-            )
+            batches = loader.tokenize(tokenizer, model_constraints.sequence_length)
 
             # Enumerate over the data loader
             n_batches = 0
@@ -262,12 +260,12 @@ async def main(config: bt.config):
 
                 # First, reload the best model from the training run.
                 model_to_upload = ft.mining.load_local_model(
-                    model_dir, competition.constraints.kwargs
+                    model_dir, model_constraints.kwargs
                 )
                 await ft.mining.push(
                     model_to_upload,
                     config.hf_repo_id,
-                    competition.id,
+                    config.competition_id,
                     wallet,
                     update_repo_visibility=config.update_repo_visibility,
                     metadata_store=chain_metadata_store,
@@ -292,7 +290,7 @@ if __name__ == "__main__":
     config = neuron_config.miner_config()
 
     if config.list_competitions:
-        print(constants.COMPETITION_SCHEDULE)
+        print(constants.COMPETITION_SCHEDULE_BY_BLOCK)
     else:
         print(config)
         asyncio.run(main(config))
