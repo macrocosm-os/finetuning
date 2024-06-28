@@ -94,6 +94,11 @@ class ModelUpdater:
         # Check that the metadata is old enough to meet the eval_block_delay for the competition.
         # If not we return false and will check again next time we go through the update loop.
         if curr_block - metadata.block < competition.constraints.eval_block_delay:
+            bt.logging.debug(
+                f"""Sync for hotkey {hotkey} delayed as the current block: {curr_block} is not at least 
+                {competition.constraints.eval_block_delay} blocks after the upload block: {metadata.block}. 
+                Will automatically retry later."""
+            )
             return False
 
         # Check what model id the model tracker currently has for this hotkey.
