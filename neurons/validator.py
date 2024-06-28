@@ -355,6 +355,8 @@ class Validator:
                     > constants.chain_update_cadence
                 ):
                     last_checked_top_models_time = dt.datetime.now()
+                    # Take a deep copy of the metagraph for use in the top uid retry check.
+                    # The regular loop below will use self.metagraph which may be updated as we go.
                     with self.metagraph_lock:
                         metagraph = copy.deepcopy(self.metagraph)
 
@@ -476,7 +478,9 @@ class Validator:
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(
-                    self.model_updater.sync_model(hotkey, curr_block, retry_stable_metadata=False)
+                    self.model_updater.sync_model(
+                        hotkey, curr_block, retry_stable_metadata=False
+                    )
                 )
 
                 if updated:
