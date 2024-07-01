@@ -36,7 +36,7 @@ class TestUtils(unittest.TestCase):
                 GemmaForCausalLM,
             ],
             tokenizer="Xenova/gpt-4",
-            eval_block_delay=7200,
+            eval_block_delay=1200,
             kwargs={
                 "torch_dtype": torch.bfloat16,
                 "attn_implementation": "flash_attention_2",
@@ -66,7 +66,7 @@ class TestUtils(unittest.TestCase):
                     GemmaForCausalLM,
                 ],
                 tokenizer="Xenova/gpt-4",
-                eval_block_delay=7200,
+                eval_block_delay=1200,
                 kwargs={
                     "torch_dtype": torch.bfloat16,
                     "attn_implementation": "flash_attention_2",
@@ -103,7 +103,7 @@ class TestUtils(unittest.TestCase):
                         GemmaForCausalLM,
                     ],
                     tokenizer="Xenova/gpt-4",
-                    eval_block_delay=7200,
+                    eval_block_delay=1200,
                     kwargs={
                         "torch_dtype": torch.bfloat16,
                         "attn_implementation": "flash_attention_2",

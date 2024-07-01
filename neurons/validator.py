@@ -398,7 +398,7 @@ class Validator:
                                 should_retry = self.model_updater.sync_model(
                                     hotkey,
                                     metagraph.block.item(),
-                                    retry_stable_metadata=True,
+                                    force=True,
                                 )
 
                                 if should_retry:
@@ -478,9 +478,7 @@ class Validator:
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(
-                    self.model_updater.sync_model(
-                        hotkey, curr_block, retry_stable_metadata=False
-                    )
+                    self.model_updater.sync_model(hotkey, curr_block, force=False)
                 )
 
                 if updated:

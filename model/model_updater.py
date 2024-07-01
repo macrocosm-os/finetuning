@@ -59,14 +59,14 @@ class ModelUpdater:
         return await self.metadata_store.retrieve_model_metadata(hotkey)
 
     async def sync_model(
-        self, hotkey: str, curr_block: int, retry_stable_metadata: bool = False
+        self, hotkey: str, curr_block: int, force: bool = False
     ) -> bool:
         """Updates local model for a hotkey if out of sync and returns if it was updated."
 
         Args:
            hotkey (str): The hotkey of the model to sync.
            curr_block (int): The current block.
-           retry_stable_metadata (bool): Whether to force a sync for this model, even if it's chain metadata hasn't changed.
+           force (bool): Whether to force a sync for this model, even if it's chain metadata hasn't changed.
         """
         # Get the metadata for the miner.
         metadata = await self._get_metadata(hotkey)
@@ -106,7 +106,7 @@ class ModelUpdater:
             hotkey
         )
         # If we are not forcing a sync due to retrying a top model we can short-circuit if no change.
-        if not retry_stable_metadata and metadata == tracker_model_metadata:
+        if not force and metadata == tracker_model_metadata:
             return False
 
         # Get the local path based on the local store to download to (top level hotkey path)
