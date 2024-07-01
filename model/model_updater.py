@@ -58,11 +58,14 @@ class ModelUpdater:
         """Get metadata about a model by hotkey"""
         return await self.metadata_store.retrieve_model_metadata(hotkey)
 
-    async def sync_model(self, hotkey: str, force: bool = False) -> bool:
+    async def sync_model(
+        self, hotkey: str, curr_block: int, force: bool = False
+    ) -> bool:
         """Updates local model for a hotkey if out of sync and returns if it was updated."
 
         Args:
            hotkey (str): The hotkey of the model to sync.
+           curr_block (int): The current block.
            force (bool): Whether to force a sync for this model, even if it's chain metadata hasn't changed.
         """
         # Get the metadata for the miner.
@@ -81,8 +84,22 @@ class ModelUpdater:
             metadata.id.competition_id, metadata.block
         )
         if not competition:
-            bt.logging.trace(f"No competition found for {metadata.id.competition_id} at block {metadata.block}")
-            raise ValueError(f"No competition found for {metadata.id.competition_id} at block {metadata.block}")
+            bt.logging.trace(
+                f"No competition found for {metadata.id.competition_id} at block {metadata.block}"
+            )
+            raise ValueError(
+                f"No competition found for {metadata.id.competition_id} at block {metadata.block}"
+            )
+
+        # Check that the metadata is old enough to meet the eval_block_delay for the competition.
+        # If not we return false and will check again next time we go through the update loop.
+        if curr_block - metadata.block < competition.constraints.eval_block_delay:
+            bt.logging.debug(
+                f"""Sync for hotkey {hotkey} delayed as the current block: {curr_block} is not at least 
+                {competition.constraints.eval_block_delay} blocks after the upload block: {metadata.block}. 
+                Will automatically retry later."""
+            )
+            return False
 
         # Check what model id the model tracker currently has for this hotkey.
         tracker_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(

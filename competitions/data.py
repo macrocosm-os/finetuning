@@ -35,6 +35,9 @@ class ModelConstraints:
     # The Pretrained tokenizer to use.
     tokenizer: str
 
+    # Block delay before evaluating uploaded models. Based on look-back period for eval data collection.
+    eval_block_delay: int
+
     # Any additional arguments to pass to from_pretrained
     kwargs: Any = field(default_factory=dict)
 
