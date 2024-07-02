@@ -46,7 +46,7 @@ from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
 from competitions import utils as competition_utils
 from model.model_tracker import ModelTracker
-from model.model_updater import ModelUpdater
+from model.model_updater import MinerMisconfiguredError, ModelUpdater
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.disk.disk_model_store import DiskModelStore
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
@@ -495,9 +495,11 @@ class Validator:
                             )
                     else:
                         bt.logging.warning(
-                            f"Failed to find metadata for uid {uid} with hotkey {hotkey}"
+                            f"Failed to find metadata for uid {next_uid} with hotkey {hotkey}"
                         )
 
+            except MinerMisconfiguredError as e:
+                bt.logging.trace(e)
             except Exception as e:
                 bt.logging.error(f"Error in update loop: {e}")
 

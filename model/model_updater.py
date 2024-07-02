@@ -13,6 +13,14 @@ from model.storage.remote_model_store import RemoteModelStore
 from model.utils import get_hash_of_two_strings
 
 
+class MinerMisconfiguredError(Exception):
+    """Error raised when a miner is misconfigured."""
+
+    def __init__(self, hotkey: str, message: str):
+        self.hotkey = hotkey
+        super().__init__(f"[{hotkey}] {message}")
+
+
 class ModelUpdater:
     """Checks if the currently tracked model for a hotkey matches what the miner committed to the chain."""
 
@@ -72,11 +80,8 @@ class ModelUpdater:
         metadata = await self._get_metadata(hotkey)
 
         if not metadata:
-            bt.logging.trace(
-                f"No valid metadata found on the chain for hotkey {hotkey}"
-            )
-            raise ValueError(
-                f"No valid metadata found on the chain for hotkey {hotkey}"
+            raise MinerMisconfiguredError(
+                hotkey, f"No valid metadata found on the chain"
             )
 
         # Check that the metadata indicates a competition available at time of upload.
@@ -84,11 +89,9 @@ class ModelUpdater:
             metadata.id.competition_id, metadata.block
         )
         if not competition:
-            bt.logging.trace(
-                f"No competition found for {metadata.id.competition_id} at block {metadata.block}"
-            )
-            raise ValueError(
-                f"No competition found for {metadata.id.competition_id} at block {metadata.block}"
+            raise MinerMisconfiguredError(
+                hotkey,
+                f"No competition found for {metadata.id.competition_id} at block {metadata.block}",
             )
 
         # Check that the metadata is old enough to meet the eval_block_delay for the competition.
@@ -123,16 +126,15 @@ class ModelUpdater:
         # Check that the hash of the downloaded content matches.
         secure_hash = get_hash_of_two_strings(model.id.hash, hotkey)
         if secure_hash != metadata.id.secure_hash:
-            bt.logging.trace(
-                f"Sync for hotkey {hotkey} failed. Hashes do not match of content: {secure_hash} != {metadata.id.secure_hash}."
-            )
-            raise ValueError(
-                f"Sync for hotkey {hotkey} failed. Hash of content downloaded from hugging face does not match chain metadata. {metadata}"
+            raise MinerMisconfiguredError(
+                hotkey,
+                f"Hash of content downloaded from hugging face does not match chain metadata. {metadata}",
             )
 
         if not ModelUpdater.verify_model_satisfies_parameters(model):
-            raise ValueError(
-                f"Sync for hotkey {hotkey} failed, model does not satisfy parameters for competition {competition.id}"
+            raise MinerMisconfiguredError(
+                hotkey,
+                f"Model does not satisfy parameters for competition {competition.id}",
             )
 
         return True

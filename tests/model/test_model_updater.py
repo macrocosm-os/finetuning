@@ -8,7 +8,7 @@ from competitions.data import CompetitionId
 from model import utils
 from model.data import Model, ModelId, ModelMetadata
 from model.model_tracker import ModelTracker
-from model.model_updater import ModelUpdater
+from model.model_updater import MinerMisconfiguredError, ModelUpdater
 from model.storage.disk.disk_model_store import DiskModelStore
 from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
@@ -230,7 +230,7 @@ class TestModelUpdater(unittest.TestCase):
         self.remote_store.inject_mismatched_model(model_id_chain, model)
 
         # Assert we fail due to the hash mismatch between the model in remote store and the metadata on chain.
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(MinerMisconfiguredError) as context:
             asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         self.assertIn("Hash", str(context.exception))
@@ -276,7 +276,7 @@ class TestModelUpdater(unittest.TestCase):
         )
 
         # Assert we fail due to not meeting the competition parameters.
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(MinerMisconfiguredError) as context:
             asyncio.run(self.model_updater.sync_model(hotkey, curr_block=100_000))
 
         self.assertIn("does not satisfy parameters", str(context.exception))
