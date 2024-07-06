@@ -73,7 +73,6 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         tokenizer="Xenova/gpt-4",
         kwargs={
             "torch_dtype": torch.bfloat16,
-            "attn_implementation": "flash_attention_2",
         },
         eval_block_delay=1200,  # ~4 hours.
     ),

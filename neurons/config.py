@@ -183,11 +183,6 @@ def miner_config():
         help="Number of samples trained on per epoch",
     )
     parser.add_argument(
-        "--attn_implementation",
-        default="flash_attention_2",
-        help="Implementation of attention to use",
-    )
-    parser.add_argument(
         "--netuid",
         type=str,
         default=constants.SUBNET_UID,

@@ -131,7 +131,6 @@ async def main(config: bt.config):
     kwargs["torch_dtype"] = (
         torch.bfloat16 if config.dtype == "bfloat16" else torch.float16
     )
-    kwargs["attn_implementation"] = config.attn_implementation
 
     # Init model.
     tokenizer = ft.model.load_tokenizer(model_constraints, cache_dir=config.model_dir)
