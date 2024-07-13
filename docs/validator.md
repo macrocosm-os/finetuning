@@ -61,9 +61,9 @@ It is important to note that this affects the game theoretics of the incentive l
 
 # System Requirements
 
-Validators will need enough disk space to store the model of every miner in the subnet. Each model (As of Jun 15th, 2024) is limited to 15 GB and 7B parameters, and the validator has cleanup logic to remove old models. It is recommended to have at least 3 TB of disk space.
+Validators will need enough disk space to store the model of every miner in the subnet. Each model (As of Jul 15th, 2024) is limited to 15 GB and 7B parameters, and the validator has cleanup logic to remove old models. It is recommended to have at least 3 TB of disk space.
 
-Validators will need enough processing power to evaluate their model. As of Jun 15th, 2024 it is required to have a GPU that supports [flash attention 2](https://github.com/Dao-AILab/flash-attention) with atleast 48 GB of VRAM and at least 38 TFLOPs for half precision (bfloat 16) operations.
+Validators will need enough processing power to evaluate their model. As of Jul 15th, 2024 it is required to have a GPU with atleast 48 GB of VRAM and at least 38 TFLOPs for half precision (bfloat 16) operations.
 
 # Getting Started
 
@@ -88,12 +88,6 @@ cd finetuning
 python -m pip install -e .
 ```
 
-Note: flash-attn may not have their dependencies set up correctly. If you run into issues try installing those requirements separately first:
-```shell
-pip install packaging
-pip install wheel
-pip install torch
-```
 
 5. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
 
