@@ -20,7 +20,7 @@ from competitions.data import Competition, CompetitionId, ModelConstraints
 # Project Constants.
 # ---------------------------------
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
