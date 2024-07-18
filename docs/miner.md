@@ -39,12 +39,7 @@ cd finetuning
 python -m pip install -e .
 ```
 
-Note: flash-attn may not have their dependencies set up correctly. If you run into issues try installing those requirements separately first:
-```shell
-pip install packaging
-pip install wheel
-pip install torch
-```
+Note: We require a python version of at least 3.9.
 
 6. Make sure you've [created a Wallet](https://docs.bittensor.com/getting-started/wallets) and [registered a hotkey](https://docs.bittensor.com/subnets/register-and-participate).
 

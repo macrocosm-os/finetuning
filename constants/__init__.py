@@ -20,7 +20,7 @@ from competitions.data import Competition, CompetitionId, ModelConstraints
 # Project Constants.
 # ---------------------------------
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -43,7 +43,7 @@ CORTEX_SUBNET_UID = 18
 CORTEX_WANDB_PROJECT = "cortex-t/multi-modality"
 CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
-CORTEX_MAX_AGE = dt.timedelta(days=1)
+CORTEX_MAX_AGE = dt.timedelta(hours=4)
 CORTEX_MIN_SCORE = 0.85
 # Minimum stake to get data from a cortex validator.
 CORTEX_MIN_STAKE = 100_000
@@ -73,8 +73,8 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         tokenizer="Xenova/gpt-4",
         kwargs={
             "torch_dtype": torch.bfloat16,
-            "attn_implementation": "flash_attention_2",
         },
+        eval_block_delay=1200,  # ~4 hours.
     ),
 }
 
