@@ -25,7 +25,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -35,7 +35,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 1
+VALIDATOR_STATE_VERSION = 2
 
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
