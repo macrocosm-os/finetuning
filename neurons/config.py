@@ -3,10 +3,10 @@ import os
 
 import bittensor as bt
 import torch
+from taoverse.utilities.enum_action import IntEnumAction
 
-from competitions.data import CompetitionId
 import constants
-from utilities.enum_action import IntEnumAction
+from competitions.data import CompetitionId
 
 
 def validator_config():

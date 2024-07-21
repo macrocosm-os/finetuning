@@ -1,10 +1,10 @@
 import uuid
 from dataclasses import replace
 
-from competitions.data import Competition
-from model.data import Model, ModelId
-from model.storage.disk import utils
-from model.storage.remote_model_store import RemoteModelStore
+from taoverse.model.competition.data import Competition
+from taoverse.model.data import Model, ModelId
+from taoverse.model.storage.disk import utils
+from taoverse.model.storage.remote_model_store import RemoteModelStore
 
 
 class FakeRemoteModelStore(RemoteModelStore):

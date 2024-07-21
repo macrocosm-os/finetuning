@@ -24,12 +24,12 @@ import typing
 import bittensor as bt
 import torch
 import wandb
+from taoverse.utilities import utils
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
 from wandb.apis.public.history import HistoryScan
 
 import constants
-from utilities import utils
 
 UNWANTED_PHRASES = [
     "text-based AI language model",

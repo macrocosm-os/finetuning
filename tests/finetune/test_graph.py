@@ -5,11 +5,12 @@ from unittest import mock
 
 import bittensor as bt
 import torch
+from taoverse.model.data import ModelId
 
-from finetune import graph
 from competitions.data import CompetitionId
-from model.data import ModelId
-from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
+from finetune import graph
+from tests.model.storage.fake_model_metadata_store import \
+    FakeModelMetadataStore
 
 
 class TestMining(unittest.TestCase):
