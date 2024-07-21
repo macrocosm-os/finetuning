@@ -695,7 +695,7 @@ class Validator:
         # Pull the latest data from Cortex
         # Only pull from validators meeting a minimum stake threshold.
         with self.cortex_metagraph_lock:
-            vali_uids = utils.get_high_stake_validators(
+            vali_uids = metagraph_utils.get_high_stake_validators(
                 self.cortex_metagraph, constants.CORTEX_MIN_STAKE
             )
             vali_hotkeys = set(
