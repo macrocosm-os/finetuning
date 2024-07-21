@@ -1,6 +1,5 @@
+from taoverse.model.competition.data import ModelConstraints
 from transformers import AutoTokenizer, PreTrainedTokenizer
-
-from competitions.data import ModelConstraints
 
 
 def load_tokenizer(

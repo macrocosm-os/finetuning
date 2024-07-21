@@ -1,8 +1,8 @@
 from collections import defaultdict, deque
 from typing import List, Optional
 
-from model.data import ModelId, ModelMetadata
-from model.storage.model_metadata_store import ModelMetadataStore
+from taoverse.model.data import ModelId, ModelMetadata
+from taoverse.model.storage.model_metadata_store import ModelMetadataStore
 
 
 class FakeModelMetadataStore(ModelMetadataStore):

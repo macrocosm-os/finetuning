@@ -18,12 +18,15 @@
 
 import asyncio
 from typing import Optional
-import bittensor as bt
 
-from competitions.data import CompetitionId
+import bittensor as bt
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
+from taoverse.model.storage.model_metadata_store import ModelMetadataStore
+
 import constants
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.model_metadata_store import ModelMetadataStore
+from competitions.data import CompetitionId
 
 
 def best_uid(
@@ -44,7 +47,9 @@ def best_uid(
         metagraph = subtensor.metagraph(constants.SUBNET_UID)
 
     if not metadata_store:
-        metadata_store = ChainModelMetadataStore(subtensor)
+        metadata_store = ChainModelMetadataStore(
+            subtensor=subtensor, subnet_uid=constants.SUBNET_UID
+        )
 
     incentives = [(metagraph.I[uid].item(), uid) for uid in range(metagraph.n)]
     # With a winner takes all model, we expect ~ 1 model per competition.

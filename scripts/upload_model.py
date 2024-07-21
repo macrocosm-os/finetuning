@@ -15,15 +15,19 @@ import os
 
 import bittensor as bt
 from dotenv import load_dotenv
+from taoverse.metagraph import utils as metagraph_utils
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
+from taoverse.model.storage.hugging_face.hugging_face_model_store import (
+    HuggingFaceModelStore,
+)
+from taoverse.utilities import utils
+from taoverse.utilities.enum_action import IntEnumAction
 
 import constants
 import finetune as ft
-from competitions import utils as competition_utils
 from competitions.data import CompetitionId
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-from utilities import utils
-from utilities.enum_action import IntEnumAction
 
 load_dotenv()  # take environment variables from .env.
 
@@ -86,15 +90,19 @@ async def main(config: bt.config):
     subtensor = bt.subtensor(config=config)
     metagraph: bt.metagraph = subtensor.metagraph(config.netuid)
     chain_metadata_store = ChainModelMetadataStore(
-        subtensor, wallet, subnet_uid=config.netuid
+        subtensor=subtensor,
+        subnet_uid=config.netuid,
+        wallet=wallet,
     )
 
     # Make sure we're registered and have a HuggingFace token.
-    utils.assert_registered(wallet, metagraph)
+    metagraph_utils.assert_registered(wallet, metagraph)
     HuggingFaceModelStore.assert_access_token_exists()
 
     # Get current model parameters
-    model_constraints = competition_utils.get_model_constraints(config.competition_id)
+    model_constraints = constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+        config.competition_id, None
+    )
     if model_constraints is None:
         raise RuntimeError(
             f"Could not find current competition for id: {config.competition_id}"
