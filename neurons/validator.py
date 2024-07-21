@@ -402,11 +402,13 @@ class Validator:
                                 # Redownload this model and schedule it for eval even if it hasn't changed.
                                 # Still respect the eval block delay so that previously top uids can't bypass it.
                                 hotkey = metagraph.hotkeys[uid]
-                                should_retry = self.model_updater.sync_model(
-                                    hotkey=hotkey,
-                                    curr_block=metagraph.block.item(),
-                                    schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
-                                    force=True,
+                                should_retry = asyncio.run(
+                                    self.model_updater.sync_model(
+                                        hotkey=hotkey,
+                                        curr_block=metagraph.block.item(),
+                                        schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                                        force=True,
+                                    )
                                 )
 
                                 if should_retry:
