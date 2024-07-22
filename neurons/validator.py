@@ -38,24 +38,29 @@ import wandb
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
+from taoverse.metagraph import utils as metagraph_utils
+from taoverse.metagraph.metagraph_syncer import MetagraphSyncer
+from taoverse.metagraph.miner_iterator import MinerIterator
+from taoverse.model.competition import utils as competition_utils
+from taoverse.model.competition.competition_tracker import CompetitionTracker
+from taoverse.model.model_tracker import ModelTracker
+from taoverse.model.model_updater import MinerMisconfiguredError, ModelUpdater
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
+from taoverse.model.storage.disk.disk_model_store import DiskModelStore
+from taoverse.model.storage.hugging_face.hugging_face_model_store import (
+    HuggingFaceModelStore,
+)
+from taoverse.utilities import utils
+from taoverse.utilities import wandb as wandb_utils
+from taoverse.utilities.perf_monitor import PerfMonitor
 from transformers import GenerationConfig
 
 import constants
 import finetune as ft
-from competitions.competition_tracker import CompetitionTracker
 from competitions.data import CompetitionId
-from competitions import utils as competition_utils
-from model.model_tracker import ModelTracker
-from model.model_updater import MinerMisconfiguredError, ModelUpdater
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.disk.disk_model_store import DiskModelStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from neurons import config as neuron_config
-from utilities import utils
-from utilities import wandb as wandb_utils
-from utilities.metagraph_syncer import MetagraphSyncer
-from utilities.miner_iterator import MinerIterator
-from utilities.perf_monitor import PerfMonitor
 
 load_dotenv()  # take environment variables from .env.
 
@@ -144,7 +149,7 @@ class Validator:
 
         # Dont check registration status if offline.
         if not self.config.offline:
-            self.uid = utils.assert_registered(self.wallet, self.metagraph)
+            self.uid = metagraph_utils.assert_registered(self.wallet, self.metagraph)
 
         # Track how may run_steps this validator has completed.
         self.run_step_count = 0
@@ -260,7 +265,9 @@ class Validator:
 
         # Setup a ModelMetadataStore
         self.metadata_store = ChainModelMetadataStore(
-            self.subtensor, self.wallet, self.config.netuid
+            subtensor=self.subtensor,
+            subnet_uid=self.config.netuid,
+            wallet=self.wallet,
         )
 
         # Setup a RemoteModelStore
@@ -362,7 +369,7 @@ class Validator:
 
                     # Find any miner UIDs which top valis are assigning weight and aren't currently scheduled for an eval.
                     # This is competition agnostic, as anything with weight is 'winning' a competition for some vali.
-                    top_miner_uids = utils.get_top_miners(
+                    top_miner_uids = metagraph_utils.get_top_miners(
                         metagraph,
                         constants.WEIGHT_SYNC_VALI_MIN_STAKE,
                         constants.WEIGHT_SYNC_MINER_MIN_PERCENT,
@@ -395,10 +402,13 @@ class Validator:
                                 # Redownload this model and schedule it for eval even if it hasn't changed.
                                 # Still respect the eval block delay so that previously top uids can't bypass it.
                                 hotkey = metagraph.hotkeys[uid]
-                                should_retry = self.model_updater.sync_model(
-                                    hotkey,
-                                    metagraph.block.item(),
-                                    force=True,
+                                should_retry = asyncio.run(
+                                    self.model_updater.sync_model(
+                                        hotkey=hotkey,
+                                        curr_block=metagraph.block.item(),
+                                        schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                                        force=True,
+                                    )
                                 )
 
                                 if should_retry:
@@ -478,7 +488,12 @@ class Validator:
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(
-                    self.model_updater.sync_model(hotkey, curr_block, force=False)
+                    self.model_updater.sync_model(
+                        hotkey=hotkey,
+                        curr_block=curr_block,
+                        schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                        force=False,
+                    )
                 )
 
                 if updated:
@@ -647,7 +662,7 @@ class Validator:
         with self.metagraph_lock:
             block = self.metagraph.block.item()
         competition_schedule = competition_utils.get_competition_schedule_for_block(
-            block
+            block=block, schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK
         )
         competition = competition_schedule[self.global_step % len(competition_schedule)]
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
@@ -682,7 +697,7 @@ class Validator:
         # Pull the latest data from Cortex
         # Only pull from validators meeting a minimum stake threshold.
         with self.cortex_metagraph_lock:
-            vali_uids = utils.get_high_stake_validators(
+            vali_uids = metagraph_utils.get_high_stake_validators(
                 self.cortex_metagraph, constants.CORTEX_MIN_STAKE
             )
             vali_hotkeys = set(

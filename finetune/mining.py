@@ -15,27 +15,30 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from dataclasses import replace
 import os
 import time
 import traceback
+from dataclasses import replace
 from typing import Any, Dict, Optional
 
 import bittensor as bt
 import huggingface_hub
+from taoverse.model import utils as model_utils
+from taoverse.model.data import Model, ModelId
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
+from taoverse.model.storage.hugging_face.hugging_face_model_store import (
+    HuggingFaceModelStore,
+)
+from taoverse.model.storage.model_metadata_store import ModelMetadataStore
+from taoverse.model.storage.remote_model_store import RemoteModelStore
+from taoverse.model.utils import get_hash_of_two_strings
 from transformers import AutoModelForCausalLM, PreTrainedModel
 
 import constants
 import finetune as ft
-from competitions import utils as competition_utils
 from competitions.data import CompetitionId
-from model.data import Model, ModelId
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-from model.storage.model_metadata_store import ModelMetadataStore
-from model.storage.remote_model_store import RemoteModelStore
-from model.utils import get_hash_of_two_strings
-from utilities import utils
 
 
 def model_path(base_dir: str, run_id: str) -> str:
@@ -71,17 +74,21 @@ async def push(
     bt.logging.info("Pushing model")
 
     if metadata_store is None:
-        metadata_store = ChainModelMetadataStore(bt.subtensor(), wallet=wallet)
+        metadata_store = ChainModelMetadataStore(
+            subtensor=bt.subtensor(), subnet_uid=constants.SUBNET_UID, wallet=wallet
+        )
 
     if remote_model_store is None:
         remote_model_store = HuggingFaceModelStore()
 
-    model_constraints = competition_utils.get_model_constraints(competition_id)
+    model_constraints = constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+        competition_id, None
+    )
     if not model_constraints:
         raise ValueError("Invalid competition_id")
 
     # First upload the model to HuggingFace.
-    namespace, name = utils.validate_hf_repo_id(repo)
+    namespace, name = model_utils.validate_hf_repo_id(repo)
     model_id = ModelId(namespace=namespace, name=name, competition_id=competition_id)
     model_id = await remote_model_store.upload_model(
         Model(id=model_id, pt_model=model), model_constraints
@@ -159,7 +166,9 @@ async def get_repo(
 ) -> str:
     """Returns a URL to the HuggingFace repo of the Miner with the given UID."""
     if metadata_store is None:
-        metadata_store = ChainModelMetadataStore(bt.subtensor())
+        metadata_store = ChainModelMetadataStore(
+            subtensor=bt.subtensor(), subnet_uid=constants.SUBNET_UID
+        )
     if metagraph is None:
         metagraph = bt.metagraph(netuid=constants.SUBNET_UID)
 
@@ -169,7 +178,7 @@ async def get_repo(
     if not model_metadata:
         raise ValueError(f"No model metadata found for miner {uid}")
 
-    return utils.get_hf_url(model_metadata)
+    return model_utils.get_hf_url(model_metadata)
 
 
 def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> PreTrainedModel:
@@ -203,7 +212,9 @@ async def load_remote_model(
         metagraph = bt.metagraph(netuid=constants.SUBNET_UID)
 
     if metadata_store is None:
-        metadata_store = ChainModelMetadataStore(subtensor=bt.subtensor())
+        metadata_store = ChainModelMetadataStore(
+            subtensor=bt.subtensor(), subnet_uid=constants.SUBNET_UID
+        )
 
     if remote_model_store is None:
         remote_model_store = HuggingFaceModelStore()
@@ -213,9 +224,10 @@ async def load_remote_model(
     if not model_metadata:
         raise ValueError(f"No model metadata found for miner {uid}")
 
-    model_constraints = competition_utils.get_model_constraints(
-        model_metadata.id.competition_id
+    model_constraints = constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+        model_metadata.id.competition_id, None
     )
+
     if not model_constraints:
         raise ValueError("Invalid competition_id")
 

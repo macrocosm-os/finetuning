@@ -27,17 +27,21 @@ import bittensor as bt
 import torch
 import wandb
 from dotenv import load_dotenv
+from taoverse.metagraph import utils as metagraph_utils
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
+from taoverse.model.storage.hugging_face.hugging_face_model_store import (
+    HuggingFaceModelStore,
+)
+from taoverse.model.storage.model_metadata_store import ModelMetadataStore
+from taoverse.utilities import utils
+from taoverse.utilities import wandb as wandb_utils
 from transformers import PreTrainedModel
 
 import constants
 import finetune as ft
-from competitions import utils as competition_utils
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-from model.storage.model_metadata_store import ModelMetadataStore
 from neurons import config as neuron_config
-from utilities import utils
-from utilities import wandb as wandb_utils
 
 load_dotenv()  # take environment variables from .env.
 
@@ -98,13 +102,15 @@ async def main(config: bt.config):
     subtensor = bt.subtensor(config=config)
     metagraph = subtensor.metagraph(config.netuid)
     chain_metadata_store = ChainModelMetadataStore(
-        subtensor, wallet, subnet_uid=config.netuid
+        subtensor=subtensor,
+        subnet_uid=config.netuid,
+        wallet=wallet,
     )
 
     # If running online, make sure the miner is registered, has a hugging face access token, and has provided a repo id.
     my_uid = None
     if not config.offline:
-        my_uid = utils.assert_registered(wallet, metagraph)
+        my_uid = metagraph_utils.assert_registered(wallet, metagraph)
         HuggingFaceModelStore.assert_access_token_exists()
 
     # Data comes from Subnet 18's wandb project. Make sure we're logged in
@@ -124,7 +130,10 @@ async def main(config: bt.config):
         else:
             use_wandb = True
 
-    model_constraints = competition_utils.get_model_constraints(config.competition_id)
+    model_constraints = constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+        config.competition_id, None
+    )
+
     if not model_constraints:
         raise RuntimeError(f"No competition found for {config.competition_id}")
     kwargs = model_constraints.kwargs.copy()

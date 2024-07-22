@@ -14,13 +14,18 @@ from transformers import (
     PhiForCausalLM,
 )
 
-from competitions.data import Competition, CompetitionId, ModelConstraints
+from taoverse.model.competition.data import (
+    Competition,
+    ModelConstraints,
+    NormValidationConstraints,
+)
+from competitions.data import CompetitionId
 
 # ---------------------------------
 # Project Constants.
 # ---------------------------------
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -30,7 +35,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 1
+VALIDATOR_STATE_VERSION = 2
 
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
@@ -75,6 +80,11 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             "torch_dtype": torch.bfloat16,
         },
         eval_block_delay=1200,  # ~4 hours.
+        norm_validation_constraints=NormValidationConstraints(
+            norm_eps_soft=200,
+            norm_eps_soft_percent_threshold=0.15,
+            norm_eps_hard=1000,
+        ),
     ),
 }
 
@@ -111,11 +121,6 @@ alpha = 0.5
 temperature = 0.01
 # validator score boosting for earlier models.
 timestamp_epsilon = 0.005
-
-# norm validation values
-norm_eps_soft = 200
-norm_eps_soft_percent_threshold = 0.15
-norm_eps_hard = 1000
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
 # time required between retrying evaluation of a stale model. (First retry will be immediate).
