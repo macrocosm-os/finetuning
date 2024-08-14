@@ -130,6 +130,6 @@ python scripts/upload_model.py --load_model_dir <path to model> --hf_repo_id my-
 
 As of Jun 15th, 2024 for the current competition the subnet works with models matching the [subnet 9](https://github.com/macrocosm-os/pretraining/) outputs and evaluates them against synthetic data from [subnet 18](https://github.com/corcel-api/cortex.t/).
 
-The specific requirements for each competition can be found [here](./constants/__init__.py).
+The specific requirements for each competition can be found [here](../constants/__init__.py).
 
 The `finetune/mining.py` file has several methods that you may find useful. See the [examples](./examples.ipynb) Jupyter notebook for some example uses.
