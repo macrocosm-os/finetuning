@@ -56,7 +56,7 @@ CORTEX_MIN_STAKE = 100_000
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.
 # Since there can be multiple competitions at different reward percentages we can't just check biggest.
-WEIGHT_SYNC_MINER_MIN_PERCENT = 0.10
+WEIGHT_SYNC_MINER_MIN_PERCENT = 0.05
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
