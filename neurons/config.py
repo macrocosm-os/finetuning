@@ -55,13 +55,13 @@ def validator_config():
     parser.add_argument(
         "--sample_min",
         type=int,
-        default=5,
+        default=constants.sample_min,
         help="Number of uids to keep after evaluating a competition.",
     )
     parser.add_argument(
         "--updated_models_limit",
         type=int,
-        default=15,
+        default=constants.updated_models_limit,
         help="Max number of uids that can be either pending eval or currently being evaluated.",
     )
     parser.add_argument(
