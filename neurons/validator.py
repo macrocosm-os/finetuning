@@ -40,6 +40,7 @@ from rich.console import Console
 from rich.table import Table
 from taoverse.metagraph import utils as metagraph_utils
 from taoverse.metagraph.metagraph_syncer import MetagraphSyncer
+from taoverse.model import utils as model_utils
 from taoverse.metagraph.miner_iterator import MinerIterator
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.competition.competition_tracker import CompetitionTracker
@@ -693,6 +694,8 @@ class Validator:
         # Keep track of which block this uid last updated their model.
         # Default to an infinite block if we can't retrieve the metadata for the miner.
         uid_to_block = defaultdict(lambda: math.inf)
+        # Keep track of the hugging face url for this uid.
+        uid_to_hf_url = defaultdict(lambda: "unknown")
 
         # Pull the latest data from Cortex
         # Only pull from validators meeting a minimum stake threshold.
@@ -741,6 +744,8 @@ class Validator:
             losses: typing.List[float] = [math.inf for _ in range(len(batches))]
             sample: typing.Optional[typing.Tuple[str, str]] = None
 
+            bt.logging.trace(f"Getting metadata for uid: {uid_i}.")
+
             # Check that the model is in the tracker.
             with self.metagraph_lock:
                 hotkey = self.metagraph.hotkeys[uid_i]
@@ -753,8 +758,14 @@ class Validator:
                 and model_i_metadata.id.competition_id == competition.id
             ):
                 try:
+                    bt.logging.info(
+                        f"Evaluating uid: {uid_i} / hotkey: {hotkey} with metadata: {model_i_metadata} and hf_url: {model_utils.get_hf_url(model_i_metadata)}."
+                    )
+
                     # Update the block this uid last updated their model.
                     uid_to_block[uid_i] = model_i_metadata.block
+                    # Update the hf url for this model.
+                    uid_to_hf_url[uid_i] = model_utils.get_hf_url(model_i_metadata)
 
                     # Get the model locally and evaluate its loss.
                     model_i = None
@@ -896,11 +907,13 @@ class Validator:
             competition.id,
             uids,
             uid_to_block,
+            uid_to_hf_url,
             self._get_uids_to_competition_ids(),
             list(cortex_data.get_selected_sample_ids()),
             wins,
             win_rate,
             losses_per_uid,
+            competition_weights,
             load_model_perf,
             compute_loss_perf,
             load_data_perf,
@@ -914,11 +927,13 @@ class Validator:
         competition_id: CompetitionId,
         uids: typing.List[int],
         uid_to_block: typing.Dict[int, int],
+        uid_to_hf_url: typing.Dict[int, str],
         uid_to_competition_id: typing.Dict[int, typing.Optional[CompetitionId]],
         samples_ids: typing.List[str],
         wins: typing.Dict[int, int],
         win_rate: typing.Dict[int, float],
         losses_per_uid: typing.Dict[int, typing.List[float]],
+        competition_weights: torch.Tensor,
         load_model_perf: PerfMonitor,
         compute_loss_perf: PerfMonitor,
         load_data_perf: PerfMonitor,
@@ -937,6 +952,7 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
+                "hf_url": uid_to_hf_url[uid],
                 "competition_id": uid_to_competition_id[uid],
                 "average_loss": (sum(losses_per_uid[uid]) / len(losses_per_uid[uid])),
                 "perplexity": (
@@ -960,8 +976,12 @@ class Validator:
         table.add_column("perplexity", style="magenta")
         table.add_column("win_rate", style="magenta")
         table.add_column("win_total", style="magenta")
-        table.add_column("weights", style="magenta")
+        table.add_column("total_weight", style="magenta")
+        table.add_column("competition_weight", style="magenta")
         table.add_column("block", style="magenta")
+        table.add_column("competition", style="magenta")
+        table.add_column("hf_url", style="magenta")
+
         for uid in uids:
             try:
                 table.add_row(
@@ -971,7 +991,10 @@ class Validator:
                     str(round(step_log["uid_data"][str(uid)]["win_rate"], 4)),
                     str(step_log["uid_data"][str(uid)]["win_total"]),
                     str(round(self.weights[uid].item(), 4)),
+                    str(round(competition_weights[uid].item(), 4)),
                     str(step_log["uid_data"][str(uid)]["block"]),
+                    str(step_log["uid_data"][str(uid)]["competition_id"]),
+                    str(step_log["uid_data"][str(uid)]["hf_url"]),
                 )
             except:
                 pass
@@ -1028,6 +1051,9 @@ class Validator:
                     str(uid): uid_data[str(uid)]["win_total"] for uid in uids
                 },
                 "weight_data": {str(uid): self.weights[uid].item() for uid in uids},
+                "competition_weight_data": {
+                    str(uid): competition_weights[uid].item() for uid in uids
+                },
                 "competition_id": {
                     str(uid): uid_to_competition_id[uid]
                     for uid in uids
