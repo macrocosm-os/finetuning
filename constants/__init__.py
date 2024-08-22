@@ -125,3 +125,7 @@ timestamp_epsilon = 0.005
 chain_update_cadence = dt.timedelta(minutes=20)
 # time required between retrying evaluation of a stale model. (First retry will be immediate).
 model_retry_cadence = dt.timedelta(hours=4)
+# validator eval batch min to keep for next loop.
+sample_min = 5
+# We allow the sample_min per competition + 10 additional models to be held at any one time.
+updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 10
