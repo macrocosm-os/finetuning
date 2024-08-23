@@ -7,11 +7,11 @@ from unittest import mock
 
 import bittensor as bt
 import torch
+from taoverse.model.data import Model, ModelId
 
+import constants
 import finetune as ft
-from competitions import utils as competition_utils
 from competitions.data import CompetitionId
-from model.data import Model, ModelId
 from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
 from tests.utils import assert_model_equality, get_test_model
@@ -172,8 +172,8 @@ class TestMining(unittest.TestCase):
                 id=miner_1_model_id,
                 pt_model=model,
             ),
-            model_constraints=competition_utils.get_model_constraints(
-                CompetitionId.SN9_MODEL
+            model_constraints=constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+                1, None
             ),
         )
 

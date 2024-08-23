@@ -7,18 +7,18 @@ import math
 import random
 import sys
 
+from taoverse.model.competition.data import Competition
+from taoverse.model.data import Model, ModelId
+from taoverse.model.model_updater import ModelUpdater
+from taoverse.utilities.enum_action import IntEnumAction
+from taoverse.utilities.perf_monitor import PerfMonitor
 from transformers import AutoModelForCausalLM
 
 import constants
 import finetune as ft
-from competitions import utils as competition_utils
-from competitions.data import Competition, CompetitionId
+from competitions.data import CompetitionId
 from finetune.dataset import CortexSubsetLoader
 from finetune.validation import compute_losses
-from model.data import Model, ModelId
-from model.model_updater import ModelUpdater
-from utilities.enum_action import IntEnumAction
-from utilities.perf_monitor import PerfMonitor
 
 
 def load_model(model_path, competition: Competition) -> Model:
@@ -73,7 +73,10 @@ def main():
         print(constants.COMPETITION_SCHEDULE_BY_BLOCK)
         return
 
-    model_constraints = competition_utils.get_model_constraints(args.competition_id)
+    model_constraints = constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
+        args.competition_id, None
+    )
+
     if model_constraints is None:
         raise AssertionError("Competition for {args.competition_id} not found")
 
@@ -85,7 +88,7 @@ def main():
         model = load_model(args.model_path, model_constraints)
     print(load_model_perf.summary_str())
 
-    if not ModelUpdater.verify_model_satisfies_parameters(model):
+    if not ModelUpdater.verify_model_satisfies_parameters(model, model_constraints):
         print("Model does not satisfy competition parameters!!!")
         return
 
