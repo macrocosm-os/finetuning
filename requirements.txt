@@ -1,4 +1,4 @@
-bittensor==6.9.3
+bittensor==6.9.4
 huggingface_hub
 numpy==1.26.4
 python-dotenv
@@ -7,4 +7,4 @@ safetensors
 torch==2.3.1
 transformers==4.41.2
 wandb==0.17.1
-taoverse==1.0.0
+taoverse==1.0.1
