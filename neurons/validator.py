@@ -1022,8 +1022,8 @@ class Validator:
         # Log to screen and wandb.
         self.log_step(
             competition,
-            uids,
             block,
+            uids,
             uid_to_state,
             self._get_uids_to_competition_ids(),
             list(cortex_data.get_selected_sample_ids()),
