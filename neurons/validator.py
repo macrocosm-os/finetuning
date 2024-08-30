@@ -40,8 +40,8 @@ from rich.console import Console
 from rich.table import Table
 from taoverse.metagraph import utils as metagraph_utils
 from taoverse.metagraph.metagraph_syncer import MetagraphSyncer
-from taoverse.model import utils as model_utils
 from taoverse.metagraph.miner_iterator import MinerIterator
+from taoverse.model import utils as model_utils
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.competition.competition_tracker import CompetitionTracker
 from taoverse.model.data import ModelMetadata
@@ -62,6 +62,7 @@ from transformers import GenerationConfig
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from neurons import config as neuron_config
 
 load_dotenv()  # take environment variables from .env.
@@ -711,7 +712,7 @@ class Validator:
         cortex_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
         with load_data_perf.sample():
-            cortex_data = ft.dataset.CortexSubsetLoader(
+            cortex_data = CortexSubsetLoader(
                 use_latest_data=True,
                 random_seed=random.randint(0, sys.maxsize),
                 max_samples=self.config.latest_cortex_samples,

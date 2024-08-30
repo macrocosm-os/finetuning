@@ -41,6 +41,7 @@ from transformers import PreTrainedModel
 
 import constants
 import finetune as ft
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from neurons import config as neuron_config
 
 load_dotenv()  # take environment variables from .env.
@@ -198,7 +199,7 @@ async def main(config: bt.config):
             bt.logging.debug(
                 f"Loading {config.cortex_samples_per_epoch} pages for training this epoch"
             )
-            loader = ft.dataset.CortexSubsetLoader(
+            loader = CortexSubsetLoader(
                 use_latest_data=False,
                 random_seed=random.randint(0, 100000000),
                 max_samples=config.cortex_samples_per_epoch,
