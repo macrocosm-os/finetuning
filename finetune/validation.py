@@ -147,6 +147,51 @@ def compute_losses(
     return losses
 
 
+def compute_multiple_choice_deviation(
+    model,
+    batches: typing.List[typing.Tuple[transformers.BatchEncoding, int]],
+    device: str,
+) -> typing.List[float]:
+    """
+    Computes the incorrectness of multiple choice answers for a given model on provided batches.
+
+    Parameters:
+        model (torch.nn.Module): The model for which multiple choice deviations are to be computed.
+        batches (dict): A list of batches and the index of the correct answer.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+
+    Returns:
+        dict: A dictionary with page indices as keys and lists of multiple choice deviations as values.
+    """
+    # Iterate over each page and corresponding batches
+    multiple_choice_deviations = []
+    with torch.inference_mode():
+        model.to(device)
+        model.eval()
+        for inputs, correct_index in batches:
+            try:
+                inputs = inputs.to(device)
+                # ** unpacks the BatchEncoding dictrionary into keyword arguments.
+                outputs = model(**inputs)
+                # Get the predicted choice based on the index of the highest logit.
+                predicted_choice = torch.argmax(outputs.logits, dim=1).item()
+                # If the prediction is correct, there is no deviation. Else there is full deviation.
+                if predicted_choice == correct_index:
+                    multiple_choice_deviations.append(0)
+                else:
+                    multiple_choice_deviations.append(1)
+            except Exception as e:
+                bt.logging.error(
+                    f"Exception occurred in multiple choice deviation computation: {e}"
+                )
+                traceback.print_exc()  # Print the stack trace
+                multiple_choice_deviations.append(
+                    math.inf
+                )  # Use infinity to indicate failure
+
+    return multiple_choice_deviations
+
+
 def generate_output(
     model,
     input_ids: torch.Tensor,
