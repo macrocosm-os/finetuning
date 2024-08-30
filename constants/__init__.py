@@ -19,13 +19,14 @@ from taoverse.model.competition.data import (
     ModelConstraints,
     NormValidationConstraints,
 )
+from taoverse.model.competition.epsilon import FixedEpsilon
 from competitions.data import CompetitionId
 
 # ---------------------------------
 # Project Constants.
 # ---------------------------------
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -35,7 +36,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 2
+VALIDATOR_STATE_VERSION = 3
 
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
@@ -85,6 +86,8 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_soft_percent_threshold=0.15,
             norm_eps_hard=1000,
         ),
+        epsilon_func=FixedEpsilon(0.005),
+        max_bytes=15 * 1024 * 1024 * 1024,
     ),
 }
 

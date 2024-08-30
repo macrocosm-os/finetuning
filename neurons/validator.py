@@ -771,7 +771,7 @@ class Validator:
                     # Update the block this uid last updated their model.
                     uid_to_block[uid_i] = model_i_metadata.block
                     # Update the hf url for this model.
-                    uid_to_hf[uid_i] = self._get_hf_repo_name(model_i_metadata)
+                    uid_to_hf[uid_i] = model_utils.get_hf_repo_name(model_i_metadata)
 
                     # Get the model locally and evaluate its loss.
                     model_i = None
@@ -1167,11 +1167,6 @@ class Validator:
                 bt.logging.error(
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
-
-    # TODO: Move to taoverse package.
-    def _get_hf_repo_name(self, model_metadata: ModelMetadata) -> str:
-        """Returns the Hugging Face repo name for the provided model metadata."""
-        return f"{model_metadata.id.namespace}/{model_metadata.id.name}"
 
 
 if __name__ == "__main__":
