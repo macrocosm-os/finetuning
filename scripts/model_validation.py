@@ -17,7 +17,7 @@ from transformers import AutoModelForCausalLM
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.dataset import CortexSubsetLoader
+from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from finetune.validation import compute_losses
 
 
