@@ -126,8 +126,10 @@ temperature = 0.01
 timestamp_epsilon = 0.005
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
-# time required between retrying evaluation of a stale model. (First retry will be immediate).
-model_retry_cadence = dt.timedelta(hours=4)
+# Number of blocks required between retrying evaluation of a model.
+model_retry_cadence = 300  # Roughly 1 hour
+# How frequently to check the models given weights by other large validators.
+scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
 sample_min = 5
 # We allow the sample_min per competition + 10 additional models to be held at any one time.
