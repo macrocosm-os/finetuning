@@ -48,12 +48,12 @@ You can view the entire validation system by reading the code in `neurons/valida
         set_weights( subnet_weights )
 ```
 
-The behaviour of `iswin( loss_a, loss_b, block_a, block_b)` function intentionally skews the win function to reward models which have been hosted earlier such that newer models are only better than others iff their loss is `epsilon` percent lower accoring to the following function. Currently `epsilon` is set to 0.5% and is a hyper parameter of the mechanism
+The behaviour of `iswin( loss_a, loss_b, block_a, block_b, epsilon_func, curr_block)` function intentionally skews the win function to reward models which have been hosted earlier such that newer models are only better than others iff their loss is `epsilon` percent lower accoring to the following function. `epsilon` is calculated based on a per-competition specified function based on the distance from the earlier model block to the current block.
 
 ```python
-def iswin( loss_a, loss_b, block_a, block_b ):
-    loss_a = (1 - constants.timestamp_epsilon) * loss_a if block_a < block_b else loss_a
-    loss_b = (1 - constants.timestamp_epsilon) * loss_b if block_b < block_a else loss_b
+def iswin(loss_a, loss_b, block_a, block_b, epsilon_func, curr_block):
+    loss_a = (1 - epsilon_func(curr_block, block_a)) * loss_a if block_a < block_b else loss_a
+    loss_b = (1 - epsilon_func(curr_block, block_b)) * loss_b if block_b < block_a else loss_b
     return loss_a < loss_b
 ```
 
