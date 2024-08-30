@@ -53,6 +53,18 @@ def validator_config():
         help="Number of most recent Cortex samples to eval against",
     )
     parser.add_argument(
+        "--latest_prompting_steps",
+        type=int,
+        default=500,  # Sample more steps since prompting runs this less frequently.
+        help="Number of most recent Prompting steps to sample data from",
+    )
+    parser.add_argument(
+        "--latest_prompting_samples",
+        type=int,
+        default=100,
+        help="Number of most recent Prompting samples to eval against",
+    )
+    parser.add_argument(
         "--sample_min",
         type=int,
         default=constants.sample_min,
