@@ -72,6 +72,7 @@ import constants
 import finetune as ft
 from competitions.data import CompetitionId
 from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
+from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -93,8 +94,8 @@ class PerUIDEvalState:
     # The hugging face repo name.
     repo_name: str = "Unknown"
 
-    # The losses per batch.
-    losses: typing.List[float] = dataclasses.field(default=None)
+    # The deviations per batch. Currently either losses or percent of questions wrong.
+    deviations: typing.List[float] = dataclasses.field(default=None)
 
 
 class Validator:
@@ -155,6 +156,7 @@ class Validator:
         # Create metagraph locks to avoid cross thread access issues in the update loop.
         self.metagraph_lock = threading.RLock()
         self.cortex_metagraph_lock = threading.RLock()
+        self.prompting_metagraph_lock = threading.RLock()
 
         # Get initial metagraphs.
         self.metagraph: bt.metagraph = self.subnet_metagraph_syncer.get_metagraph(
@@ -163,9 +165,13 @@ class Validator:
         self.cortex_metagraph: bt.metagraph = (
             self.dataset_metagraph_syncer.get_metagraph(constants.CORTEX_SUBNET_UID)
         )
+        self.prompting_metagraph: bt.metagraph = (
+            self.dataset_metagraph_syncer.get_metagraph(constants.PROMPTING_SUBNET_UID)
+        )
 
         bt.logging.info(f"Metagraph: {self.metagraph}.")
         bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
+        bt.logging.info(f"Prompting Metagraph: {self.cortex_metagraph}.")
 
         # Register a listener for the subnet and dataset metagraph syncers.
         self.subnet_metagraph_syncer.register_listener(
@@ -174,7 +180,7 @@ class Validator:
         )
         self.dataset_metagraph_syncer.register_listener(
             self._on_dataset_metagraph_updated,
-            netuids=[constants.CORTEX_SUBNET_UID],
+            netuids=[constants.CORTEX_SUBNET_UID, constants.PROMPTING_SUBNET_UID],
         )
 
         # Dont check registration status if offline.
@@ -731,8 +737,11 @@ class Validator:
     def _on_dataset_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
         """Processes an update to the metagraph for the dataset subnets."""
         if netuid == constants.CORTEX_SUBNET_UID:
-            with self.cortex_metagraph:
+            with self.cortex_metagraph_lock:
                 self.cortex_metagraph = copy.deepcopy(metagraph)
+        elif netuid == constants.PROMPTING_SUBNET_UID:
+            with self.prompting_metagraph_lock:
+                self.prompting_metagraph = copy.deepcopy(metagraph)
         else:
             bt.logging.error(
                 f"Unexpected subnet uid in dataset metagraph syncer: {netuid}"
@@ -756,11 +765,11 @@ class Validator:
         Executes a step in the evaluation process of models. This function performs several key tasks:
             1. Identifies valid models for evaluation (top 5 from last run + newly updated models).
             2. Generates random pages for evaluation and prepares batches for each page from the dataset.
-            3. Computes the scoring for each model based on the losses incurred on the evaluation batches.
+            3. Computes the scoring for each model based on the deviations found on the evaluation batches.
             4. Calculates wins and win rates for each model to determine their performance relative to others.
             5. Updates the weights of each model based on their performance and applies a softmax normalization.
             6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
-            7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
+            7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and deviations.
         """
 
         block = self._get_current_block()
@@ -793,27 +802,53 @@ class Validator:
                 time.sleep(300)
             return
 
-        # Pull the latest data from Cortex
-        # Only pull from validators meeting a minimum stake threshold.
-        with self.cortex_metagraph_lock:
-            vali_uids = metagraph_utils.get_high_stake_validators(
-                self.cortex_metagraph, constants.CORTEX_MIN_STAKE
-            )
-            vali_hotkeys = set(
-                [self.cortex_metagraph.hotkeys[uid] for uid in vali_uids]
-            )
-
-        cortex_data = None
+        # Pull the latest sample data based on the competition.
+        sample_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
-        with load_data_perf.sample():
-            cortex_data = CortexSubsetLoader(
-                use_latest_data=True,
-                random_seed=random.randint(0, sys.maxsize),
-                max_samples=self.config.latest_cortex_samples,
-                steps=self.config.latest_cortex_steps,
-                page_size=self.config.latest_cortex_steps,
-                max_run_age=constants.CORTEX_MAX_AGE,
-                validator_hotkeys=vali_hotkeys,
+
+        if competition.id == CompetitionId.SN9_MODEL:
+            # Pull the latest data from Cortex
+            # Only pull from validators meeting a minimum stake threshold.
+            with self.cortex_metagraph_lock:
+                vali_uids = metagraph_utils.get_high_stake_validators(
+                    self.cortex_metagraph, constants.CORTEX_MIN_STAKE
+                )
+                vali_hotkeys = set(
+                    [self.cortex_metagraph.hotkeys[uid] for uid in vali_uids]
+                )
+
+            with load_data_perf.sample():
+                sample_data = CortexSubsetLoader(
+                    use_latest_data=True,
+                    random_seed=random.randint(0, sys.maxsize),
+                    max_samples=self.config.latest_cortex_samples,
+                    steps=self.config.latest_cortex_steps,
+                    page_size=self.config.latest_cortex_steps,
+                    max_run_age=constants.CORTEX_MAX_AGE,
+                    validator_hotkeys=vali_hotkeys,
+                )
+        elif competition.id == CompetitionId.B7_MULTI_CHOICE:
+            with self.prompting_metagraph_lock:
+                vali_uids = metagraph_utils.get_high_stake_validators(
+                    self.prompting_metagraph, constants.PROMPTING_MIN_STAKE
+                )
+                vali_hotkeys = set(
+                    [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
+                )
+
+            with load_data_perf.sample():
+                sample_data = PromptingSubsetLoader(
+                    use_latest_data=True,
+                    random_seed=random.randint(0, sys.maxsize),
+                    max_samples=self.config.latest_prompting_samples,
+                    steps=self.config.latest_prompting_steps,
+                    page_size=self.config.latest_prompting_steps,
+                    max_run_age=constants.PROMPTING_MAX_AGE,
+                    validator_hotkeys=vali_hotkeys,
+                )
+        else:
+            raise ValueError(
+                f"Competition id: {competition.id} has no sample loading logic specified."
             )
 
         # Tokenize the data into batches for use in evaluation.
@@ -821,7 +856,8 @@ class Validator:
         tokenizer = ft.model.load_tokenizer(
             competition.constraints, cache_dir=self.config.model_dir
         )
-        batches = cortex_data.tokenize(
+        # Note that the formatting of batches changes depending on where the sample data is obtained.
+        batches = sample_data.tokenize(
             tokenizer, competition.constraints.sequence_length
         )
 
@@ -829,15 +865,17 @@ class Validator:
         kwargs = competition.constraints.kwargs.copy()
         kwargs["use_cache"] = True
 
-        # Compute model losses on batches.
-        bt.logging.debug(f"Computing losses on {uids} for competition {competition.id}")
+        # Compute model deviations on batches.
+        bt.logging.debug(
+            f"Computing deviations on {uids} for competition {competition.id}"
+        )
         uid_to_state = defaultdict(PerUIDEvalState)
 
         load_model_perf = PerfMonitor("Eval: Load model")
-        compute_loss_perf = PerfMonitor("Eval: Compute loss")
+        compute_deviation_perf = PerfMonitor("Eval: Compute deviation")
 
         for uid_i in uids:
-            losses: typing.List[float] = [math.inf for _ in range(len(batches))]
+            deviations: typing.List[float] = [math.inf for _ in range(len(batches))]
             sample: typing.Optional[typing.Tuple[str, str]] = None
 
             # Check that the model is in the tracker.
@@ -866,18 +904,31 @@ class Validator:
                         model_i_metadata
                     )
 
-                    # Get the model locally and evaluate its loss.
+                    # Get the model locally and evaluate its deviation.
                     model_i = None
                     with load_model_perf.sample():
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
 
-                    with compute_loss_perf.sample():
+                    if competition.id == CompetitionId.SN9_MODEL:
+                        with compute_deviation_perf.sample():
+                            # Run each computation in a subprocess so that the GPU is reset between each model.
+                            deviations = utils.run_in_subprocess(
+                                functools.partial(
+                                    ft.validation.compute_losses,
+                                    model_i.pt_model,
+                                    batches,
+                                    self.config.device,
+                                ),
+                                ttl=360,
+                                mode="spawn",
+                            )
+                    elif competition.id == CompetitionId.B7_MULTI_CHOICE:
                         # Run each computation in a subprocess so that the GPU is reset between each model.
-                        losses = utils.run_in_subprocess(
+                        deviations = utils.run_in_subprocess(
                             functools.partial(
-                                ft.validation.compute_losses,
+                                ft.validation.compute_multiple_choice_deviation,
                                 model_i.pt_model,
                                 batches,
                                 self.config.device,
@@ -885,45 +936,55 @@ class Validator:
                             ttl=360,
                             mode="spawn",
                         )
+                    else:
+                        raise ValueError(
+                            f"Competition id: {competition.id} has no evaluation logic specified."
+                        )
 
+                    # TODO add sample functionality for B7_PROMPTING
                     if self.config.do_sample:
                         try:
-                            prompt, truth = cortex_data.get_sample()
-                            conversation = [{"role": "user", "content": prompt}]
-                            input_ids = tokenizer.apply_chat_template(
-                                conversation,
-                                truncation=True,
-                                return_tensors="pt",
-                                max_length=competition.constraints.sequence_length,
-                                add_generation_prompt=True,
-                            )
-                            generation_config = GenerationConfig(
-                                max_length=competition.constraints.sequence_length,
-                                do_sample=True,
-                                temperature=0.8,
-                                top_p=0.95,
-                                top_k=40,
-                                repetition_penalty=1.1,
-                                eos_token_id=tokenizer.eos_token_id,
-                                pad_token_id=tokenizer.eos_token_id,
-                            )
-                            # Run each generation in a subprocess so that the GPU is reset between each model.
-                            response = utils.run_in_subprocess(
-                                functools.partial(
-                                    ft.validation.generate_output,
-                                    model_i.pt_model,
-                                    input_ids,
-                                    generation_config,
-                                    self.config.device,
-                                    tokenizer,
-                                ),
-                                ttl=360,
-                                mode="spawn",
-                            )
-                            sample = (prompt, response, truth)
-                            bt.logging.success(
-                                f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
-                            )
+                            if competition.id == CompetitionId.SN9_MODEL:
+                                prompt, truth = sample_data.get_sample()
+                                conversation = [{"role": "user", "content": prompt}]
+                                input_ids = tokenizer.apply_chat_template(
+                                    conversation,
+                                    truncation=True,
+                                    return_tensors="pt",
+                                    max_length=competition.constraints.sequence_length,
+                                    add_generation_prompt=True,
+                                )
+                                generation_config = GenerationConfig(
+                                    max_length=competition.constraints.sequence_length,
+                                    do_sample=True,
+                                    temperature=0.8,
+                                    top_p=0.95,
+                                    top_k=40,
+                                    repetition_penalty=1.1,
+                                    eos_token_id=tokenizer.eos_token_id,
+                                    pad_token_id=tokenizer.eos_token_id,
+                                )
+                                # Run each generation in a subprocess so that the GPU is reset between each model.
+                                response = utils.run_in_subprocess(
+                                    functools.partial(
+                                        ft.validation.generate_output,
+                                        model_i.pt_model,
+                                        input_ids,
+                                        generation_config,
+                                        self.config.device,
+                                        tokenizer,
+                                    ),
+                                    ttl=360,
+                                    mode="spawn",
+                                )
+                                sample = (prompt, response, truth)
+                                bt.logging.success(
+                                    f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
+                                )
+                            else:
+                                bt.logging.trace(
+                                    "Sampling for B7_MULTI_CHOICE is not implemented yet."
+                                )
                         except Exception as e:
                             bt.logging.error(
                                 f"Error in eval loop during sample generation: {e}."
@@ -933,25 +994,27 @@ class Validator:
                     del model_i
                 except Exception as e:
                     bt.logging.error(
-                        f"Error in eval loop: {e}. Setting losses for uid: {uid_i} to infinity."
+                        f"Error in eval loop: {e}. Setting deviations for uid: {uid_i} to infinity."
                     )
             else:
                 bt.logging.debug(
                     f"Unable to load the model metadata for {uid_i} or it belongs to another competition. Setting loss to infinity for this competition."
                 )
 
-            average_model_loss = sum(losses) / len(losses)
-            uid_to_state[uid_i].losses = losses
+            average_model_deviation = sum(deviations) / len(deviations)
+            uid_to_state[uid_i].deviations = deviations
             bt.logging.trace(
-                f"Computed model losses for uid: {uid_i} with average loss: {average_model_loss}"
+                f"Computed model deviations for uid: {uid_i} with average deviation: {average_model_deviation}"
             )
 
         # Compute wins and win rates per uid.
-        losses_per_uid = {uid: state.losses for uid, state in uid_to_state.items()}
+        deviations_per_uid = {
+            uid: state.deviations for uid, state in uid_to_state.items()
+        }
         uid_to_block = {uid: state.block for uid, state in uid_to_state.items()}
         wins, win_rate = ft.validation.compute_wins(
             uids,
-            losses_per_uid,
+            deviations_per_uid,
             batches,
             uid_to_block,
             competition.constraints.epsilon_func,
@@ -1017,7 +1080,7 @@ class Validator:
         # Log the performance of the eval loop.
         bt.logging.debug(load_data_perf.summary_str())
         bt.logging.debug(load_model_perf.summary_str())
-        bt.logging.debug(compute_loss_perf.summary_str())
+        bt.logging.debug(compute_deviation_perf.summary_str())
 
         # Log to screen and wandb.
         self.log_step(
@@ -1026,12 +1089,12 @@ class Validator:
             uids,
             uid_to_state,
             self._get_uids_to_competition_ids(),
-            list(cortex_data.get_selected_sample_ids()),
+            list(sample_data.get_selected_sample_ids()),
             wins,
             win_rate,
             tracker_competition_weights,
             load_model_perf,
-            compute_loss_perf,
+            compute_deviation_perf,
             load_data_perf,
         )
 
@@ -1078,26 +1141,28 @@ class Validator:
             curr_block (int): The current block.
             uid_to_state (typing.Dict[int, PerUIDEvalState]): A dictionary mapping uids to their eval state.
         """
-        top_model_loss = self._compute_avg_loss(uid_to_state[top_uid].losses)
+        top_model_deviation = self._compute_avg_deviation(
+            uid_to_state[top_uid].deviations
+        )
         for _, state in uid_to_state.items():
             self.model_tracker.on_model_evaluated(
                 state.hotkey,
                 EvalResult(
                     block=curr_block,
-                    score=self._compute_avg_loss(state.losses),
+                    score=self._compute_avg_deviation(state.deviations),
                     winning_model_block=uid_to_state[top_uid].block,
-                    winning_model_score=top_model_loss,
+                    winning_model_score=top_model_deviation,
                 ),
             )
 
-    def _compute_avg_loss(self, losses: typing.List[float]) -> float:
-        """Safely computes the average loss from a list of losses.
+    def _compute_avg_deviation(self, deviations: typing.List[float]) -> float:
+        """Safely computes the average deviation from a list of deviations.
         Args:
-            losses (typing.List[float]): A list of losses.
+            deviations (typing.List[float]): A list of deviations.
         Returns:
-            float: The average loss.
+            float: The average deviation.
         """
-        return sum(losses) / len(losses) if losses else math.inf
+        return sum(deviations) / len(deviations) if deviations else math.inf
 
     def log_step(
         self,
@@ -1111,7 +1176,7 @@ class Validator:
         win_rate: typing.Dict[int, float],
         competition_weights: torch.Tensor,
         load_model_perf: PerfMonitor,
-        compute_loss_perf: PerfMonitor,
+        compute_deviation_perf: PerfMonitor,
         load_data_perf: PerfMonitor,
     ):
         """Logs the results of the step to the console and wandb (if enabled)."""
@@ -1130,7 +1195,9 @@ class Validator:
                 "block": uid_to_state[uid].block,
                 "hf": uid_to_state[uid].repo_name,
                 "competition_id": int(competition.id),
-                "average_loss": self._compute_avg_loss(uid_to_state[uid].losses),
+                "average_loss": self._compute_avg_deviation(
+                    uid_to_state[uid].deviations
+                ),  # Keep the log here as loss to avoid breaking the leaderboard.
                 "epsilon_adv": competition.constraints.epsilon_func.compute_epsilon(
                     current_block, uid_to_state[uid].block
                 ),
@@ -1141,7 +1208,7 @@ class Validator:
         table = Table(title="Step", expand=True)
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("hf", style="magenta", overflow="fold")
-        table.add_column("avg_loss", style="magenta", overflow="fold")
+        table.add_column("avg_deviation", style="magenta", overflow="fold")
         table.add_column("epsilon_adv", style="magenta", overflow="fold")
         table.add_column("win_rate", style="magenta", overflow="fold")
         table.add_column("total_weight", style="magenta", overflow="fold")
@@ -1231,10 +1298,10 @@ class Validator:
                     "P90": load_model_perf.percentile(90),
                 },
                 "compute_model_perf": {
-                    "min": compute_loss_perf.min(),
-                    "median": compute_loss_perf.median(),
-                    "max": compute_loss_perf.max(),
-                    "P90": compute_loss_perf.percentile(90),
+                    "min": compute_deviation_perf.min(),
+                    "median": compute_deviation_perf.median(),
+                    "max": compute_deviation_perf.max(),
+                    "P90": compute_deviation_perf.percentile(90),
                 },
                 "load_data_perf": {
                     "min": load_data_perf.min(),

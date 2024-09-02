@@ -83,7 +83,6 @@ class PromptingSubsetLoader:
         page_size: int = 100,
         prompting_project: str = constants.PROMPTING_WANDB_PROJECT,
         max_run_age: typing.Optional[dt.timedelta] = None,
-        min_score: typing.Optional[float] = None,
         validator_hotkeys: typing.Optional[typing.Set[str]] = None,
     ):
         """Loads prompt/response data from Subnet 1.
@@ -98,7 +97,6 @@ class PromptingSubsetLoader:
             page_size (int, optional): The number of steps to fetch from a run at a time. Recommended to be >= steps.
             prompting_project (_type_, optional): The wandb project used for subnet 1. Defaults to constants.PROMPTING_WANDB_PROJECT.
             max_run_age (typing.Optional[dt.timedelta], optional): If set, only considers data from runs that were created within the past `max_run_age`
-            min_score (typing.Optional[float], optional): If set, only prompt/responses that were scored (by a subbnet 1 validator) higher than 'min_score' are included in the dataset.
             validator_hotkeys (typing.Optional[typing.Set[str]], optional): If provided, only considers data from one of these validators.
         """
         api = wandb.Api(timeout=100)
