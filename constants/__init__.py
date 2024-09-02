@@ -4,6 +4,12 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import torch
+from taoverse.model.competition.data import (
+    Competition,
+    ModelConstraints,
+    NormValidationConstraints,
+)
+from taoverse.model.competition.epsilon import FixedEpsilon, LinearDecay
 from transformers import (
     BartForCausalLM,
     FalconForCausalLM,
@@ -14,12 +20,6 @@ from transformers import (
     PhiForCausalLM,
 )
 
-from taoverse.model.competition.data import (
-    Competition,
-    ModelConstraints,
-    NormValidationConstraints,
-)
-from taoverse.model.competition.epsilon import FixedEpsilon
 from competitions.data import CompetitionId
 
 # ---------------------------------
@@ -92,6 +92,31 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         epsilon_func=FixedEpsilon(0.005),
         max_bytes=15 * 1024 * 1024 * 1024,
     ),
+    CompetitionId.B7_MULTI_CHOICE: ModelConstraints(
+        max_model_parameter_size=6_900_000_000,
+        sequence_length=4096,
+        allowed_architectures=[
+            MistralForCausalLM,
+            LlamaForCausalLM,
+            BartForCausalLM,
+            FalconForCausalLM,
+            GPTNeoXForCausalLM,
+            PhiForCausalLM,
+            GemmaForCausalLM,
+        ],
+        tokenizer="Xenova/gpt-4",
+        kwargs={
+            "torch_dtype": torch.bfloat16,
+        },
+        eval_block_delay=1200,  # ~4 hours.
+        norm_validation_constraints=NormValidationConstraints(
+            norm_eps_soft=200,
+            norm_eps_soft_percent_threshold=0.15,
+            norm_eps_hard=1000,
+        ),
+        epsilon_func=LinearDecay(0.005, 0.001, 7200 * 7),  # Decay over ~7 days.
+        max_bytes=15 * 1024 * 1024 * 1024,
+    ),
 }
 
 # Schedule of competitions by block.
@@ -105,7 +130,22 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                 1.0,
             )
         ],
-    )
+    ),
+    (
+        3790750,
+        [
+            Competition(
+                CompetitionId.SN9_MODEL,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.SN9_MODEL],
+                0.25,
+            ),
+            Competition(
+                CompetitionId.B7_MULTI_CHOICE,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
+                0.75,
+            ),
+        ],
+    ),
 ]
 
 for block_and_competitions in COMPETITION_SCHEDULE_BY_BLOCK:
