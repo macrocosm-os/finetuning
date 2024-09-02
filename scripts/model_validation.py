@@ -12,7 +12,7 @@ from taoverse.model.data import Model, ModelId
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
 from taoverse.utilities.perf_monitor import PerfMonitor
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import constants
 import finetune as ft
@@ -73,6 +73,17 @@ def main():
     parser.add_argument(
         "--list_competitions", action="store_true", help="Print out all competitions"
     )
+    parser.add_argument(
+        "--tokenizer_override",
+        action="store_true",
+        help="If a custom tokenizer should be used rather than the competition one",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        type=str,
+        default="Xenova/gpt-4",
+        help="Tokenizer",
+    )
     args = parser.parse_args()
     if args.list_competitions:
         print(constants.COMPETITION_SCHEDULE_BY_BLOCK)
@@ -128,7 +139,10 @@ def main():
     print(pull_data_perf.summary_str())
 
     print("Tokenizing sample data")
-    tokenizer = ft.model.load_tokenizer(model_constraints)
+    if args.tokenizer_override:
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+    else:
+        tokenizer = ft.model.load_tokenizer(model_constraints)
     batches = sample_data.tokenize(tokenizer, model_constraints.sequence_length)
 
     print("Calculating losses")
