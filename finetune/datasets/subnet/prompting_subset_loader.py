@@ -42,7 +42,7 @@ class PromptingSubsetLoader:
     def _get_filters(
         self, use_latest_data, random_seed, validator_hotkeys
     ) -> typing.Dict[str, typing.List[str]]:
-        filters_and = [{"config.type": constants.CORTEX_WANDB_TYPE}]
+        filters_and = []
         filters_or = []
 
         if use_latest_data:
@@ -76,11 +76,11 @@ class PromptingSubsetLoader:
         self,
         use_latest_data: bool = False,
         random_seed: typing.Optional[int] = None,
-        max_samples: int = 300,
-        steps: int = 5,
+        max_samples: int = 100,
+        steps: int = 300,
         progress: bool = False,
         retry_limit: int = 10,
-        page_size: int = 100,
+        page_size: int = 300,
         prompting_project: str = constants.PROMPTING_WANDB_PROJECT,
         max_run_age: typing.Optional[dt.timedelta] = None,
         validator_hotkeys: typing.Optional[typing.Set[str]] = None,
@@ -132,7 +132,6 @@ class PromptingSubsetLoader:
                     run_order, desc="Run", leave=False, disable=not progress
                 ):
                     run = runs[run_index]
-
                     # TODO: Re-enable the hotkey check once subnet 1 adds the signature.
                     # # Validator hotkeys are used to ensure the authenticity of the run.
                     # if validator_hotkeys:
@@ -180,10 +179,9 @@ class PromptingSubsetLoader:
                                 continue
 
                             # Only check samples that are multiple choice based.
-                            if sample.get("task", "none") != "multi_choice":
+                            if sample.get("task", "none") == "multi_choice":
                                 try:
                                     # TODO: Consider only using questions that some threshold of miners got correct.
-
                                     # If not found these get caught in the KeyError catch below.
                                     challenge = sample["challenge"]
                                     reference = sample["reference"]
@@ -224,7 +222,6 @@ class PromptingSubsetLoader:
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
     ) -> typing.List[typing.Tuple[BatchEncoding, int]]:
-
         # Each batch is 4 tokenized question + answer pairs and the correct choice.
         batches = []
         for challenge, reference in self:
@@ -248,7 +245,7 @@ class PromptingSubsetLoader:
             # TODO: confirm the logit index is 0 based.
             correct_highest_logit_index = PROMPTING_SUBNET_CHOICES.index(reference)
 
-            batches.append(input_ids, correct_highest_logit_index)
+            batches.append((input_ids, correct_highest_logit_index))
 
         return batches
 

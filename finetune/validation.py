@@ -171,10 +171,12 @@ def compute_multiple_choice_deviation(
         for inputs, correct_index in batches:
             try:
                 inputs = inputs.to(device)
-                # ** unpacks the BatchEncoding dictrionary into keyword arguments.
+                # ** unpacks the BatchEncoding dictionary into keyword arguments.
                 outputs = model(**inputs)
-                # Get the predicted choice based on the index of the highest logit.
-                predicted_choice = torch.argmax(outputs.logits, dim=1).item()
+                logits = outputs.logits
+                # TODO fix this.
+                # Logits.shape is [4, len(input), len(token_choices)].
+                predicted_choice = torch.argmax(logits, dim=1).item()
                 # If the prediction is correct, there is no deviation. Else there is full deviation.
                 if predicted_choice == correct_index:
                     multiple_choice_deviations.append(0)

@@ -56,7 +56,7 @@ CORTEX_MIN_STAKE = 100_000
 # The uid for the Prompting subnet.
 PROMPTING_SUBNET_UID = 1
 # The Prompting validator WANDB project and filters
-CORTEX_WANDB_PROJECT = "macrocosmos/prompting-validators"
+PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Percentage of promping miners who must have gotten the question correct to include in the eval set.
 # TODO incorporate this value in the PromptingSubsetLoader.
