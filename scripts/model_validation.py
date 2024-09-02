@@ -12,7 +12,7 @@ from taoverse.model.data import Model, ModelId
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
 from taoverse.utilities.perf_monitor import PerfMonitor
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 import constants
 import finetune as ft
@@ -174,9 +174,24 @@ def main():
         with compute_deviation_perf.sample():
             deviations = compute_losses(model.pt_model, batches, device=args.device)
     elif args.competition_id == CompetitionId.B7_MULTI_CHOICE:
+        # TODO: Consider max_time parameter on this.
+        generation_config = GenerationConfig(
+            max_new_tokens=20,
+            do_sample=True,
+            temperature=0.8,
+            top_p=0.95,
+            top_k=40,
+            repetition_penalty=1.1,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.eos_token_id,
+        )
         with compute_deviation_perf.sample():
             deviations = compute_multiple_choice_deviation(
-                model.pt_model, batches, device=args.device
+                model.pt_model,
+                tokenizer,
+                generation_config,
+                batches,
+                device=args.device,
             )
     else:
         print(

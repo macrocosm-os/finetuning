@@ -925,11 +925,23 @@ class Validator:
                                 mode="spawn",
                             )
                     elif competition.id == CompetitionId.B7_MULTI_CHOICE:
+                        compute_generation_config = GenerationConfig(
+                                max_new_tokens=20,
+                                do_sample=True,
+                                temperature=0.8,
+                                top_p=0.95,
+                                top_k=40,
+                                repetition_penalty=1.1,
+                                eos_token_id=tokenizer.eos_token_id,
+                                pad_token_id=tokenizer.eos_token_id,
+                            )
                         # Run each computation in a subprocess so that the GPU is reset between each model.
                         deviations = utils.run_in_subprocess(
                             functools.partial(
                                 ft.validation.compute_multiple_choice_deviation,
                                 model_i.pt_model,
+                                tokenizer,
+                                compute_generation_config,
                                 batches,
                                 self.config.device,
                             ),

@@ -182,6 +182,7 @@ class PromptingSubsetLoader:
                             if sample.get("task", "none") == "multi_choice":
                                 try:
                                     # TODO: Consider only using questions that some threshold of miners got correct.
+                                    # TODO: consider adding additional instructions to the challenge.
                                     # If not found these get caught in the KeyError catch below.
                                     challenge = sample["challenge"]
                                     reference = sample["reference"]
@@ -221,32 +222,31 @@ class PromptingSubsetLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[BatchEncoding, int]]:
-        # Each batch is 4 tokenized question + answer pairs and the correct choice.
+    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+        # Each batch is a tokenized question + the chocies + the correct choice.
         batches = []
-        for challenge, reference in self:
-            # Construct the 4 possible question + answer pairs.
-            # Padding could be necessary if the tokenization of the different answer parts at the end varies.
-            tokenizer.pad_token = tokenizer.eos_token
-            # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
-            tokenizer.truncation_side = "left"
+        # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
+        tokenizer.truncation_side = "left"
 
-            # Passing a paired list of strings for tokenization just combines them.
-            input_ids = tokenizer(
-                [challenge] * len(PROMPTING_SUBNET_CHOICES),
-                PROMPTING_SUBNET_CHOICES,
-                padding=True,
+        for challenge, reference in self:
+            # TODO remove extra logging.
+            print(f"Challenge: {challenge} added to batches.")
+            conversation = [
+                {"role": "user", "content": challenge},
+            ]
+            ids = tokenizer.apply_chat_template(
+                conversation,
                 truncation=True,
                 max_length=sequence_length,
-                return_tensors="pt",
             )
 
-            # Turn the reference answer (validated earlier) into the expected index of the highest logit.
-            # TODO: confirm the logit index is 0 based.
-            correct_highest_logit_index = PROMPTING_SUBNET_CHOICES.index(reference)
-
-            batches.append((input_ids, correct_highest_logit_index))
-
+            batches.append(
+                (
+                    torch.stack([torch.tensor(ids)]),
+                    PROMPTING_SUBNET_CHOICES,
+                    reference,
+                )
+            )
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:

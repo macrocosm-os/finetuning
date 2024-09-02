@@ -19,6 +19,7 @@
 # Tools for performing validation over models.
 
 import math
+import re
 import traceback
 import typing
 
@@ -149,7 +150,9 @@ def compute_losses(
 
 def compute_multiple_choice_deviation(
     model,
-    batches: typing.List[typing.Tuple[transformers.BatchEncoding, int]],
+    tokenizer: transformers.PreTrainedTokenizer,
+    generation_config: transformers.GenerationConfig,
+    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]],
     device: str,
 ) -> typing.List[float]:
     """
@@ -157,7 +160,9 @@ def compute_multiple_choice_deviation(
 
     Parameters:
         model (torch.nn.Module): The model for which multiple choice deviations are to be computed.
-        batches (dict): A list of batches and the index of the correct answer.
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
+        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
+        batches (dict): A list of batches, choices, and the correct answer.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
 
     Returns:
@@ -165,31 +170,44 @@ def compute_multiple_choice_deviation(
     """
     # Iterate over each page and corresponding batches
     multiple_choice_deviations = []
-    with torch.inference_mode():
-        model.to(device)
-        model.eval()
-        for inputs, correct_index in batches:
-            try:
-                inputs = inputs.to(device)
-                # ** unpacks the BatchEncoding dictionary into keyword arguments.
-                outputs = model(**inputs)
-                logits = outputs.logits
-                # TODO fix this.
-                # Logits.shape is [4, len(input), len(token_choices)].
-                predicted_choice = torch.argmax(logits, dim=1).item()
-                # If the prediction is correct, there is no deviation. Else there is full deviation.
-                if predicted_choice == correct_index:
-                    multiple_choice_deviations.append(0)
-                else:
-                    multiple_choice_deviations.append(1)
-            except Exception as e:
-                bt.logging.error(
-                    f"Exception occurred in multiple choice deviation computation: {e}"
-                )
-                traceback.print_exc()  # Print the stack trace
-                multiple_choice_deviations.append(
-                    math.inf
-                )  # Use infinity to indicate failure
+
+    for (
+        inputs,
+        choices,
+        answer,
+    ) in batches:
+        try:
+            response = generate_output(
+                model=model,
+                input_ids=inputs,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+
+            # Find words which match one of the choices.
+            matches = [
+                word for word in re.sub(r"\W", " ", response).split() if word in choices
+            ]
+
+            # TODO remove extra logging:
+            print(
+                f"For response: {response}, found matches {matches}, compared to answer {answer}"
+            )
+
+            # Give credit if the last matched word in the response is correct.
+            if matches and matches[-1] == answer:
+                multiple_choice_deviations.append(0)
+            else:
+                multiple_choice_deviations.append(1)
+        except Exception as e:
+            bt.logging.error(
+                f"Exception occurred in multiple choice deviation computation: {e}"
+            )
+            traceback.print_exc()  # Print the stack trace
+            multiple_choice_deviations.append(
+                math.inf
+            )  # Use infinity to indicate failure
 
     return multiple_choice_deviations
 
@@ -219,7 +237,8 @@ def generate_output(
         model.eval()
         input_ids = input_ids.to(device)
         output = model.generate(
-            input_ids=input_ids, generation_config=generation_config
+            input_ids=input_ids,
+            generation_config=generation_config,
         )
         response = tokenizer.decode(
             output[0][len(input_ids[0]) :], skip_special_tokens=True
