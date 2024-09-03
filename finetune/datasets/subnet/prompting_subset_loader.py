@@ -135,7 +135,7 @@ class PromptingSubsetLoader:
                     # TODO: Re-enable the hotkey check once subnet 1 adds the signature.
                     # # Validator hotkeys are used to ensure the authenticity of the run.
                     # if validator_hotkeys:
-                    #     hotkey = run.config["hotkey"]
+                    #     hotkey = run.config["HOTKEY_SS58"]
                     #     # First check that the hotkey is in fact a desired validator hotkey.
                     #     if hotkey not in validator_hotkeys:
                     #         bt.logging.debug(
@@ -143,7 +143,7 @@ class PromptingSubsetLoader:
                     #         )
                     #         continue
 
-                    #     signature = run.config["signature"]
+                    #     signature = run.config["SIGNATURE"]
                     #     # Then verify the signature using the hotkey.
                     #     if not bt.Keypair(ss58_address=hotkey).verify(
                     #         run.id, bytes.fromhex(signature)
