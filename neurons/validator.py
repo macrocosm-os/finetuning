@@ -926,15 +926,15 @@ class Validator:
                             )
                     elif competition.id == CompetitionId.B7_MULTI_CHOICE:
                         compute_generation_config = GenerationConfig(
-                                max_new_tokens=20,
-                                do_sample=True,
-                                temperature=0.8,
-                                top_p=0.95,
-                                top_k=40,
-                                repetition_penalty=1.1,
-                                eos_token_id=tokenizer.eos_token_id,
-                                pad_token_id=tokenizer.eos_token_id,
-                            )
+                            max_new_tokens=20,
+                            do_sample=True,
+                            temperature=0.8,
+                            top_p=0.95,
+                            top_k=40,
+                            repetition_penalty=1.1,
+                            eos_token_id=tokenizer.eos_token_id,
+                            pad_token_id=tokenizer.eos_token_id,
+                        )
                         # Run each computation in a subprocess so that the GPU is reset between each model.
                         deviations = utils.run_in_subprocess(
                             functools.partial(
@@ -953,7 +953,6 @@ class Validator:
                             f"Competition id: {competition.id} has no evaluation logic specified."
                         )
 
-                    # TODO add sample functionality for B7_PROMPTING
                     if self.config.do_sample:
                         try:
                             if competition.id == CompetitionId.SN9_MODEL:
@@ -994,8 +993,41 @@ class Validator:
                                     f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
                                 )
                             else:
-                                bt.logging.trace(
-                                    "Sampling for B7_MULTI_CHOICE is not implemented yet."
+                                challenge, reference = sample_data.get_sample()
+                                conversation = [{"role": "user", "content": challenge}]
+                                input_ids = tokenizer.apply_chat_template(
+                                    conversation,
+                                    truncation=True,
+                                    return_tensors="pt",
+                                    max_length=competition.constraints.sequence_length,
+                                    add_generation_prompt=True,
+                                )
+                                generation_config = GenerationConfig(
+                                    max_new_tokens=20,
+                                    do_sample=True,
+                                    temperature=0.8,
+                                    top_p=0.95,
+                                    top_k=40,
+                                    repetition_penalty=1.1,
+                                    eos_token_id=tokenizer.eos_token_id,
+                                    pad_token_id=tokenizer.eos_token_id,
+                                )
+                                # Run each generation in a subprocess so that the GPU is reset between each model.
+                                response = utils.run_in_subprocess(
+                                    functools.partial(
+                                        ft.validation.generate_output,
+                                        model_i.pt_model,
+                                        input_ids,
+                                        generation_config,
+                                        self.config.device,
+                                        tokenizer,
+                                    ),
+                                    ttl=360,
+                                    mode="spawn",
+                                )
+                                sample = (prompt, response, reference)
+                                bt.logging.success(
+                                    f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
                                 )
                         except Exception as e:
                             bt.logging.error(

@@ -26,7 +26,7 @@ import torch
 import wandb
 from taoverse.utilities import utils
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerBase, BatchEncoding
+from transformers import PreTrainedTokenizerBase
 from wandb.apis.public.history import HistoryScan
 
 import constants
@@ -237,7 +237,9 @@ class PromptingSubsetLoader:
             ids = tokenizer.apply_chat_template(
                 conversation,
                 truncation=True,
+                return_tensors="pt",
                 max_length=sequence_length,
+                add_generation_prompt=True,
             )
 
             batches.append(
