@@ -83,6 +83,7 @@ class PromptingSubsetLoader:
         page_size: int = 300,
         prompting_project: str = constants.PROMPTING_WANDB_PROJECT,
         max_run_age: typing.Optional[dt.timedelta] = None,
+        min_percent_correct: typing.Optional[float] = None,
         validator_hotkeys: typing.Optional[typing.Set[str]] = None,
     ):
         """Loads prompt/response data from Subnet 1.
@@ -97,6 +98,7 @@ class PromptingSubsetLoader:
             page_size (int, optional): The number of steps to fetch from a run at a time. Recommended to be >= steps.
             prompting_project (_type_, optional): The wandb project used for subnet 1. Defaults to constants.PROMPTING_WANDB_PROJECT.
             max_run_age (typing.Optional[dt.timedelta], optional): If set, only considers data from runs that were created within the past `max_run_age`
+            min_percent_correct (typing.Optional[float], optional): If set, only include prompt/responses at least "min_percent_correct" sn 1 miners answered correctly.
             validator_hotkeys (typing.Optional[typing.Set[str]], optional): If provided, only considers data from one of these validators.
         """
         api = wandb.Api(timeout=100)
@@ -181,7 +183,21 @@ class PromptingSubsetLoader:
                             # Only check samples that are multiple choice based.
                             if sample.get("task", "none") == "multi_choice":
                                 try:
-                                    # TODO: Consider only using questions that some threshold of miners got correct.
+                                    # Check if a baseline threshold of SN1 miners answered the question correctly.
+                                    if min_percent_correct:  # min_percent_correct:
+                                        rewards = sample[
+                                            "MultiChoiceRewardModel_rewards"
+                                        ]
+                                        if isinstance(rewards, list) and isinstance(
+                                            rewards[0], (int, float)
+                                        ):
+                                            # 1 for correct, 0 for incorrect.
+                                            percent_correct = sum(rewards) / len(
+                                                rewards
+                                            )
+                                            if percent_correct < min_percent_correct:
+                                                continue
+
                                     # TODO: consider adding additional instructions to the challenge.
                                     # If not found these get caught in the KeyError catch below.
                                     challenge = sample["challenge"]
@@ -237,7 +253,6 @@ class PromptingSubsetLoader:
             ids = tokenizer.apply_chat_template(
                 conversation,
                 truncation=True,
-                return_tensors="pt",
                 max_length=sequence_length,
                 add_generation_prompt=True,
             )

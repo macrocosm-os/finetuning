@@ -844,6 +844,7 @@ class Validator:
                     steps=self.config.latest_prompting_steps,
                     page_size=self.config.latest_prompting_steps,
                     max_run_age=constants.PROMPTING_MAX_AGE,
+                    min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
                     validator_hotkeys=vali_hotkeys,
                 )
         else:
@@ -992,13 +993,12 @@ class Validator:
                                 bt.logging.success(
                                     f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
                                 )
-                            else:
+                            elif competition.id == CompetitionId.B7_MULTI_CHOICE:
                                 challenge, reference = sample_data.get_sample()
                                 conversation = [{"role": "user", "content": challenge}]
                                 input_ids = tokenizer.apply_chat_template(
                                     conversation,
                                     truncation=True,
-                                    return_tensors="pt",
                                     max_length=competition.constraints.sequence_length,
                                     add_generation_prompt=True,
                                 )
@@ -1028,6 +1028,10 @@ class Validator:
                                 sample = (prompt, response, reference)
                                 bt.logging.success(
                                     f"Generated sample for uid: {uid_i} Prompt: {sample[0]}\n\nResponse: {sample[1]}\n\nTruth: {sample[2]}"
+                                )
+                            else:
+                                raise ValueError(
+                                    f"Competition id: {competition.id} has no do sample logic specified."
                                 )
                         except Exception as e:
                             bt.logging.error(

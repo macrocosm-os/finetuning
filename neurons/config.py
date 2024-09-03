@@ -55,7 +55,7 @@ def validator_config():
     parser.add_argument(
         "--latest_prompting_steps",
         type=int,
-        default=300,  # Sample more steps since prompting runs this less frequently.
+        default=500,  # Sample more steps since prompting runs this less frequently.
         help="Number of most recent Prompting steps to sample data from",
     )
     parser.add_argument(

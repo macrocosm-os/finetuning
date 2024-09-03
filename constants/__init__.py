@@ -59,8 +59,7 @@ PROMPTING_SUBNET_UID = 1
 PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Percentage of promping miners who must have gotten the question correct to include in the eval set.
-# TODO incorporate this value in the PromptingSubsetLoader.
-PROMPTING_MIN_CORRECT_MINERS = 0.75
+PROMPTING_MIN_CORRECT_MINERS = 0.25
 # Minimum stake to get data from a cortex validator.
 PROMPTING_MIN_STAKE = 100_000
 # Minimum stake to consider a validator when checking for miners with weights.
