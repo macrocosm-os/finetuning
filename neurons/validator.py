@@ -147,6 +147,7 @@ class Validator:
             self.dataset_subtensor,
             config={
                 constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
+                constants.PROMPTING_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
             },
         )
 
@@ -171,7 +172,7 @@ class Validator:
 
         bt.logging.info(f"Metagraph: {self.metagraph}.")
         bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
-        bt.logging.info(f"Prompting Metagraph: {self.cortex_metagraph}.")
+        bt.logging.info(f"Prompting Metagraph: {self.prompting_metagraph}.")
 
         # Register a listener for the subnet and dataset metagraph syncers.
         self.subnet_metagraph_syncer.register_listener(
