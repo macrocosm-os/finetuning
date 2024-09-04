@@ -63,7 +63,7 @@ class PromptingSubsetLoader:
         if validator_hotkeys:
             # 'IN' is not supported in the query language so we add a series of 'OR'.
             for hotkey in validator_hotkeys:
-                filters_or.append({"config.hotkey": hotkey})
+                filters_or.append({"config.HOTKEY_SS58": hotkey})
 
         # Compose the complete dictionary of filters for the wandb call.
         filters = {"$and": filters_and}
@@ -134,26 +134,25 @@ class PromptingSubsetLoader:
                     run_order, desc="Run", leave=False, disable=not progress
                 ):
                     run = runs[run_index]
-                    # TODO: Re-enable the hotkey check once subnet 1 adds the signature.
                     # # Validator hotkeys are used to ensure the authenticity of the run.
-                    # if validator_hotkeys:
-                    #     hotkey = run.config["HOTKEY_SS58"]
-                    #     # First check that the hotkey is in fact a desired validator hotkey.
-                    #     if hotkey not in validator_hotkeys:
-                    #         bt.logging.debug(
-                    #             f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
-                    #         )
-                    #         continue
+                    if validator_hotkeys:
+                        hotkey = run.config["HOTKEY_SS58"]
+                        # First check that the hotkey is in fact a desired validator hotkey.
+                        if hotkey not in validator_hotkeys:
+                            bt.logging.debug(
+                                f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
+                            )
+                            continue
 
-                    #     signature = run.config["SIGNATURE"]
-                    #     # Then verify the signature using the hotkey.
-                    #     if not bt.Keypair(ss58_address=hotkey).verify(
-                    #         run.id, bytes.fromhex(signature)
-                    #     ):
-                    #         bt.logging.debug(
-                    #             f"Failed Signature: {signature} is not valid for {run.id}."
-                    #         )
-                    #         continue
+                        signature = run.config["SIGNATURE"]
+                        # Then verify the signature using the hotkey.
+                        if not bt.Keypair(ss58_address=hotkey).verify(
+                            run.id, bytes.fromhex(signature)
+                        ):
+                            bt.logging.debug(
+                                f"Failed Signature: {signature} is not valid for {run.id}."
+                            )
+                            continue
 
                     if use_latest_data:
                         last_step: int = run.lastHistoryStep
