@@ -853,6 +853,10 @@ class Validator:
                 f"Competition id: {competition.id} has no sample loading logic specified."
             )
 
+        if not sample_data:
+            bt.logging.error("Failed to load sample data. Skipping evaluation.")
+            return
+
         # Tokenize the data into batches for use in evaluation.
         # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
         tokenizer = ft.model.load_tokenizer(
