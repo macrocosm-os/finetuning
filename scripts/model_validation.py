@@ -22,16 +22,24 @@ from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoad
 from finetune.validation import compute_losses, compute_multiple_choice_deviation
 
 
-def load_model(model_path, competition_id, kwargs) -> Model:
+def load_model(model_path, competition_id, allow_remote_code, kwargs) -> Model:
     model_id = ModelId(
         namespace="namespace", name="name", competition_id=competition_id
     )
-    pt_model = AutoModelForCausalLM.from_pretrained(
-        pretrained_model_name_or_path=model_path,
-        local_files_only=True,
-        use_safetensors=True,
-        **kwargs,
-    )
+    if allow_remote_code:
+        pt_model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=model_path,
+            trust_remote_code=True,
+            use_safetensors=True,
+            **kwargs,
+        )
+    else:
+        pt_model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=model_path,
+            local_files_only=True,
+            use_safetensors=True,
+            **kwargs,
+        )
 
     return Model(id=model_id, pt_model=pt_model)
 
@@ -46,6 +54,12 @@ def main():
         type=str,
         default="cuda",
         help="Device name.",
+    )
+    parser.add_argument(
+        "--random_seed",
+        type=int,
+        default=0,
+        help="Random seed to use while loading data. If 0 then randomize.",
     )
     parser.add_argument(
         "--latest_cortex_steps",
@@ -77,6 +91,11 @@ def main():
         default=CompetitionId.SN9_MODEL.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
+    )
+    parser.add_argument(
+        "--allow_remote_code",
+        action="store_true",
+        help="If a remote code should be allowed",
     )
     parser.add_argument(
         "--skip_constraints_check",
@@ -120,7 +139,9 @@ def main():
     print(f"Loading model for competition {args.competition_id}")
     load_model_perf = PerfMonitor("Eval: Load model")
     with load_model_perf.sample():
-        model = load_model(args.model_path, competition.id, kwargs)
+        model = load_model(
+            args.model_path, competition.id, args.allow_remote_code, kwargs
+        )
     print(load_model_perf.summary_str())
 
     if not args.skip_constraints_check:
@@ -133,12 +154,14 @@ def main():
     pull_data_perf = PerfMonitor("Eval: Pull data")
     sample_data = None
 
+    seed = args.random_seed if args.random_seed else random.randint(0, sys.maxsize)
+
     if args.competition_id == CompetitionId.SN9_MODEL:
         print("Getting latest sample data from cortex.")
         with pull_data_perf.sample():
             sample_data = CortexSubsetLoader(
                 use_latest_data=True,
-                random_seed=random.randint(0, sys.maxsize),
+                random_seed=seed,
                 max_samples=args.latest_cortex_samples,
                 steps=args.latest_cortex_steps,
                 page_size=args.latest_cortex_steps,
@@ -148,7 +171,7 @@ def main():
         with pull_data_perf.sample():
             sample_data = PromptingSubsetLoader(
                 use_latest_data=True,
-                random_seed=random.randint(0, sys.maxsize),
+                random_seed=seed,
                 max_samples=args.latest_prompting_samples,
                 steps=args.latest_prompting_steps,
                 page_size=args.latest_prompting_steps,
