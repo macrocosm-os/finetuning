@@ -143,12 +143,12 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
             Competition(
                 CompetitionId.SN9_MODEL,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.SN9_MODEL],
-                0.25,
+                0.50,
             ),
             Competition(
                 CompetitionId.B7_MULTI_CHOICE,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                0.75,
+                0.50,
             ),
         ],
     ),
