@@ -208,11 +208,14 @@ class PromptingSubsetLoader:
                                         and isinstance(reference, str)
                                         and reference in PROMPTING_SUBNET_CHOICES
                                     ):
-                                        self.buffer.append((challenge, reference))
                                         step = sample.get("_step", "Unknown")
-                                        self.selected_samples.add(f"{run.id}_{step}")
-                                        if len(self.buffer) == max_samples:
-                                            return
+                                        run_step = f"{run.id}_{step}"
+                                        # Check that we haven't already seen this exact step to avoid duplicates.
+                                        if run_step not in self.selected_samples:
+                                            self.buffer.append((challenge, reference))
+                                            self.selected_samples.add(run_step)
+                                            if len(self.buffer) == max_samples:
+                                                return
 
                                 except KeyError:
                                     pass
