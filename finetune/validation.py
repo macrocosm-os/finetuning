@@ -195,8 +195,8 @@ def compute_multiple_choice_deviation(
                 f"For response: {response}, found matches {matches}, compared to answer {answer}"
             )
 
-            # Give credit if the last matched word in the response is correct.
-            if matches and matches[-1] == answer:
+            # Give credit if the first matched word in the response is correct.
+            if matches and matches[0] == answer:
                 multiple_choice_deviations.append(0)
             else:
                 multiple_choice_deviations.append(1)
@@ -205,9 +205,7 @@ def compute_multiple_choice_deviation(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()  # Print the stack trace
-            multiple_choice_deviations.append(
-                math.inf
-            )  # Use infinity to indicate failure
+            multiple_choice_deviations.append(1)  # Use 1 to indicate failure
 
     return multiple_choice_deviations
 

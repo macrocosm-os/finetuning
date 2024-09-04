@@ -59,7 +59,7 @@ PROMPTING_SUBNET_UID = 1
 PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Percentage of promping miners who must have gotten the question correct to include in the eval set.
-PROMPTING_MIN_CORRECT_MINERS = 0.25
+PROMPTING_MIN_CORRECT_MINERS = 0
 # Minimum stake to get data from a cortex validator.
 PROMPTING_MIN_STAKE = 100_000
 # Minimum stake to consider a validator when checking for miners with weights.
@@ -180,6 +180,6 @@ model_retry_cadence = 300  # Roughly 1 hour
 # How frequently to check the models given weights by other large validators.
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
-sample_min = 5
+sample_min = 2
 # We allow the sample_min per competition + 10 additional models to be held at any one time.
 updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 10
