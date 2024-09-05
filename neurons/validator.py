@@ -926,7 +926,7 @@ class Validator:
                                     batches,
                                     self.config.device,
                                 ),
-                                ttl=360,
+                                ttl=400,
                                 mode="spawn",
                             )
                     elif competition.id == CompetitionId.B7_MULTI_CHOICE:
@@ -951,7 +951,7 @@ class Validator:
                                     batches,
                                     self.config.device,
                                 ),
-                                ttl=360,
+                                ttl=400,
                                 mode="spawn",
                             )
                     else:
