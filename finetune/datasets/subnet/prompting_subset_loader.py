@@ -197,7 +197,6 @@ class PromptingSubsetLoader:
                                             if percent_correct < min_percent_correct:
                                                 continue
 
-                                    # TODO: consider adding additional instructions to the challenge.
                                     # If not found these get caught in the KeyError catch below.
                                     challenge = sample["challenge"]
                                     reference = sample["reference"]
@@ -247,8 +246,6 @@ class PromptingSubsetLoader:
         tokenizer.truncation_side = "left"
 
         for challenge, reference in self:
-            # TODO remove extra logging.
-            print(f"Challenge: {challenge} added to batches.")
             conversation = [
                 {"role": "user", "content": challenge},
             ]

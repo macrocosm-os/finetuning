@@ -200,7 +200,6 @@ def main():
         with compute_deviation_perf.sample():
             deviations = compute_losses(model.pt_model, batches, device=args.device)
     elif args.competition_id == CompetitionId.B7_MULTI_CHOICE:
-        # TODO: Consider max_time parameter on this.
         generation_config = GenerationConfig(
             max_new_tokens=20,
             do_sample=True,
@@ -209,7 +208,7 @@ def main():
             top_k=40,
             repetition_penalty=1.1,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
         )
         with compute_deviation_perf.sample():
             deviations = compute_multiple_choice_deviation(

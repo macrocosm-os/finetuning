@@ -939,7 +939,7 @@ class Validator:
                             top_k=40,
                             repetition_penalty=1.1,
                             eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.eos_token_id,
+                            pad_token_id=tokenizer.pad_token_id,
                         )
                         # Run each computation in a subprocess so that the GPU is reset between each model.
                         deviations = utils.run_in_subprocess(
@@ -979,7 +979,7 @@ class Validator:
                                     top_k=40,
                                     repetition_penalty=1.1,
                                     eos_token_id=tokenizer.eos_token_id,
-                                    pad_token_id=tokenizer.eos_token_id,
+                                    pad_token_id=tokenizer.pad_token_id,
                                 )
                                 # Run each generation in a subprocess so that the GPU is reset between each model.
                                 response = utils.run_in_subprocess(
@@ -1015,7 +1015,7 @@ class Validator:
                                     top_k=40,
                                     repetition_penalty=1.1,
                                     eos_token_id=tokenizer.eos_token_id,
-                                    pad_token_id=tokenizer.eos_token_id,
+                                    pad_token_id=tokenizer.pad_token_id,
                                 )
                                 # Run each generation in a subprocess so that the GPU is reset between each model.
                                 response = utils.run_in_subprocess(
