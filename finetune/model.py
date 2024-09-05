@@ -12,4 +12,4 @@ def load_tokenizer(
     # Overwrite the pad token id to eos token if it doesn't exist.
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
-    return
+    return tokenizer
