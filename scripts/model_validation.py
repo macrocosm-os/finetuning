@@ -186,7 +186,9 @@ def main():
 
     print("Tokenizing sample data")
     if args.tokenizer_override:
-        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.tokenizer, trust_remote_code=args.allow_remote_code
+        )
     else:
         tokenizer = ft.model.load_tokenizer(competition.constraints)
     batches = sample_data.tokenize(tokenizer, competition.constraints.sequence_length)
@@ -229,7 +231,7 @@ def main():
         sum(deviations) / len(deviations) if len(deviations) > 0 else math.inf
     )
 
-    print(f"The average model loss for {args.model_path} is {average_model_deviation}")
+    print(f"The average deviation for {args.model_path} is {average_model_deviation}")
 
 
 if __name__ == "__main__":
