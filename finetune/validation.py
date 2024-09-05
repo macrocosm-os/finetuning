@@ -19,6 +19,7 @@
 # Tools for performing validation over models.
 
 import math
+import re
 import traceback
 import typing
 
@@ -147,6 +148,63 @@ def compute_losses(
     return losses
 
 
+def compute_multiple_choice_deviation(
+    model,
+    tokenizer: transformers.PreTrainedTokenizer,
+    generation_config: transformers.GenerationConfig,
+    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]],
+    device: str,
+) -> typing.List[float]:
+    """
+    Computes the incorrectness of multiple choice answers for a given model on provided batches.
+
+    Parameters:
+        model (torch.nn.Module): The model for which multiple choice deviations are to be computed.
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
+        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
+        batches (dict): A list of batches, choices, and the correct answer.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+
+    Returns:
+        dict: A dictionary with page indices as keys and lists of multiple choice deviations as values.
+    """
+    # Iterate over each page and corresponding batches
+    multiple_choice_deviations = []
+
+    for (
+        inputs,
+        choices,
+        answer,
+    ) in batches:
+        try:
+            response = generate_output(
+                model=model,
+                input_ids=inputs,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+
+            # Find words which match one of the choices.
+            matches = [
+                word for word in re.sub(r"\W", " ", response).split() if word in choices
+            ]
+
+            # Give credit if the first matched word in the response is correct.
+            if matches and matches[0] == answer:
+                multiple_choice_deviations.append(0)
+            else:
+                multiple_choice_deviations.append(1)
+        except Exception as e:
+            bt.logging.error(
+                f"Exception occurred in multiple choice deviation computation: {e}"
+            )
+            traceback.print_exc()  # Print the stack trace
+            multiple_choice_deviations.append(1)  # Use 1 to indicate failure
+
+    return multiple_choice_deviations
+
+
 def generate_output(
     model,
     input_ids: torch.Tensor,
@@ -172,7 +230,8 @@ def generate_output(
         model.eval()
         input_ids = input_ids.to(device)
         output = model.generate(
-            input_ids=input_ids, generation_config=generation_config
+            input_ids=input_ids,
+            generation_config=generation_config,
         )
         response = tokenizer.decode(
             output[0][len(input_ids[0]) :], skip_special_tokens=True

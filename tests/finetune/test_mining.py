@@ -160,7 +160,7 @@ class TestMining(unittest.TestCase):
             ModelId(
                 namespace="hf",
                 name="model2",
-                competition_id=CompetitionId.COMPETITION_2,
+                competition_id=CompetitionId.B7_MULTI_CHOICE,
             ),
         )
 

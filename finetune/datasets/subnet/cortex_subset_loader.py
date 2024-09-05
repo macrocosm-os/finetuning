@@ -413,7 +413,7 @@ class CortexSubsetLoader:
                 return
             except Exception:
                 attempt += 1
-                print(
+                bt.logging.warning(
                     f"Failed to fetch data. {traceback.format_exc()}, retrying. Attempt {attempt}/{retry_limit}"
                 )
                 if attempt < retry_limit:
@@ -456,3 +456,6 @@ class CortexSubsetLoader:
 
     def __iter__(self):
         return self.buffer.__iter__()
+
+    def __len__(self):
+        return len(self.buffer)
