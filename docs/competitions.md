@@ -1,7 +1,5 @@
 # Competitions
 
-This page contains information about the current competitions.
-
 ## Competition 1: SN9_MODEL
 
 Competition 1 is the OG competition for the finetuning subnet. 
@@ -36,4 +34,4 @@ Our early testing of this dataset, shows promising correlation between this comp
 
 ### Definitions
 
-[Code Link](TODO: Fill in)
+[Code Link](https://github.com/macrocosm-os/finetuning/blob/94e8fd92ab4158e1e4a425a9562695eebafa27b1/constants/__init__.py#L128)
