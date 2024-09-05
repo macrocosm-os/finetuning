@@ -189,6 +189,9 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(
             args.tokenizer, trust_remote_code=args.allow_remote_code
         )
+        # Overwrite the pad token id to eos token if it doesn't exist.
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
     else:
         tokenizer = ft.model.load_tokenizer(competition.constraints)
     batches = sample_data.tokenize(tokenizer, competition.constraints.sequence_length)
