@@ -43,6 +43,8 @@ WANDB_PROJECT = "finetuning"
 WANDB_ENTITY = "rusticluftig"
 # The uid for this subnet.
 SUBNET_UID = 37
+# Minimum stake to get sample data from a validator.
+SAMPLE_VALI_MIN_STAKE = 100_000
 # The uid for the Cortex subnet.
 CORTEX_SUBNET_UID = 18
 # The Cortex.t validator WANDB project and filters
@@ -51,8 +53,6 @@ CORTEX_WANDB_TYPE = "validator"
 CORTEX_MAX_UIDS = 256
 CORTEX_MAX_AGE = dt.timedelta(hours=4)
 CORTEX_MIN_SCORE = 0.85
-# Minimum stake to get data from a cortex validator.
-CORTEX_MIN_STAKE = 100_000
 # The uid for the Prompting subnet.
 PROMPTING_SUBNET_UID = 1
 # The Prompting validator WANDB project and filters
@@ -60,8 +60,6 @@ PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Percentage of promping miners who must have gotten the question correct to include in the eval set.
 PROMPTING_MIN_CORRECT_MINERS = 0
-# Minimum stake to get data from a cortex validator.
-PROMPTING_MIN_STAKE = 100_000
 # Minimum stake to consider a validator when checking for miners with weights.
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.

@@ -812,7 +812,7 @@ class Validator:
             # Only pull from validators meeting a minimum stake threshold.
             with self.cortex_metagraph_lock:
                 vali_uids = metagraph_utils.get_high_stake_validators(
-                    self.cortex_metagraph, constants.CORTEX_MIN_STAKE
+                    self.cortex_metagraph, constants.SAMPLE_VALI_MIN_STAKE
                 )
                 vali_hotkeys = set(
                     [self.cortex_metagraph.hotkeys[uid] for uid in vali_uids]
@@ -831,7 +831,7 @@ class Validator:
         elif competition.id == CompetitionId.B7_MULTI_CHOICE:
             with self.prompting_metagraph_lock:
                 vali_uids = metagraph_utils.get_high_stake_validators(
-                    self.prompting_metagraph, constants.PROMPTING_MIN_STAKE
+                    self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
                 )
                 vali_hotkeys = set(
                     [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
