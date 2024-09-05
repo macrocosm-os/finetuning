@@ -6,8 +6,7 @@ class CompetitionId(IntEnum):
 
     SN9_MODEL = 1
 
-    # Defined for tests. Will be repurposed later.
-    COMPETITION_2 = 2
+    B7_MULTI_CHOICE = 2
 
     # Overwrite the default __repr__, which doesn't work with
     # bt.logging for some unknown reason.
