@@ -939,21 +939,22 @@ class Validator:
                             top_k=40,
                             repetition_penalty=1.1,
                             eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.pad_token_id,
+                            pad_token_id=tokenizer.eos_token_id,
                         )
-                        # Run each computation in a subprocess so that the GPU is reset between each model.
-                        deviations = utils.run_in_subprocess(
-                            functools.partial(
-                                ft.validation.compute_multiple_choice_deviation,
-                                model_i.pt_model,
-                                tokenizer,
-                                compute_generation_config,
-                                batches,
-                                self.config.device,
-                            ),
-                            ttl=360,
-                            mode="spawn",
-                        )
+                        with compute_deviation_perf.sample():
+                            # Run each computation in a subprocess so that the GPU is reset between each model.
+                            deviations = utils.run_in_subprocess(
+                                functools.partial(
+                                    ft.validation.compute_multiple_choice_deviation,
+                                    model_i.pt_model,
+                                    tokenizer,
+                                    compute_generation_config,
+                                    batches,
+                                    self.config.device,
+                                ),
+                                ttl=360,
+                                mode="spawn",
+                            )
                     else:
                         raise ValueError(
                             f"Competition id: {competition.id} has no evaluation logic specified."
@@ -979,7 +980,7 @@ class Validator:
                                     top_k=40,
                                     repetition_penalty=1.1,
                                     eos_token_id=tokenizer.eos_token_id,
-                                    pad_token_id=tokenizer.pad_token_id,
+                                    pad_token_id=tokenizer.eos_token_id,
                                 )
                                 # Run each generation in a subprocess so that the GPU is reset between each model.
                                 response = utils.run_in_subprocess(
@@ -1015,7 +1016,7 @@ class Validator:
                                     top_k=40,
                                     repetition_penalty=1.1,
                                     eos_token_id=tokenizer.eos_token_id,
-                                    pad_token_id=tokenizer.pad_token_id,
+                                    pad_token_id=tokenizer.eos_token_id,
                                 )
                                 # Run each generation in a subprocess so that the GPU is reset between each model.
                                 response = utils.run_in_subprocess(
