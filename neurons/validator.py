@@ -983,7 +983,6 @@ class Validator:
         wins, win_rate = ft.validation.compute_wins(
             uids,
             deviations_per_uid,
-            batches,
             uid_to_block,
             competition.constraints.epsilon_func,
             block,
