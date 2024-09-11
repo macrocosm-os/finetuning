@@ -185,6 +185,10 @@ def compute_multiple_choice_deviation(
                 tokenizer=tokenizer,
             )
 
+            str_input = tokenizer.decode(inputs[0], skip_special_tokens=True)
+            bt.logging.info(f"Input:\n{str_input}\n\n")
+            bt.logging.info(f"Response:\n{response}\n\n")
+
             # Find words which match one of the choices.
             matches = [
                 word for word in re.sub(r"\W", " ", response).split() if word in choices
