@@ -74,6 +74,7 @@ setup(
     license="MIT",
     python_requires=">=3.9",
     install_requires=requirements,
+    extras_require={"benchmark": ["lm_eval[math,ifeval,sentencepiece]==0.4.4"]},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
