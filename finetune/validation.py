@@ -68,7 +68,6 @@ def iswin(
 def compute_wins(
     uids: typing.List[int],
     losses_per_uid: typing.Dict[int, typing.List[float]],
-    batches: typing.List[torch.FloatTensor],
     uid_to_block: typing.Dict[int, int],
     epsilon_func: EpsilonFunc,
     current_block: int,
@@ -78,8 +77,7 @@ def compute_wins(
 
     Parameters:
         uids (list): A list of uids to compare.
-        losses_per_uid (dict): A dictionary of losses for each uid by batch.
-        batches (List): A list of data batches.
+        losses_per_uid (dict): A dictionary of losses for each uid by batch. All values must have the same length.
         uid_to_block (dict): A dictionary of blocks for each uid.
         epsilon_func (EpsilonFunc): Function that determines how much advantage to give to the earlier block.
         current_block: The current block.
@@ -89,20 +87,22 @@ def compute_wins(
     """
     wins = {uid: 0 for uid in uids}
     win_rate = {uid: 0 for uid in uids}
-    for i, uid_i in enumerate(uids):
+    for uid_i in uids:
         total_matches = 0
-        block_i = uid_to_block[uid_i]
-        for j, uid_j in enumerate(uids):
-            if i == j:
+        for uid_j in uids:
+            if uid_i == uid_j:
                 continue
-            block_j = uid_to_block[uid_j]
-            for batch_idx, _ in enumerate(batches):
-                loss_i = losses_per_uid[uid_i][batch_idx]
-                loss_j = losses_per_uid[uid_j][batch_idx]
+
+            for loss_i, loss_j in zip(losses_per_uid[uid_i], losses_per_uid[uid_j]):
                 wins[uid_i] += (
                     1
                     if iswin(
-                        loss_i, loss_j, block_i, block_j, epsilon_func, current_block
+                        loss_i,
+                        loss_j,
+                        uid_to_block[uid_i],
+                        uid_to_block[uid_j],
+                        epsilon_func,
+                        current_block,
                     )
                     else 0
                 )
@@ -202,7 +202,14 @@ def compute_multiple_choice_deviation(
             traceback.print_exc()  # Print the stack trace
             multiple_choice_deviations.append(1)  # Use 1 to indicate failure
 
-    return multiple_choice_deviations
+    # For multiple choice, return a single deviation, which is the ratio of incorrect answers.
+    return [
+        (
+            sum(multiple_choice_deviations) / len(multiple_choice_deviations)
+            if multiple_choice_deviations
+            else 1
+        )
+    ]
 
 
 def generate_output(
