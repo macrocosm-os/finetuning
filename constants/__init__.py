@@ -26,7 +26,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -147,7 +147,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_soft_percent_threshold=0.15,
             norm_eps_hard=1000,
         ),
-        epsilon_func=LinearDecay(0.005, 0.001, 7200 * 7),  # Decay over ~7 days.
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 5),  # Decay over ~5 days.
         max_bytes=15 * 1024 * 1024 * 1024,
     ),
 }
