@@ -26,7 +26,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -147,7 +147,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_soft_percent_threshold=0.15,
             norm_eps_hard=1000,
         ),
-        epsilon_func=LinearDecay(0.005, 0.001, 7200 * 7),  # Decay over ~7 days.
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 5),  # Decay over ~5 days.
         max_bytes=15 * 1024 * 1024 * 1024,
     ),
 }
@@ -335,8 +335,6 @@ alpha = 0.5
 # validator scoring exponential temperature
 # 0.01 gives ~96% to best model with only ~3 receiving any weights.
 temperature = 0.01
-# validator score boosting for earlier models.
-timestamp_epsilon = 0.005
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
 # Number of blocks required between retrying evaluation of a model.
@@ -344,6 +342,6 @@ model_retry_cadence = 300  # Roughly 1 hour
 # How frequently to check the models given weights by other large validators.
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
-sample_min = 2
+sample_min = 4
 # We allow the sample_min per competition + 10 additional models to be held at any one time.
 updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 10
