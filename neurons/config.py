@@ -61,7 +61,7 @@ def validator_config():
     parser.add_argument(
         "--latest_prompting_samples",
         type=int,
-        default=400,
+        default=200,
         help="Number of most recent Prompting samples to eval against",
     )
     parser.add_argument(
