@@ -26,7 +26,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.0.1"
+__version__ = "2.1.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -290,29 +290,9 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
         3819200,
         [
             Competition(
-                CompetitionId.SN9_MODEL,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.SN9_MODEL],
-                0.55,
-            ),
-            Competition(
                 CompetitionId.B7_MULTI_CHOICE,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                0.45,
-            ),
-        ],
-    ),
-    (
-        3822800,
-        [
-            Competition(
-                CompetitionId.SN9_MODEL,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.SN9_MODEL],
-                0.50,
-            ),
-            Competition(
-                CompetitionId.B7_MULTI_CHOICE,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                0.50,
+                1.0,
             ),
         ],
     ),

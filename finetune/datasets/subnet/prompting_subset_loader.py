@@ -110,6 +110,8 @@ class PromptingSubsetLoader:
         # Get the runs, oldest first.
         runs = api.runs(prompting_project, filters, order="+created_at")
 
+        bt.logging.debug(f"Found {len(runs)} runs")
+
         if random_seed is not None:
             random.seed(random_seed)
 
@@ -213,6 +215,9 @@ class PromptingSubsetLoader:
                                             self.buffer.append((challenge, reference))
                                             self.selected_samples.add(run_step)
                                             if len(self.buffer) == max_samples:
+                                                bt.logging.debug(
+                                                    f"Collected {max_samples} samples"
+                                                )
                                                 return
 
                                 except KeyError:
