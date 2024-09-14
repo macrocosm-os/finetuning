@@ -27,9 +27,9 @@ import wandb
 from taoverse.utilities import utils
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
-from wandb.apis.public.history import HistoryScan
 
 import constants
+from finetune.datasets.subnet.history_scan import SampledHistoryScan
 
 # Multiple choice answers for the prompting subnet.
 PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
@@ -136,6 +136,8 @@ class PromptingSubsetLoader:
                     run_order, desc="Run", leave=False, disable=not progress
                 ):
                     run = runs[run_index]
+                    bt.logging.trace(f"Processing run: {run.id}")
+
                     # # Validator hotkeys are used to ensure the authenticity of the run.
                     if validator_hotkeys:
                         hotkey = run.config["HOTKEY_SS58"]
@@ -165,65 +167,68 @@ class PromptingSubsetLoader:
                     max_step = last_step + 1
                     min_step = max(0, max_step - steps)
 
-                    history_scan = HistoryScan(
-                        run.client, run, min_step, max_step, page_size=page_size
+                    samples = SampledHistoryScan(
+                        run.client,
+                        run,
+                        [
+                            "_timestamp",
+                            "_step",
+                            "task",
+                            "MultiChoiceRewardModel_rewards",
+                            "challenge",
+                            "reference",
+                        ],
+                        min_step,
+                        max_step,
+                        page_size=page_size,
                     )
-                    while True:
-                        try:
-                            sample = next(history_scan)
+                    for sample in samples:
+                        # Skip any samples older than max_run_age.
+                        if (
+                            max_run_age
+                            and dt.datetime.now()
+                            - dt.datetime.fromtimestamp(sample["_timestamp"])
+                            > max_run_age
+                        ):
+                            continue
 
-                            # Skip any samples older than max_run_age.
-                            if (
-                                max_run_age
-                                and dt.datetime.now()
-                                - dt.datetime.fromtimestamp(sample["_timestamp"])
-                                > max_run_age
-                            ):
-                                continue
-
-                            # Only check samples that are multiple choice based.
-                            if sample.get("task", "none") == "multi_choice":
-                                try:
-                                    # Check if a baseline threshold of SN1 miners answered the question correctly.
-                                    if min_percent_correct:  # min_percent_correct:
-                                        rewards = sample[
-                                            "MultiChoiceRewardModel_rewards"
-                                        ]
-                                        if isinstance(rewards, list) and isinstance(
-                                            rewards[0], (int, float)
-                                        ):
-                                            # 1 for correct, 0 for incorrect.
-                                            percent_correct = sum(rewards) / len(
-                                                rewards
-                                            )
-                                            if percent_correct < min_percent_correct:
-                                                continue
-
-                                    # If not found these get caught in the KeyError catch below.
-                                    challenge = sample["challenge"]
-                                    reference = sample["reference"]
-
-                                    if (
-                                        isinstance(challenge, str)
-                                        and isinstance(reference, str)
-                                        and reference in PROMPTING_SUBNET_CHOICES
+                        # Only check samples that are multiple choice based.
+                        if sample.get("task", "none") == "multi_choice":
+                            try:
+                                # Check if a baseline threshold of SN1 miners answered the question correctly.
+                                if min_percent_correct:  # min_percent_correct:
+                                    rewards = sample["MultiChoiceRewardModel_rewards"]
+                                    if isinstance(rewards, list) and isinstance(
+                                        rewards[0], (int, float)
                                     ):
-                                        step = sample.get("_step", "Unknown")
-                                        run_step = f"{run.id}_{step}"
-                                        # Check that we haven't already seen this exact step to avoid duplicates.
-                                        if run_step not in self.selected_samples:
-                                            self.buffer.append((challenge, reference))
-                                            self.selected_samples.add(run_step)
-                                            if len(self.buffer) == max_samples:
-                                                bt.logging.debug(
-                                                    f"Collected {max_samples} samples"
-                                                )
-                                                return
+                                        # 1 for correct, 0 for incorrect.
+                                        percent_correct = sum(rewards) / len(rewards)
+                                        if percent_correct < min_percent_correct:
+                                            continue
 
-                                except KeyError:
-                                    pass
-                        except StopIteration:
-                            break
+                                # If not found these get caught in the KeyError catch below.
+                                challenge = sample["challenge"]
+                                reference = sample["reference"]
+
+                                if (
+                                    isinstance(challenge, str)
+                                    and isinstance(reference, str)
+                                    and reference in PROMPTING_SUBNET_CHOICES
+                                ):
+                                    step = sample.get("_step", "Unknown")
+                                    run_step = f"{run.id}_{step}"
+                                    # Check that we haven't already seen this exact step to avoid duplicates.
+                                    if run_step not in self.selected_samples:
+                                        self.buffer.append((challenge, reference))
+                                        self.selected_samples.add(run_step)
+                                        if len(self.buffer) == max_samples:
+                                            bt.logging.debug(
+                                                f"Collected {max_samples} samples"
+                                            )
+                                            return
+
+                            except KeyError:
+                                pass
 
                 bt.logging.warning(
                     f"Did not collect {max_samples}, only got {len(self.buffer)}"
