@@ -186,8 +186,8 @@ def compute_multiple_choice_deviation(
             )
 
             str_input = tokenizer.decode(inputs[0], skip_special_tokens=True)
-            bt.logging.info(f"Input:\n{str_input}\n\n")
-            bt.logging.info(f"Response:\n{response}\n\n")
+            bt.logging.info(f"Input:\n[{str_input}]")
+            bt.logging.info(f"Response (correct answer is '{answer}'):\n'[{response}]")
 
             # Find words which match one of the choices.
             matches = [
