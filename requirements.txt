@@ -6,5 +6,5 @@ rich
 safetensors
 torch==2.3.1
 transformers==4.44.1
-wandb==0.17.1
+wandb==0.18.0
 taoverse==1.0.5
