@@ -216,7 +216,7 @@ def main(args: argparse.Namespace):
                 },
                 allow_val_change=True,
             )
-            wandb_run.log(results | lb_results)
+            wandb_run.log(results["results"] | lb_results)
             wandb_run.finish()
 
             store.add(state)
