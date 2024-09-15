@@ -172,7 +172,7 @@ def main(args: argparse.Namespace):
                 block=subtensor.block,
                 schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
             )
-            competition = competition_schedule[1]
+            competition = competition_schedule[step % len(competition_schedule)]
             print(f"Checking if a benchmark is needed for competition {competition.id}")
 
             uid, model_metadata = _get_top_model_metadata(subtensor, competition)
