@@ -112,7 +112,12 @@ def _run_benchmarks(
 
     return lm_eval.simple_evaluate(
         model=hf_model,
-        tasks="leaderboard",
+        tasks=[
+            "leaderboard_mmlu_pro",
+            "leaderboard_bbh",
+            "leaderboard_gpqa",
+            "leaderboard_ifeval",
+        ],
         verbosity="DEBUG",
         batch_size="auto",
         log_samples=True,
