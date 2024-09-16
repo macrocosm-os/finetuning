@@ -292,10 +292,10 @@ def compute_mmlu_pro(results: Dict[str, Any]) -> float:
 
 def get_leaderboard_scores(results: Dict[str, Any]) -> Dict[str, float]:
     return {
-        "ifeval": compute_ifeval(results),
+        # "ifeval": compute_ifeval(results),
         "bbh": compute_bbh(results),
         # "math": compute_math(results),
-        "gpqa": compute_gpqa(results),
+        # "gpqa": compute_gpqa(results),
         # "musr": compute_musr(results),
         "mmlu_pro": compute_mmlu_pro(results),
     }

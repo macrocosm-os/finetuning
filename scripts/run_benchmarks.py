@@ -115,8 +115,10 @@ def _run_benchmarks(
         tasks=[
             "leaderboard_mmlu_pro",
             "leaderboard_bbh",
-            "leaderboard_gpqa",
-            "leaderboard_ifeval",
+            # "leaderboard_gpqa",
+            # "leaderboard_ifeval",
+            "mmlu_pro",
+            "mmlu",
         ],
         verbosity="DEBUG",
         batch_size="auto",
