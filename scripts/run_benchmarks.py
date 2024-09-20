@@ -97,43 +97,43 @@ def _run_benchmarks(
 ) -> Dict[str, Any]:
     """Runs a benchmark on a given model."""
 
-    # Download the tokenizer and model.
-    tokenizer = AutoTokenizer.from_pretrained(
-        competition.constraints.tokenizer, cache_dir=hf_dir
-    )
-    store = HuggingFaceModelStore()
-    model = asyncio.run(
-        store.download_model(model_metadata.id, hf_dir, competition.constraints)
-    )
-    pretrained = model.pt_model
-    pretrained.to("cuda")
-    print("Model device is: {}".format(pretrained.device))
-    hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
+    # # Download the tokenizer and model.
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     competition.constraints.tokenizer, cache_dir=hf_dir
+    # )
+    # store = HuggingFaceModelStore()
+    # model = asyncio.run(
+    #     store.download_model(model_metadata.id, hf_dir, competition.constraints)
+    # )
+    # pretrained = model.pt_model
+    # pretrained.to("cuda")
+    # print("Model device is: {}".format(pretrained.device))
+    # hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
 
-    return lm_eval.simple_evaluate(
-        model=hf_model,
-        tasks=[
-            "leaderboard_mmlu_pro",
-            "leaderboard_bbh",
-            # "leaderboard_gpqa",
-            # "leaderboard_ifeval",
-            "mmlu_pro",
-            "mmlu",
-        ],
-        verbosity="DEBUG",
-        batch_size="auto",
-        log_samples=True,
-    )
-
-    # model = model_metadata.id.namespace + "/" + model_metadata.id.name
     # return lm_eval.simple_evaluate(
-    #     model="hf",
-    #     model_args=f"pretrained=Qwen/Qwen2-1.5B-Instruct",
-    #     tasks="leaderboard",
+    #     model=hf_model,
+    #     tasks=[
+    #         "leaderboard_mmlu_pro",
+    #         "leaderboard_bbh",
+    #         # "leaderboard_gpqa",
+    #         # "leaderboard_ifeval",
+    #         "mmlu_pro",
+    #         "mmlu",
+    #     ],
     #     verbosity="DEBUG",
     #     batch_size="auto",
-    #     log_samples=False,
+    #     log_samples=True,
     # )
+
+    # model = model_metadata.id.namespace + "/" + model_metadata.id.name
+    return lm_eval.simple_evaluate(
+        model="hf",
+        model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
+        tasks="leaderboard",
+        verbosity="DEBUG",
+        batch_size="auto",
+        log_samples=False,
+    )
 
 
 def main(args: argparse.Namespace):
@@ -187,11 +187,11 @@ def main(args: argparse.Namespace):
                 commit=model_metadata.id.commit,
             )
 
-            if store.contains(state):
-                print(
-                    f"Model {state.repo} at commit {state.commit} has already been benchmarked."
-                )
-                continue
+            # if store.contains(state):
+            #     print(
+            #         f"Model {state.repo} at commit {state.commit} has already been benchmarked."
+            #     )
+            #     continue
 
             print(f"Running benchmarks for {state.repo}/{state.commit}.")
             results = _run_benchmarks(competition, model_metadata, args.hf_dir)
@@ -221,7 +221,7 @@ def main(args: argparse.Namespace):
             wandb_run.log(results["results"] | lb_results)
             wandb_run.finish()
 
-            store.add(state)
+            # store.add(state)
             store.save()
         except KeyboardInterrupt:
             break
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb_project",
         type=str,
-        default="test-benchmarks",
+        default="test-benchmark",
         help="Wandb project to log results to.",
     )
     parser.add_argument(
