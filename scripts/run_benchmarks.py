@@ -129,7 +129,14 @@ def _run_benchmarks(
     return lm_eval.simple_evaluate(
         model="hf",
         model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
-        tasks="leaderboard",
+        tasks=[
+            "leaderboard_mmlu_pro",
+            "leaderboard_bbh",
+            # "leaderboard_gpqa",
+            # "leaderboard_ifeval",
+            "mmlu_pro",
+            "mmlu",
+        ],
         verbosity="DEBUG",
         batch_size="auto",
         log_samples=False,
