@@ -28,6 +28,9 @@ import torch
 import transformers
 from taoverse.model.competition.epsilon import EpsilonFunc
 
+# Temp logging:
+import csv
+
 
 def iswin(
     loss_i: float,
@@ -171,6 +174,9 @@ def compute_multiple_choice_deviation(
     # Iterate over each page and corresponding batches
     multiple_choice_deviations = []
 
+    # Collect data for logging.
+    logging_data = []
+
     for (
         inputs,
         choices,
@@ -190,17 +196,33 @@ def compute_multiple_choice_deviation(
                 word for word in re.sub(r"\W", " ", response).split() if word in choices
             ]
 
+            # Input for logging.
+            question = tokenizer.decode(inputs[0], skip_special_tokens=True)
+            # Truncate first section for prompt.
+            trunc_index = question.find("[Input Question]") + len("[Input Question]")
+            question = question[trunc_index:]
+
             # Give credit if the first matched word in the response is correct.
             if matches and matches[0] == answer:
                 multiple_choice_deviations.append(0)
+                # log question and response to right.
+                logging_data.append([question, response, answer, "RIGHT"])
             else:
                 multiple_choice_deviations.append(1)
+                # log question and response to wrong.
+                logging_data.append([question, response, answer, "WRONG"])
         except Exception as e:
             bt.logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()  # Print the stack trace
             multiple_choice_deviations.append(1)  # Use 1 to indicate failure
+
+    # Write the data to a csv file for later parsing.
+    # Reuse the same file name each time. Can be manually deleted to 'reset'.
+    with open("mc_logging.csv", mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(logging_data)
 
     # For multiple choice, return a single deviation, which is the ratio of incorrect answers.
     return [
