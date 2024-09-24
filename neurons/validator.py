@@ -177,8 +177,8 @@ class Validator:
         )
 
         # Dont check registration status if offline.
-        if not self.config.offline:
-            self.uid = metagraph_utils.assert_registered(self.wallet, self.metagraph)
+        # if not self.config.offline:
+        #    self.uid = metagraph_utils.assert_registered(self.wallet, self.metagraph)
 
         # Track how may run_steps this validator has completed.
         self.run_step_count = 0
@@ -1286,18 +1286,18 @@ class Validator:
                 await self.try_run_step(ttl=60 * 60)
                 self.global_step += 1
 
-                block = self._get_current_block()
+                # block = self._get_current_block()
 
                 # Then check if we should set weights and do so if needed.
-                if not self.config.offline:
-                    blocks_until_epoch = block - self.last_epoch
+                # if not self.config.offline:
+                #     blocks_until_epoch = block - self.last_epoch
 
-                    if blocks_until_epoch >= self.config.blocks_per_epoch:
-                        await self.try_set_weights(block=block, ttl=60)
-                    else:
-                        bt.logging.debug(
-                            f"{blocks_until_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
-                        )
+                #     if blocks_until_epoch >= self.config.blocks_per_epoch:
+                #         await self.try_set_weights(block=block, ttl=60)
+                #     else:
+                #         bt.logging.debug(
+                #             f"{blocks_until_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
+                #         )
 
             except KeyboardInterrupt:
                 bt.logging.info(
