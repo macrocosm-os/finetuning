@@ -657,9 +657,9 @@ class Validator:
 
                 # Only keep those hotkeys.
                 evaluated_hotkeys_to_model_id = {
-                    # hotkey: model_id
-                    # for hotkey, model_id in hotkey_to_model_id.items()
-                    # if hotkey in hotkeys_to_keep
+                    hotkey: model_id
+                    for hotkey, model_id in hotkey_to_model_id.items()
+                    if hotkey in hotkeys_to_keep
                 }
 
                 self.local_store.delete_unreferenced_models(
@@ -670,7 +670,7 @@ class Validator:
                 bt.logging.error(f"Error in clean loop: {e}")
 
             # Only check every 5 minutes.
-            time.sleep(dt.timedelta(minutes=1).total_seconds())
+            time.sleep(dt.timedelta(seconds=10).total_seconds())
 
         bt.logging.info("Exiting clean models loop.")
 
