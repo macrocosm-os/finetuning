@@ -664,7 +664,7 @@ class Validator:
 
                 self.local_store.delete_unreferenced_models(
                     valid_models_by_hotkey=evaluated_hotkeys_to_model_id,
-                    grace_period_seconds=10,
+                    grace_period_seconds=60,
                 )
             except Exception as e:
                 bt.logging.error(f"Error in clean loop: {e}")
