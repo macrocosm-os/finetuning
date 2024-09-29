@@ -626,7 +626,7 @@ class Validator:
         # Delay the clean-up thread until the update loop has had time to run one full pass after an upgrade.
         # This helps prevent unnecessarily deleting a model which is on disk, but hasn't yet been re-added to the
         # model tracker by the update loop.
-        time.sleep(dt.timedelta(hours=1).total_seconds())
+        time.sleep(dt.timedelta(minutes=1).total_seconds())
 
         # The below loop checks to clear out all models in local storage that are no longer referenced.
         while not self.stop_event.is_set():
@@ -657,20 +657,20 @@ class Validator:
 
                 # Only keep those hotkeys.
                 evaluated_hotkeys_to_model_id = {
-                    hotkey: model_id
-                    for hotkey, model_id in hotkey_to_model_id.items()
-                    if hotkey in hotkeys_to_keep
+                    # hotkey: model_id
+                    # for hotkey, model_id in hotkey_to_model_id.items()
+                    # if hotkey in hotkeys_to_keep
                 }
 
                 self.local_store.delete_unreferenced_models(
                     valid_models_by_hotkey=evaluated_hotkeys_to_model_id,
-                    grace_period_seconds=constants.CLEAN_LOOP_GRACE_PERIOD.seconds,
+                    grace_period_seconds=10,
                 )
             except Exception as e:
                 bt.logging.error(f"Error in clean loop: {e}")
 
             # Only check every 5 minutes.
-            time.sleep(dt.timedelta(minutes=5).total_seconds())
+            time.sleep(dt.timedelta(minutes=1).total_seconds())
 
         bt.logging.info("Exiting clean models loop.")
 
