@@ -69,6 +69,8 @@ WEIGHT_SYNC_MINER_MIN_PERCENT = 0.10
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
 MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
+# Grace period for the clean loop to avoid deleting models as they are downloaded.
+CLEAN_LOOP_GRACE_PERIOD = dt.timedelta(minutes=5)
 # Defined model constraints by competition id to ensure they are constant across blocks.
 MODEL_CONSTRAINTS_BY_COMPETITION_ID_FIXED_EPSILON: Dict[
     CompetitionId, ModelConstraints
