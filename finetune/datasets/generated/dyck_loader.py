@@ -28,34 +28,44 @@ DYCK_CHALLENGE_PROMPT = "Complete the rest of the sequence, making sure that the
 
 class DyckLoader:
     def _generate_dyck(
-        self,
-        dyck_character_pairs: typing.List[typing.Tuple[str, str]],
-        min_length_pairs: int,
-        max_length_pairs: int,
+        self, dyck_character_pairs: typing.List[typing.Tuple[str, str]], pair_count: int
     ) -> str:
         """Generate a Dyck word (a balanced string of brackets).
 
         Args:
-            dyck_character_pairs (typing.List[typing.Tuple[str, str]]): Pairs of open/close characters to use.
-            min_length_pairs (int): Minimum number of pairs to create the dyck word from.
-            max_length_pairs (int): Maximum number of pairs to create the dyck word from.
+            dyck_character_pairs (int): Pairs of open/close characters to use.
+            pair_count (int): Number of pairs to generate when creating the Dyck word.
 
         Returns:
-            str: A randomly generated dyck word.
+            str: A randomly generated Dyck word.
         """
-        # Decide the length of the resulting dyck up front. This is in pairs so we will have twice as many total.
-        half_length = random.randint(min_length_pairs, max_length_pairs)
-        front_half = ""
-        back_half = ""
+        open_count = [0] * len(dyck_character_pairs)
+        close_count = [0] * len(dyck_character_pairs)
+        dyck_word = ""
 
-        # Generate the front and back half using the paired tuples of characters.
-        for _ in range(half_length):
-            dyck_typle = random.choice(dyck_character_pairs)
-            front_half += dyck_typle[0]
-            back_half += dyck_typle[1]
+        # Generate the word.
+        for _ in range(pair_count * 2):
+            # Randomly choose to open or close unless we have nothing open or already have every pair opened.
+            if sum(open_count) - sum(close_count) == 0 or (
+                sum(open_count) < pair_count and random.choice([True, False])
+            ):
+                index = random.randint(0, len(dyck_character_pairs) - 1)
+                dyck_word += dyck_character_pairs[index][0]
+                open_count[index] += 1
+            else:
+                remaining_close = [a - b for a, b in zip(open_count, close_count)]
+                # Generate weights based on the values in the array.
+                weights = weights = [
+                    value / sum(remaining_close) for value in remaining_close
+                ]
+                # Generate the indexes to choose from.
+                indexes = list(range(len(dyck_character_pairs)))
+                # Choose a random index based on the weights (generating 1 choice and taking the first).
+                index = random.choices(indexes, weights=weights, k=1)[0]
+                dyck_word += dyck_character_pairs[index][1]
+                close_count[index] += 1
 
-        # Concatenate the two halves (reversing the back half).
-        return front_half + back_half[::-1]
+        return dyck_word
 
     def __init__(
         self,
@@ -86,20 +96,37 @@ class DyckLoader:
             random.seed(random_seed)
 
         for _ in range(samples):
-            complete_dyck = self._generate_dyck(
-                dyck_character_pairs, min_length_pairs, max_length_pairs
-            )
+            pair_count = random.randint(min_length_pairs, max_length_pairs)
+            complete_dyck = self._generate_dyck(dyck_character_pairs, pair_count)
+
             reference_length = random.randint(min_length_answer, max_length_answer)
-            slice_index = len(complete_dyck) - reference_length
+            # Ensure we don't make the reference longer than the number of pairs.
+            if reference_length > pair_count:
+                reference_length = pair_count
 
-            # Add spaces between the characters for the actual challenge / reference.
-            challenge_dyck = " ".join(complete_dyck[:slice_index])
-            reference_dyck = " ".join(complete_dyck[slice_index:])
+            # Randomly remove close characters into the reference answer up to length.
+            # Get index of all the close characters.
+            close_chars = {pair[1] for pair in DYCK_CHARACTER_PAIRS}
+            close_char_indexes = []
+            for index, char in enumerate(complete_dyck):
+                if char in close_chars:
+                    close_char_indexes.append(index)
 
-            # Add the prompt to the challenge
-            challenge = DYCK_CHALLENGE_PROMPT + challenge_dyck
+            chosen_indexes = random.sample(close_char_indexes, reference_length)
+            # Sort the chosen indexes so the reference answer has them in the right order.
+            chosen_indexes.sort()
 
-            self.buffer.append((challenge, reference_dyck))
+            # Generate the reference answer by getting the characters at each ordered index.
+            reference = " ".join(
+                char for i, char in enumerate(complete_dyck) if i in chosen_indexes
+            )
+
+            # Generate the challenge by prepending the prompt and removing the reference characters.
+            challenge = DYCK_CHALLENGE_PROMPT + " ".join(
+                char for i, char in enumerate(complete_dyck) if i not in chosen_indexes
+            )
+
+            self.buffer.append((challenge, reference))
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
