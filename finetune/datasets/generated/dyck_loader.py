@@ -39,31 +39,30 @@ class DyckLoader:
         Returns:
             str: A randomly generated Dyck word.
         """
-        open_count = [0] * len(dyck_character_pairs)
-        close_count = [0] * len(dyck_character_pairs)
+        open_count = 0
+        close_count = 0
+        unused_close_characters = []
         dyck_word = ""
 
         # Generate the word.
         for _ in range(pair_count * 2):
             # Randomly choose to open or close unless we have nothing open or already have every pair opened.
-            if sum(open_count) - sum(close_count) == 0 or (
-                sum(open_count) < pair_count and random.choice([True, False])
+            if open_count - close_count == 0 or (
+                open_count < pair_count and random.choice([True, False])
             ):
-                index = random.randint(0, len(dyck_character_pairs) - 1)
-                dyck_word += dyck_character_pairs[index][0]
-                open_count[index] += 1
+                # Pick a random character pair
+                dyck_char_pair = random.choice(dyck_character_pairs)
+                # Add the open character to the word now.
+                dyck_word += dyck_char_pair[0]
+                open_count += 1
+                # Add the close character to the to be used close character list
+                unused_close_characters.append(dyck_char_pair[1])
             else:
-                remaining_close = [a - b for a, b in zip(open_count, close_count)]
-                # Generate weights based on the values in the array.
-                weights = weights = [
-                    value / sum(remaining_close) for value in remaining_close
-                ]
-                # Generate the indexes to choose from.
-                indexes = list(range(len(dyck_character_pairs)))
-                # Choose a random index based on the weights (generating 1 choice and taking the first).
-                index = random.choices(indexes, weights=weights, k=1)[0]
-                dyck_word += dyck_character_pairs[index][1]
-                close_count[index] += 1
+                # Choose a random unused close character to use now.
+                close_index = random.randint(0, len(unused_close_characters) - 1)
+                close_char = unused_close_characters.pop(close_index)
+                dyck_word += close_char
+                close_count += 1
 
         return dyck_word
 
