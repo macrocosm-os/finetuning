@@ -41,7 +41,7 @@ class DyckLoader:
         """
         open_count = 0
         close_count = 0
-        unused_close_characters = []
+        unused_close_characters_stack = []
         dyck_word = ""
 
         # Generate the word.
@@ -56,11 +56,10 @@ class DyckLoader:
                 dyck_word += dyck_char_pair[0]
                 open_count += 1
                 # Add the close character to the to be used close character list
-                unused_close_characters.append(dyck_char_pair[1])
+                unused_close_characters_stack.append(dyck_char_pair[1])
             else:
-                # Choose a random unused close character to use now.
-                close_index = random.randint(0, len(unused_close_characters) - 1)
-                close_char = unused_close_characters.pop(close_index)
+                # Pop off the stack
+                close_char = unused_close_characters_stack.pop()
                 dyck_word += close_char
                 close_count += 1
 
@@ -98,31 +97,27 @@ class DyckLoader:
             pair_count = random.randint(min_length_pairs, max_length_pairs)
             complete_dyck = self._generate_dyck(dyck_character_pairs, pair_count)
 
-            reference_length = random.randint(min_length_answer, max_length_answer)
-            # Ensure we don't make the reference longer than the number of pairs.
-            if reference_length > pair_count:
-                reference_length = pair_count
-
-            # Randomly remove close characters into the reference answer up to length.
-            # Get index of all the close characters.
-            close_chars = {pair[1] for pair in DYCK_CHARACTER_PAIRS}
-            close_char_indexes = []
-            for index, char in enumerate(complete_dyck):
-                if char in close_chars:
-                    close_char_indexes.append(index)
-
-            chosen_indexes = random.sample(close_char_indexes, reference_length)
-            # Sort the chosen indexes so the reference answer has them in the right order.
-            chosen_indexes.sort()
-
-            # Generate the reference answer by getting the characters at each ordered index.
-            reference = " ".join(
-                char for i, char in enumerate(complete_dyck) if i in chosen_indexes
+            # We will attempt to make the reference length this long depending on closing characters at the end.
+            attempted_reference_length = random.randint(
+                min_length_answer, max_length_answer
             )
+            actual_reference_length = 0
+            close_chars = {pair[1] for pair in DYCK_CHARACTER_PAIRS}
+            for char in reversed(complete_dyck):
+                if (
+                    actual_reference_length < attempted_reference_length
+                    and char in close_chars
+                ):
+                    actual_reference_length += 1
+                else:
+                    break
+
+            # Generate the reference answer by taking the last reference length characters.
+            reference = " ".join(complete_dyck[-actual_reference_length:])
 
             # Generate the challenge by prepending the prompt and removing the reference characters.
             challenge = DYCK_CHALLENGE_PROMPT + " ".join(
-                char for i, char in enumerate(complete_dyck) if i not in chosen_indexes
+                complete_dyck[:-actual_reference_length]
             )
 
             self.buffer.append((challenge, reference))
