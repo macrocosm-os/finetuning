@@ -61,14 +61,13 @@ def generate_dyck(
         str: A randomly generated Dyck word.
     """
     open_count = 0
-    close_count = 0
     unused_close_characters_stack = []
     dyck_word = ""
 
     # Generate the word.
     for _ in range(pair_count * 2):
         # Randomly choose to open or close unless we have nothing open or already have every pair opened.
-        if open_count - close_count == 0 or (
+        if len(unused_close_characters_stack) == 0 or (
             open_count < pair_count and random.choice([True, False])
         ):
             # Pick a random character pair
@@ -82,7 +81,6 @@ def generate_dyck(
             # Pop off the stack
             close_char = unused_close_characters_stack.pop()
             dyck_word += close_char
-            close_count += 1
 
     return dyck_word
 
@@ -188,7 +186,7 @@ class DyckLoader:
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:
-        return self.buffer[random.randint(0, len(self.buffer))]
+        return self.buffer[random.randint(0, len(self.buffer) - 1)]
 
     def __iter__(self):
         return self.buffer.__iter__()
