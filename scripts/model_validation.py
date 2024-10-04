@@ -17,7 +17,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.validation import compute_losses, compute_multiple_choice_deviation
 
@@ -62,18 +61,6 @@ def main():
         help="Random seed to use while loading data. If 0 then randomize.",
     )
     parser.add_argument(
-        "--latest_cortex_steps",
-        type=int,
-        default=5,
-        help="Number of most recent cortex steps to sample data from",
-    )
-    parser.add_argument(
-        "--latest_cortex_samples",
-        type=int,
-        default=400,
-        help="Number of most recent cortex samples to eval against",
-    )
-    parser.add_argument(
         "--latest_prompting_steps",
         type=int,
         default=500,
@@ -88,7 +75,7 @@ def main():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL.value,
+        default=CompetitionId.B7_MULTI_CHOICE.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
@@ -156,17 +143,7 @@ def main():
 
     seed = args.random_seed if args.random_seed else random.randint(0, sys.maxsize)
 
-    if args.competition_id == CompetitionId.SN9_MODEL:
-        print("Getting latest sample data from cortex.")
-        with pull_data_perf.sample():
-            sample_data = CortexSubsetLoader(
-                use_latest_data=True,
-                random_seed=seed,
-                max_samples=args.latest_cortex_samples,
-                steps=args.latest_cortex_steps,
-                page_size=args.latest_cortex_steps,
-            )
-    elif args.competition_id == CompetitionId.B7_MULTI_CHOICE:
+    if args.competition_id == CompetitionId.B7_MULTI_CHOICE:
         print("Getting latest sample data from prompting.")
         with pull_data_perf.sample():
             sample_data = PromptingSubsetLoader(
@@ -196,10 +173,7 @@ def main():
     print("Calculating deviations")
     compute_deviation_perf = PerfMonitor("Eval: Compute deviation")
 
-    if args.competition_id == CompetitionId.SN9_MODEL:
-        with compute_deviation_perf.sample():
-            deviations = compute_losses(model.pt_model, batches, device=args.device)
-    elif args.competition_id == CompetitionId.B7_MULTI_CHOICE:
+    if args.competition_id == CompetitionId.B7_MULTI_CHOICE:
         generation_config = GenerationConfig(
             max_new_tokens=20,
             do_sample=True,

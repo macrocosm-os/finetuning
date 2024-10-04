@@ -58,7 +58,7 @@ def get_config():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL.value,
+        default=CompetitionId.B7_MULTI_CHOICE.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )

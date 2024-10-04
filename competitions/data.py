@@ -4,6 +4,7 @@ from enum import IntEnum
 class CompetitionId(IntEnum):
     """Unique identifiers for each competition."""
 
+    # This competition has been deprecated.
     SN9_MODEL = 1
 
     B7_MULTI_CHOICE = 2
