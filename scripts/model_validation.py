@@ -202,10 +202,8 @@ def main():
     elif args.competition_id == CompetitionId.B7_MULTI_CHOICE:
         generation_config = GenerationConfig(
             max_new_tokens=20,
-            do_sample=True,
-            temperature=0.8,
-            top_p=0.95,
-            top_k=40,
+            max_length=competition.constraints.sequence_length,
+            do_sample=False,
             repetition_penalty=1.1,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id,
