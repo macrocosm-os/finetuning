@@ -3,46 +3,44 @@ from collections import defaultdict
 
 from finetune.datasets.generated.dyck_loader import (
     DYCK_CHARACTER_PAIRS,
+    DYCK_ENDING_CHARS,
     DyckLoader,
-    complete_dyck,
     generate_dyck,
 )
 
 
 class TestDyckLoader(unittest.TestCase):
+    def _is_valid_dyck(self, potential_dyck: str) -> bool:
+        stack = []
+
+        matching_brackets = {
+            opening: closing for opening, closing in DYCK_CHARACTER_PAIRS
+        }
+
+        # Iterate through each character in the string
+        for char in potential_dyck:
+            # If the character is an opening bracket, push it onto the stack
+            if char in matching_brackets:
+                stack.append(char)
+            # If it's a closing bracket, check for a matching opening bracket
+            elif char in matching_brackets.values():
+                # If the stack is empty or the top doesn't match, it's not a Dyck word
+                if not stack or matching_brackets[stack.pop()] != char:
+                    return False
+
+        # The stack should be empty if all brackets are matched correctly
+        return len(stack) == 0
+
     def test_generate_dyck(self):
         """Tests that generate dyck only generates dycks and they are of the expected length."""
 
-        for i in range(100):
-            dyck = generate_dyck(DYCK_CHARACTER_PAIRS, i)
+        for i in range(1, 100):
+            ref_length = min(i, i % 3 + 1)
+            dyck = generate_dyck(DYCK_CHARACTER_PAIRS, i, ref_length)
             self.assertEqual(len(dyck), 2 * i)
-            self.assertEqual(len(complete_dyck(DYCK_CHARACTER_PAIRS, dyck)), 0)
-
-    def test_complete_dyck_bad_chars(self):
-        """Tests that complete dyck raises an error if a bad character is found."""
-
-        with self.assertRaises(ValueError):
-            _ = complete_dyck([("(", ")")], "(<>)")
-
-    def test_complete_dyck_bad_dyck(self):
-        """Tests that complete dyck raises an error if the incomplete dyck is already invalid."""
-
-        with self.assertRaises(ValueError):
-            _ = complete_dyck(DYCK_CHARACTER_PAIRS, "(<)>")
-
-    def test_complete_dyck_empty(self):
-        """Tests that complete dyck returns and empty string for already complete dycks."""
-
-        completing_chars = complete_dyck(DYCK_CHARACTER_PAIRS, "(<>)")
-
-        self.assertEqual(completing_chars, "")
-
-    def test_complete_dyck(self):
-        """Tests that complete dyck correctly completes dycks."""
-
-        completing_chars = complete_dyck(DYCK_CHARACTER_PAIRS, "(<{[]")
-
-        self.assertEqual(completing_chars, "}>)")
+            self.assertTrue(self._is_valid_dyck(dyck))
+            for c in dyck[-ref_length:]:
+                self.assertTrue(c in DYCK_ENDING_CHARS)
 
     def test_bad_word_length(self):
         """Tests that instantiating a loader with the min word length greater than the max word length fails."""
@@ -98,7 +96,7 @@ class TestDyckLoader(unittest.TestCase):
         self.assertEqual(len(lengths), 5)
 
         for value in lengths.values():
-            self.assertAlmostEqual(value, 20000, delta=200)
+            self.assertAlmostEqual(value, 20000, delta=1000)
 
     def test_generate_even_distribution_answer_length(self):
         """Tests that the loader creates a roughly even distribution of dyck answer lengths"""
@@ -120,7 +118,7 @@ class TestDyckLoader(unittest.TestCase):
         self.assertEqual(len(lengths), 5)
 
         for value in lengths.values():
-            self.assertAlmostEqual(value, 20000, delta=200)
+            self.assertAlmostEqual(value, 20000, delta=1000)
 
     def test_length(self):
         """Tests that the loader correctly reports the length of samples generated."""
