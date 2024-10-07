@@ -1,6 +1,4 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 const
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -164,7 +162,7 @@ class DyckLoader:
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:
-        return self.buffer[random.randint(0, len(self.buffer) - 1)]
+        return random.choice(self.buffer)
 
     def __iter__(self):
         return self.buffer.__iter__()
