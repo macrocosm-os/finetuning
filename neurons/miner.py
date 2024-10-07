@@ -60,8 +60,8 @@ async def load_starting_model(
     # Initialize the model based on the best on the network.
     if config.load_best:
         model = await ft.mining.load_best_model(
-            config.competition_id,
-            config.model_dir,
+            download_dir=config.model_dir,
+            competition_id=config.competition_id,
             metagraph=metagraph,
             metadata_store=metadata_store,
         )
