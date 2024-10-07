@@ -4,69 +4,45 @@ from collections import defaultdict
 from finetune.datasets.generated.dyck_loader import (
     DYCK_CHARACTER_PAIRS,
     DyckLoader,
-    count_contiguous_matching_suffix_characters,
+    complete_dyck,
     generate_dyck,
 )
 
 
 class TestDyckLoader(unittest.TestCase):
-    def _validate_dyck(self, potential_dyck: str) -> bool:
-        stack = []
-
-        matching_brackets = {
-            "<": ">",
-            "[": "]",
-            "(": ")",
-            "{": "}",
-        }
-        # Iterate through each character in the string
-        for char in potential_dyck:
-            # If the character is an opening bracket, push it onto the stack
-            if char in matching_brackets:
-                stack.append(char)
-            # If it's a closing bracket, check for a matching opening bracket
-            elif char in matching_brackets.values():
-                # If the stack is empty or the top doesn't match, it's not a Dyck word
-                if not stack or matching_brackets[stack.pop()] != char:
-                    return False
-
-        # The stack should be empty if all brackets are matched correctly
-        return len(stack) == 0
-
     def test_generate_dyck(self):
         """Tests that generate dyck only generates dycks and they are of the expected length."""
 
         for i in range(100):
             dyck = generate_dyck(DYCK_CHARACTER_PAIRS, i)
             self.assertEqual(len(dyck), 2 * i)
-            self.assertTrue(self._validate_dyck(dyck))
+            self.assertEqual(len(complete_dyck(DYCK_CHARACTER_PAIRS, dyck)), 0)
 
-    def test_count_contiguous_matching_suffix_characters_none(self):
-        """Tests counting suffix characters with no match."""
+    def test_complete_dyck_bad_chars(self):
+        """Tests that complete dyck raises an error if a bad character is found."""
 
-        word = ")}]><[{("
-        characters = {">", "]", "}", ")"}
-        count = count_contiguous_matching_suffix_characters(word, characters)
+        with self.assertRaises(ValueError):
+            _ = complete_dyck([("(", ")")], "(<>)")
 
-        self.assertEqual(count, 0)
+    def test_complete_dyck_bad_dyck(self):
+        """Tests that complete dyck raises an error if the incomplete dyck is already invalid."""
 
-    def test_count_contiguous_matching_suffix_characters_some(self):
-        """Tests counting suffix characters when some of the string matches."""
+        with self.assertRaises(ValueError):
+            _ = complete_dyck(DYCK_CHARACTER_PAIRS, "(<)>")
 
-        word = "<[{()}]>"
-        characters = {">", "]", "}", ")"}
-        count = count_contiguous_matching_suffix_characters(word, characters)
+    def test_complete_dyck_empty(self):
+        """Tests that complete dyck returns and empty string for already complete dycks."""
 
-        self.assertEqual(count, 4)
+        completing_chars = complete_dyck(DYCK_CHARACTER_PAIRS, "(<>)")
 
-    def test_count_contiguous_matching_suffix_characters_all(self):
-        """Tests counting suffix characters when everything matches."""
+        self.assertEqual(completing_chars, "")
 
-        word = ")}]>"
-        characters = {">", "]", "}", ")"}
-        count = count_contiguous_matching_suffix_characters(word, characters)
+    def test_complete_dyck(self):
+        """Tests that complete dyck correctly completes dycks."""
 
-        self.assertEqual(count, 4)
+        completing_chars = complete_dyck(DYCK_CHARACTER_PAIRS, "(<{[]")
+
+        self.assertEqual(completing_chars, "}>)")
 
     def test_bad_word_length(self):
         """Tests that instantiating a loader with the min word length greater than the max word length fails."""
