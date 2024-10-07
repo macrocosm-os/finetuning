@@ -41,18 +41,6 @@ def validator_config():
         help="Number of blocks to wait before setting weights.",
     )
     parser.add_argument(
-        "--latest_cortex_steps",
-        type=int,
-        default=5,
-        help="Number of most recent Cortex steps to sample data from",
-    )
-    parser.add_argument(
-        "--latest_cortex_samples",
-        type=int,
-        default=400,
-        help="Number of most recent Cortex samples to eval against",
-    )
-    parser.add_argument(
         "--latest_prompting_steps",
         type=int,
         default=500,  # Sample more steps since prompting runs this less frequently.
@@ -139,7 +127,7 @@ def miner_config():
         "--avg_loss_upload_threshold",
         type=float,
         default=0,  # Default to never uploading.
-        help="The threshold for avg_loss the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
+        help="The threshold for avg loss or deviation the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
     )
     parser.add_argument(
         "--model_dir",
@@ -183,18 +171,6 @@ def miner_config():
         help="The number of training accumulation steps.",
     )
     parser.add_argument(
-        "--cortex_steps",
-        type=int,
-        default=5,
-        help="Number of Cortex steps to sample data from",
-    )
-    parser.add_argument(
-        "--cortex_samples_per_epoch",
-        type=int,
-        default=4096,
-        help="Number of samples trained on per epoch",
-    )
-    parser.add_argument(
         "--netuid",
         type=str,
         default=constants.SUBNET_UID,
@@ -209,7 +185,7 @@ def miner_config():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.SN9_MODEL.value,
+        default=CompetitionId.B7_MULTI_CHOICE.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )

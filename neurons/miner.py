@@ -41,7 +41,7 @@ from transformers import PreTrainedModel
 
 import constants
 import finetune as ft
-from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
+from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from neurons import config as neuron_config
 
 load_dotenv()  # take environment variables from .env.
@@ -96,6 +96,8 @@ async def load_starting_model(
 
 
 async def main(config: bt.config):
+    raise NotImplementedError("You must implement your own training logic in miner.py")
+
     # Create bittensor objects.
     bt.logging(config=config)
 
@@ -114,7 +116,7 @@ async def main(config: bt.config):
         my_uid = metagraph_utils.assert_registered(wallet, metagraph)
         HuggingFaceModelStore.assert_access_token_exists()
 
-    # Data comes from Subnet 18's wandb project. Make sure we're logged in
+    # Data comes from Subnet 1's wandb project. Make sure we're logged in
     wandb_utils.login()
 
     # Create a unique run id for this run.
@@ -187,73 +189,19 @@ async def main(config: bt.config):
     epoch_step = 0
     global_step = 0
     n_acc_steps = 0
-    best_avg_loss = math.inf
+    best_avg_deviation = math.inf
     accumulation_steps = config.accumulation_steps
 
     try:
         while epoch_step < config.num_epochs or config.num_epochs == -1:
-            # Initialize loss accumulator for the epoch
-            epoch_loss = 0.0
+            # Implement your training logic here.
+            avg_deviation = math.inf
 
-            # Prepare the data loader with random pages for each epoch
-            bt.logging.debug(
-                f"Loading {config.cortex_samples_per_epoch} pages for training this epoch"
-            )
-            loader = CortexSubsetLoader(
-                use_latest_data=False,
-                random_seed=random.randint(0, 100000000),
-                max_samples=config.cortex_samples_per_epoch,
-                steps=config.cortex_steps,
-                page_size=config.cortex_steps,
-            )
-            bt.logging.debug("Finished loading data")
-            batches = loader.tokenize(tokenizer, model_constraints.sequence_length)
+            # Check if the average deviation of this epoch is the best we've seen so far
+            if avg_deviation < best_avg_deviation:
+                best_avg_deviation = avg_deviation  # Update the best average deviation
 
-            # Enumerate over the data loader
-            n_batches = 0
-            optimizer.zero_grad()  # Initialize gradients to zero
-
-            for i, (batch, _) in enumerate(batches):
-                # Move the input batch to the device
-                inputs = batch.to(model.device)
-
-                # Forward pass: compute the model output and loss
-                outputs = model(inputs, labels=inputs)
-
-                loss = outputs.loss / accumulation_steps  # Scale loss
-                loss.backward()  # Accumulate gradients
-
-                if (i + 1) % accumulation_steps == 0:
-                    n_acc_steps += 1
-                    optimizer.step()  # Perform a single optimization step
-                    optimizer.zero_grad()  # Clear gradients
-                    bt.logging.success(
-                        f"Step: {n_acc_steps} loss: {outputs.loss.detach().item()}"
-                    )
-                    if use_wandb:
-                        wandb_run.log(
-                            {"loss": outputs.loss.detach(), "n_batches": n_batches},
-                            step=n_acc_steps,
-                        )
-
-                torch.cuda.empty_cache()
-
-                n_batches += 1
-                global_step += 1
-                epoch_loss += outputs.loss.detach().item()
-
-            # Calculate the average loss for the epoch
-            avg_loss = epoch_loss / n_batches
-
-            # Log the average loss for the epoch
-            bt.logging.success(f"Epoch: {epoch_step} average loss: {avg_loss}")
-            epoch_step += 1
-
-            # Check if the average loss of this epoch is the best we've seen so far
-            if avg_loss < best_avg_loss:
-                best_avg_loss = avg_loss  # Update the best average loss
-
-                bt.logging.success(f"New best average loss: {best_avg_loss}.")
+                bt.logging.success(f"New best average deviation: {best_avg_deviation}.")
 
                 # Save the model to your mining dir.
                 bt.logging.success(f"Saving model to path: {model_dir}.")
@@ -262,9 +210,9 @@ async def main(config: bt.config):
         bt.logging.success("Finished training")
         # Push the model to your run.
         if not config.offline:
-            if best_avg_loss < config.avg_loss_upload_threshold:
+            if best_avg_deviation < config.avg_loss_upload_threshold:
                 bt.logging.success(
-                    f"Trained model had a best_avg_loss of {best_avg_loss} which is below the threshold of {config.avg_loss_upload_threshold}. Uploading to hugging face. "
+                    f"Trained model had a best_avg_deviation of {best_avg_deviation} which is below the threshold of {config.avg_loss_upload_threshold}. Uploading to hugging face. "
                 )
 
                 # First, reload the best model from the training run.
@@ -281,7 +229,7 @@ async def main(config: bt.config):
                 )
             else:
                 bt.logging.success(
-                    f"This training run achieved a best_avg_loss={best_avg_loss}, which did not meet the upload threshold. Not uploading to hugging face."
+                    f"This training run achieved a best_avg_deviation={best_avg_deviation}, which did not meet the upload threshold. Not uploading to hugging face."
                 )
         else:
             bt.logging.success(
