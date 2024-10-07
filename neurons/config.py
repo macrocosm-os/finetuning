@@ -124,10 +124,10 @@ def miner_config():
         help="If true, the repo will be made public after uploading.",
     )
     parser.add_argument(
-        "--avg_deviation_upload_threshold",
+        "--avg_loss_upload_threshold",
         type=float,
         default=0,  # Default to never uploading.
-        help="The threshold for avg_deviation the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
+        help="The threshold for avg loss or deviation the model must achieve to upload it to hugging face. A miner can only advertise one model, so it should be the best one.",
     )
     parser.add_argument(
         "--model_dir",

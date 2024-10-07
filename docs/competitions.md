@@ -1,4 +1,4 @@
-# Competitions
+# Live Competitions
 
 ## Competition B7_MULTICHOICE:
 
@@ -17,3 +17,17 @@ Our early testing of this dataset, shows promising correlation between this comp
 ### Definitions
 
 [Code Link](https://github.com/macrocosm-os/finetuning/blob/94e8fd92ab4158e1e4a425a9562695eebafa27b1/constants/__init__.py#L128)
+
+# Deprecated Competitions
+
+## Competition 1: SN9_MODEL
+
+Competition 1 was the OG competition for the finetuning subnet. 
+
+### Goal
+
+The purpose of this competition was to finetune the top models from the [pretraining subnet](https://www.macrocosmos.ai/sn9) to produce a chat bot.
+
+### Evaluation
+
+Models submitted to this competition were evaluated using a synthetically generated Q&A dataset from the [cortex subnet](https://github.com/Datura-ai/cortex.t). Specifically, models were evaluated based on their average loss of their generated answers. 

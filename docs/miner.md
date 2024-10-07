@@ -82,7 +82,7 @@ WANDB_ACCESS_TOKEN="YOUR_WANDB_ACCESS_TOKEN"
 To start your miner the most basic command is
 
 ```shell
-python neurons/miner.py --wallet.name coldkey --wallet.hotkey hotkey --hf_repo_id my-username/my-project --avg_deviation_upload_threshold YOUR_THRESHOLD
+python neurons/miner.py --wallet.name coldkey --wallet.hotkey hotkey --hf_repo_id my-username/my-project --avg_loss_upload_threshold YOUR_THRESHOLD
 ```
 
 - `--wallet.name`: should be the name of the coldkey that contains the hotkey your miner is registered with.
@@ -91,7 +91,7 @@ python neurons/miner.py --wallet.name coldkey --wallet.hotkey hotkey --hf_repo_i
 
 - `--hf_repo_id`: should be the namespace/model_name that matches the hugging face repo you want to upload to. Must be public so that the validators can download from it.
 
-- `--avg_deviation_upload_threshold`: should be the minimum average deviation before you want your miner to upload the model.
+- `--avg_loss_upload_threshold`: should be the minimum average loss or deviation before you want your miner to upload the model.
 
 - `--competition_id`: competition you wish to mine for; run `--list_competitions` to get a list of available competitions
 

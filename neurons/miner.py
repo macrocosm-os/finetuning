@@ -210,7 +210,7 @@ async def main(config: bt.config):
         bt.logging.success("Finished training")
         # Push the model to your run.
         if not config.offline:
-            if best_avg_deviation < config.avg_deviation_upload_threshold:
+            if best_avg_deviation < config.avg_loss_upload_threshold:
                 bt.logging.success(
                     f"Trained model had a best_avg_deviation of {best_avg_deviation} which is below the threshold of {config.avg_loss_upload_threshold}. Uploading to hugging face. "
                 )
