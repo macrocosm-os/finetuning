@@ -276,7 +276,7 @@ class PromptingSubsetLoader:
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:
-        return self.buffer[random.randint(0, len(self.buffer))]
+        return random.choice(self.buffer)
 
     def get_selected_sample_ids(self) -> typing.Set[str]:
         """Returns the set of run_id steps that data was selected from."""
