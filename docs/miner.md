@@ -23,7 +23,7 @@ Miners and validators use 🤗 Hugging Face in order to share model state inform
 Make sure that any repo you create for uploading is public so that the validators can download from it for evaluation.
 
 2. Get a Wandb Account:
-Miners and validators use Wandb to download data from [subnet 18](https://github.com/corcel-api/cortex.t/). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
+Miners and validators use Wandb to download data from [subnet 1](https://github.com/macrocosm-os/prompting). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
 
 3. Clone the repo
 
@@ -57,13 +57,19 @@ docker compose up --detach
 
 # Running the Miner
 
-The mining script downloads data from wandb to train and uploads the final model to 🤗 Hugging Face which will be evaluated by validators.
+The mining script has a shell that does some initial setup but is not fully implemented. You will need to implement the specific training logic yourself prior to running it.
+
+As of Oct 1st, 2024 for the current competition the subnet works with models matching the [subnet 9](https://github.com/macrocosm-os/pretraining/) outputs and evaluates them against synthetic data from [subnet 1](https://github.com/macrocosm-os/prompting).
+
+The specific requirements for each competition can be found [here](../constants/__init__.py).
+
+The `finetune/mining.py` file has several methods that you may find useful. See the [examples](./examples.ipynb) Jupyter notebook for some example uses.
 
 See [Validator Psuedocode](docs/validator.md#validator) for more information on how the evaluation occurs.
 
 ## Env File
 
-The Miner requires a .env file with your 🤗 Hugging Face access token in order to upload models and a Wandb access token in order to download training data from [subnet 18](https://github.com/corcel-api/cortex.t/).
+The Miner requires a .env file with your 🤗 Hugging Face access token in order to upload models and a Wandb access token in order to download training data from [subnet 1](https://github.com/macrocosm-os/prompting).
 
 Create a `.env` file in the `finetuning` directory and add the following to it:
 ```shell
@@ -85,7 +91,7 @@ python neurons/miner.py --wallet.name coldkey --wallet.hotkey hotkey --hf_repo_i
 
 - `--hf_repo_id`: should be the namespace/model_name that matches the hugging face repo you want to upload to. Must be public so that the validators can download from it.
 
-- `--avg_loss_upload_threshold`: should be the minimum average loss before you want your miner to upload the model.
+- `--avg_loss_upload_threshold`: should be the minimum average loss or deviation before you want your miner to upload the model.
 
 - `--competition_id`: competition you wish to mine for; run `--list_competitions` to get a list of available competitions
 
@@ -125,11 +131,3 @@ You can manually upload with the following command:
 ```shell
 python scripts/upload_model.py --load_model_dir <path to model> --hf_repo_id my-username/my-project --wallet.name coldkey --wallet.hotkey hotkey
 ```
-
-## Running a custom Miner
-
-As of Jun 15th, 2024 for the current competition the subnet works with models matching the [subnet 9](https://github.com/macrocosm-os/pretraining/) outputs and evaluates them against synthetic data from [subnet 18](https://github.com/corcel-api/cortex.t/).
-
-The specific requirements for each competition can be found [here](../constants/__init__.py).
-
-The `finetune/mining.py` file has several methods that you may find useful. See the [examples](./examples.ipynb) Jupyter notebook for some example uses.

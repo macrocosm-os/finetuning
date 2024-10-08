@@ -52,7 +52,6 @@ from taoverse.model import utils as model_utils
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.competition.competition_tracker import CompetitionTracker
 from taoverse.model.competition.data import Competition
-from taoverse.model.competition.epsilon import EpsilonFunc
 from taoverse.model.data import EvalResult
 from taoverse.model.model_tracker import ModelTracker
 from taoverse.model.model_updater import MinerMisconfiguredError, ModelUpdater
@@ -71,7 +70,6 @@ from transformers import GenerationConfig
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.cortex_subset_loader import CortexSubsetLoader
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
@@ -146,7 +144,6 @@ class Validator:
         self.dataset_metagraph_syncer = MetagraphSyncer(
             self.dataset_subtensor,
             config={
-                constants.CORTEX_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
                 constants.PROMPTING_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
             },
         )
@@ -156,22 +153,17 @@ class Validator:
 
         # Create metagraph locks to avoid cross thread access issues in the update loop.
         self.metagraph_lock = threading.RLock()
-        self.cortex_metagraph_lock = threading.RLock()
         self.prompting_metagraph_lock = threading.RLock()
 
         # Get initial metagraphs.
         self.metagraph: bt.metagraph = self.subnet_metagraph_syncer.get_metagraph(
             self.config.netuid
         )
-        self.cortex_metagraph: bt.metagraph = (
-            self.dataset_metagraph_syncer.get_metagraph(constants.CORTEX_SUBNET_UID)
-        )
         self.prompting_metagraph: bt.metagraph = (
             self.dataset_metagraph_syncer.get_metagraph(constants.PROMPTING_SUBNET_UID)
         )
 
         bt.logging.info(f"Metagraph: {self.metagraph}.")
-        bt.logging.info(f"Cortex Metagraph: {self.cortex_metagraph}.")
         bt.logging.info(f"Prompting Metagraph: {self.prompting_metagraph}.")
 
         # Register a listener for the subnet and dataset metagraph syncers.
@@ -181,7 +173,7 @@ class Validator:
         )
         self.dataset_metagraph_syncer.register_listener(
             self._on_dataset_metagraph_updated,
-            netuids=[constants.CORTEX_SUBNET_UID, constants.PROMPTING_SUBNET_UID],
+            netuids=[constants.PROMPTING_SUBNET_UID],
         )
 
         # Dont check registration status if offline.
@@ -737,10 +729,7 @@ class Validator:
 
     def _on_dataset_metagraph_updated(self, metagraph: bt.metagraph, netuid: int):
         """Processes an update to the metagraph for the dataset subnets."""
-        if netuid == constants.CORTEX_SUBNET_UID:
-            with self.cortex_metagraph_lock:
-                self.cortex_metagraph = copy.deepcopy(metagraph)
-        elif netuid == constants.PROMPTING_SUBNET_UID:
+        if netuid == constants.PROMPTING_SUBNET_UID:
             with self.prompting_metagraph_lock:
                 self.prompting_metagraph = copy.deepcopy(metagraph)
         else:
@@ -807,28 +796,7 @@ class Validator:
         sample_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
 
-        if competition.id == CompetitionId.SN9_MODEL:
-            # Pull the latest data from Cortex
-            # Only pull from validators meeting a minimum stake threshold.
-            with self.cortex_metagraph_lock:
-                vali_uids = metagraph_utils.get_high_stake_validators(
-                    self.cortex_metagraph, constants.SAMPLE_VALI_MIN_STAKE
-                )
-                vali_hotkeys = set(
-                    [self.cortex_metagraph.hotkeys[uid] for uid in vali_uids]
-                )
-
-            with load_data_perf.sample():
-                sample_data = CortexSubsetLoader(
-                    use_latest_data=True,
-                    random_seed=random.randint(0, sys.maxsize),
-                    max_samples=self.config.latest_cortex_samples,
-                    steps=self.config.latest_cortex_steps,
-                    page_size=self.config.latest_cortex_steps,
-                    max_run_age=constants.CORTEX_MAX_AGE,
-                    validator_hotkeys=vali_hotkeys,
-                )
-        elif competition.id == CompetitionId.B7_MULTI_CHOICE:
+        if competition.id == CompetitionId.B7_MULTI_CHOICE:
             with self.prompting_metagraph_lock:
                 vali_uids = metagraph_utils.get_high_stake_validators(
                     self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
@@ -916,26 +884,11 @@ class Validator:
                             hotkey, model_i_metadata.id, kwargs
                         )
 
-                    if competition.id == CompetitionId.SN9_MODEL:
-                        with compute_deviation_perf.sample():
-                            # Run each computation in a subprocess so that the GPU is reset between each model.
-                            deviations = utils.run_in_subprocess(
-                                functools.partial(
-                                    ft.validation.compute_losses,
-                                    model_i.pt_model,
-                                    batches,
-                                    self.config.device,
-                                ),
-                                ttl=400,
-                                mode="spawn",
-                            )
-                    elif competition.id == CompetitionId.B7_MULTI_CHOICE:
+                    if competition.id == CompetitionId.B7_MULTI_CHOICE:
                         compute_generation_config = GenerationConfig(
                             max_new_tokens=20,
-                            do_sample=True,
-                            temperature=0.8,
-                            top_p=0.95,
-                            top_k=40,
+                            max_length=competition.constraints.sequence_length,
+                            do_sample=False,
                             repetition_penalty=1.1,
                             eos_token_id=tokenizer.eos_token_id,
                             pad_token_id=tokenizer.eos_token_id,
@@ -1361,7 +1314,7 @@ class Validator:
 
 
 if __name__ == "__main__":
-    # Data comes from Subnet 18's wandb project. Make sure we're logged in
+    # Data comes from Subnet 1's wandb project. Make sure we're logged in
     wandb_utils.login()
 
     asyncio.run(Validator().run())

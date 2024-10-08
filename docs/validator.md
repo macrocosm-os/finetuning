@@ -70,7 +70,7 @@ Validators will need enough processing power to evaluate their model. As of Jul 
 ## Prerequisites
 
 1. Get a Wandb Account:
-Miners and validators use Wandb to download data from [subnet 18](https://github.com/corcel-api/cortex.t/). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
+Miners and validators use Wandb to download data from [subnet 1](https://github.com/macrocosm-os/prompting). Wandb accounts can be obtained at https://wandb.ai/ and the user access token can be found at https://wandb.ai/authorize once logged in.
 
 By default this will also be used to host validator logs for this subnet [here](https://wandb.ai/rusticluftig/pretraining).
 
@@ -108,7 +108,7 @@ docker compose up --detach
 
 ## Env File
 
-The Validator requires a .env file with your Wandb access token in order to download evaluation data from [subnet 18](https://github.com/corcel-api/cortex.t/) and upload logs to this subnets wandb.
+The Validator requires a .env file with your Wandb access token in order to download evaluation data from [subnet 1](https://github.com/macrocosm-os/prompting) and upload logs to this subnets wandb.
 
 Create a `.env` file in the `finetuning` directory and add the following to it:
 ```shell
