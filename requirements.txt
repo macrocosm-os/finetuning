@@ -1,5 +1,6 @@
 bittensor==6.9.4
 huggingface_hub
+nltk
 numpy==1.26.4
 python-dotenv
 rich
