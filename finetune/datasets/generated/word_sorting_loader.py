@@ -48,12 +48,11 @@ class WordSortingLoader:
 
         self.buffer: typing.List[typing.Tuple[str, str]] = []
 
-        # TODO consider using either only en-basic or a different list of words.
         # Only take words from the corpus of min length or greater.
-        # Per the readme for this dataset:
-        # en: English, http://en.wikipedia.org/wiki/Words_(Unix)
         # en-basic: 850 English words: C.K. Ogden in The ABC of Basic English (1932)
-        self.words = [w for w in words.words() if len(w) >= min_word_length]
+        self.words = [
+            w for w in words.words(fileids=["en-basic"]) if len(w) >= min_word_length
+        ]
 
         if random_seed is not None:
             random.seed(random_seed)
