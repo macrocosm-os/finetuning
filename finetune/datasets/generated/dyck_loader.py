@@ -121,7 +121,7 @@ class DyckLoader:
             # Decide total number of pairs.
             pair_count = random.randint(adjusted_min_length_pairs, max_length_pairs)
 
-            # Generate a dyck of the minimum pair length.
+            # Generate a dyck with the specified number of total pairs, ending with reference length closing characters.
             full_dyck = generate_dyck(
                 dyck_character_pairs, pair_count, reference_length
             )
