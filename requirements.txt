@@ -7,4 +7,4 @@ safetensors
 torch==2.3.1
 transformers==4.44.1
 wandb==0.18.0
-taoverse==1.0.5
+taoverse==1.0.6
