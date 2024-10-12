@@ -37,7 +37,7 @@ class WordSortingLoader:
         Args:
             min_word_count (int, optional): Minimum number of words to generate. Defaults to 2.
             max_word_count (int, optional): Maximum number of words to generate. Defaults to 20.
-            max_word_count (int, optional): Minimum length of the words to use. Defaults to 3.
+            max_word_length (int, optional): Minimum length of the words to use. Defaults to 3.
             random_seed (typing.Optional[int], optional): Seed to use for all random operations if set.
             samples (int, optional): Number of samples to generate. Defaults to 100.
         """
@@ -51,7 +51,9 @@ class WordSortingLoader:
         # Only take words from the corpus of min length or greater.
         # en-basic: 850 English words: C.K. Ogden in The ABC of Basic English (1932)
         self.words = [
-            w for w in words.words(fileids=["en-basic"]) if len(w) >= min_word_length
+            w.lower()  # These should all already be lowercase, but also lower() to be sure.
+            for w in words.words(fileids=["en-basic"])
+            if len(w) >= min_word_length
         ]
 
         if random_seed is not None:
