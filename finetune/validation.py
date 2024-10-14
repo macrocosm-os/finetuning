@@ -27,6 +27,11 @@ import bittensor as bt
 import torch
 import transformers
 from taoverse.model.competition.epsilon import EpsilonFunc
+from transformers import GenerationConfig
+from taoverse.model.competition.data import Competition
+
+
+from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
 
 
 def iswin(
@@ -67,7 +72,7 @@ def iswin(
 
 def compute_wins(
     uids: typing.List[int],
-    losses_per_uid: typing.Dict[int, typing.List[float]],
+    score_per_uid: typing.Dict[int, float],
     uid_to_block: typing.Dict[int, int],
     epsilon_func: EpsilonFunc,
     current_block: int,
@@ -77,7 +82,7 @@ def compute_wins(
 
     Parameters:
         uids (list): A list of uids to compare.
-        losses_per_uid (dict): A dictionary of losses for each uid by batch. All values must have the same length.
+        score_per_uid (dict): A dictionary of score for each uid
         uid_to_block (dict): A dictionary of blocks for each uid.
         epsilon_func (EpsilonFunc): Function that determines how much advantage to give to the earlier block.
         current_block: The current block.
@@ -92,21 +97,21 @@ def compute_wins(
         for uid_j in uids:
             if uid_i == uid_j:
                 continue
-
-            for loss_i, loss_j in zip(losses_per_uid[uid_i], losses_per_uid[uid_j]):
-                wins[uid_i] += (
-                    1
-                    if iswin(
-                        loss_i,
-                        loss_j,
-                        uid_to_block[uid_i],
-                        uid_to_block[uid_j],
-                        epsilon_func,
-                        current_block,
-                    )
-                    else 0
+            loss_i = score_per_uid[uid_i]
+            loss_j = score_per_uid[uid_j]
+            wins[uid_i] += (
+                1
+                if iswin(
+                    loss_i,
+                    loss_j,
+                    uid_to_block[uid_i],
+                    uid_to_block[uid_j],
+                    epsilon_func,
+                    current_block,
                 )
-                total_matches += 1
+                else 0
+            )
+            total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
 
@@ -154,7 +159,7 @@ def compute_multiple_choice_deviation(
     generation_config: transformers.GenerationConfig,
     batches: typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]],
     device: str,
-) -> typing.List[float]:
+) -> float:
     """
     Computes the incorrectness of multiple choice answers for a given model on provided batches.
 
@@ -203,13 +208,11 @@ def compute_multiple_choice_deviation(
             multiple_choice_deviations.append(1)  # Use 1 to indicate failure
 
     # For multiple choice, return a single deviation, which is the ratio of incorrect answers.
-    return [
-        (
-            sum(multiple_choice_deviations) / len(multiple_choice_deviations)
-            if multiple_choice_deviations
-            else 1
-        )
-    ]
+    return (
+        sum(multiple_choice_deviations) / len(multiple_choice_deviations)
+        if multiple_choice_deviations
+        else 1
+    )
 
 
 def generate_output(
@@ -232,15 +235,81 @@ def generate_output(
     Returns:
         str: Generated tokenized output from the model.
     """
+    input_ids = input_ids.to(device)
+    output = model.generate(
+        input_ids=input_ids,
+        generation_config=generation_config,
+    )
+    response = tokenizer.decode(
+        output[0][len(input_ids[0]) :], skip_special_tokens=True
+    )
+    return response
+
+
+def score_model(
+    model,
+    tokenizer: transformers.PreTrainedTokenizer,
+    evals: typing.List[EvalTask],
+    competition: Competition,
+    device: str,
+) -> typing.Tuple[float, dict]:
+    """Scores a model based on the provided eval tasks."""
+
     with torch.inference_mode():
         model.to(device)
         model.eval()
-        input_ids = input_ids.to(device)
-        output = model.generate(
-            input_ids=input_ids,
-            generation_config=generation_config,
-        )
-        response = tokenizer.decode(
-            output[0][len(input_ids[0]) :], skip_special_tokens=True
-        )
-        return response
+
+        score = 0
+        score_details = {}
+
+        for eval in evals:
+            match eval.method:
+                case EvalMethodId.MULTIPLE_CHOICE:
+                    compute_generation_config = GenerationConfig(
+                        max_new_tokens=20,
+                        max_length=competition.constraints.sequence_length,
+                        do_sample=False,
+                        repetition_penalty=1.1,
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.eos_token_id,
+                    )
+                    score = compute_multiple_choice_deviation(
+                        model=model,
+                        tokenizer=tokenizer,
+                        generation_config=compute_generation_config,
+                        batches=eval.samples,
+                        device=device,
+                    )
+
+                case _:
+                    raise ValueError(f"Unhandled evaluation method {eval.method}.")
+            # Normalize score
+            normalized_score = normalize_score(
+                score, eval.normalization_id, eval.normalization_kwargs
+            )
+            weighted_norm_score = normalized_score * eval.weight
+
+            score += weighted_norm_score
+            score_details[eval.name] = {
+                "raw_score": score,
+                "norm_score": normalized_score,
+                "weighted_norm_score": weighted_norm_score,
+            }
+
+    return score, score_details
+
+
+def normalize_score(
+    score: float,
+    normalization_id: NormalizationId,
+    norm_kwargs: dict,
+) -> float:
+    match normalization_id:
+        case NormalizationId.NONE:
+            return _normalize_none(score, norm_kwargs)
+        case _:
+            raise ValueError(f"Unhandled normalization method {normalization_id}.")
+
+
+def _normalize_none(score: float, _: dict) -> float:
+    return score
