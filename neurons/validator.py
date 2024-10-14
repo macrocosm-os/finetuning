@@ -21,6 +21,8 @@ import dataclasses
 
 from huggingface_hub.utils import disable_progress_bars
 
+from finetune.eval.task import EvalTask, EvalMethodId, NormalizationId
+
 disable_progress_bars()
 
 import asyncio
@@ -65,7 +67,6 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
-from transformers import GenerationConfig
 
 import constants
 import finetune as ft
@@ -92,8 +93,8 @@ class PerUIDEvalState:
     # The hugging face repo name.
     repo_name: str = "Unknown"
 
-    # The deviations per batch. Currently either losses or percent of questions wrong.
-    deviations: typing.List[float] = dataclasses.field(default=None)
+    # The model's score.
+    score: float = math.inf
 
 
 class Validator:
@@ -795,6 +796,12 @@ class Validator:
         # Pull the latest sample data based on the competition.
         sample_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
+        # Tokenize the data into batches for use in evaluation.
+        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
+        tokenizer = ft.model.load_tokenizer(
+            competition.constraints, cache_dir=self.config.model_dir
+        )
+        eval_tasks = []
 
         if competition.id == CompetitionId.B7_MULTI_CHOICE:
             with self.prompting_metagraph_lock:
@@ -816,24 +823,25 @@ class Validator:
                     min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
                     validator_hotkeys=vali_hotkeys,
                 )
+                # Note that the formatting of batches changes depending on where the sample data is obtained.
+                # Tuple of prompt, ["a",b", "c", "d"], answer
+                eval_tasks.append(
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        samples=sample_data.tokenize(
+                            tokenizer, competition.constraints.sequence_length
+                        ),
+                        method=EvalMethodId.MULTIPLE_CHOICE,
+                        normalization_id=NormalizationId.NONE,
+                    )
+                )
+
+                # TODO: Add a block number and add additional data.
+                # TODO: Load more data here
         else:
             raise ValueError(
                 f"Competition id: {competition.id} has no sample loading logic specified."
             )
-
-        if not sample_data:
-            bt.logging.error("Failed to load sample data. Skipping evaluation.")
-            return
-
-        # Tokenize the data into batches for use in evaluation.
-        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
-        tokenizer = ft.model.load_tokenizer(
-            competition.constraints, cache_dir=self.config.model_dir
-        )
-        # Note that the formatting of batches changes depending on where the sample data is obtained.
-        batches = sample_data.tokenize(
-            tokenizer, competition.constraints.sequence_length
-        )
 
         # Prepare evaluation.
         kwargs = competition.constraints.kwargs.copy()
@@ -849,7 +857,8 @@ class Validator:
         compute_deviation_perf = PerfMonitor("Eval: Compute deviation")
 
         for uid_i in uids:
-            deviations: typing.List[float] = [math.inf for _ in range(len(batches))]
+            score: float = math.inf
+            score_details = {}
 
             # Check that the model is in the tracker.
             with self.metagraph_lock:
@@ -880,30 +889,24 @@ class Validator:
                     # Get the model locally and evaluate its deviation.
                     model_i = None
                     with load_model_perf.sample():
+                        # TODO: Consider loading in the subprocess.
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
 
                     if competition.id == CompetitionId.B7_MULTI_CHOICE:
-                        compute_generation_config = GenerationConfig(
-                            max_new_tokens=20,
-                            max_length=competition.constraints.sequence_length,
-                            do_sample=False,
-                            repetition_penalty=1.1,
-                            eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.eos_token_id,
-                        )
                         with compute_deviation_perf.sample():
                             # Run each computation in a subprocess so that the GPU is reset between each model.
-                            deviations = utils.run_in_subprocess(
+                            score, score_details = utils.run_in_subprocess(
                                 functools.partial(
-                                    ft.validation.compute_multiple_choice_deviation,
+                                    ft.validation.score_model,
                                     model_i.pt_model,
                                     tokenizer,
-                                    compute_generation_config,
-                                    batches,
+                                    eval_tasks,
+                                    competition,
                                     self.config.device,
                                 ),
+                                # TODO: Bump the TTL
                                 ttl=400,
                                 mode="spawn",
                             )
@@ -922,20 +925,17 @@ class Validator:
                     f"Unable to load the model metadata for {uid_i} or it belongs to another competition. Setting loss to infinity for this competition."
                 )
 
-            average_model_deviation = sum(deviations) / len(deviations)
-            uid_to_state[uid_i].deviations = deviations
+            uid_to_state[uid_i].score = score
             bt.logging.trace(
-                f"Computed model deviations for uid: {uid_i} with average deviation: {average_model_deviation}"
+                f"Computed model score for uid: {uid_i} with score: {score}. Details: {score_details}"
             )
 
         # Compute wins and win rates per uid.
-        deviations_per_uid = {
-            uid: state.deviations for uid, state in uid_to_state.items()
-        }
+        score_per_uid = {uid: state.score for uid, state in uid_to_state.items()}
         uid_to_block = {uid: state.block for uid, state in uid_to_state.items()}
         wins, win_rate = ft.validation.compute_wins(
             uids,
-            deviations_per_uid,
+            score_per_uid,
             uid_to_block,
             competition.constraints.epsilon_func,
             block,
@@ -1061,15 +1061,13 @@ class Validator:
             curr_block (int): The current block.
             uid_to_state (typing.Dict[int, PerUIDEvalState]): A dictionary mapping uids to their eval state.
         """
-        top_model_deviation = self._compute_avg_deviation(
-            uid_to_state[top_uid].deviations
-        )
+        top_model_deviation = self._compute_avg_deviation(uid_to_state[top_uid].score)
         for _, state in uid_to_state.items():
             self.model_tracker.on_model_evaluated(
                 state.hotkey,
                 EvalResult(
                     block=curr_block,
-                    score=self._compute_avg_deviation(state.deviations),
+                    score=self._compute_avg_deviation(state.score),
                     winning_model_block=uid_to_state[top_uid].block,
                     winning_model_score=top_model_deviation,
                 ),
@@ -1116,7 +1114,7 @@ class Validator:
                 "hf": uid_to_state[uid].repo_name,
                 "competition_id": int(competition.id),
                 "average_loss": self._compute_avg_deviation(
-                    uid_to_state[uid].deviations
+                    uid_to_state[uid].score
                 ),  # Keep the log here as loss to avoid breaking the leaderboard.
                 "epsilon_adv": competition.constraints.epsilon_func.compute_epsilon(
                     current_block, uid_to_state[uid].block
