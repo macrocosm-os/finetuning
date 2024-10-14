@@ -20,6 +20,11 @@
 import dataclasses
 
 from huggingface_hub.utils import disable_progress_bars
+from taoverse.metagraph.utils import get_hash_of_sync_block
+
+from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
+from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
+from finetune.validation import ScoreDetails
 
 disable_progress_bars()
 
@@ -31,8 +36,6 @@ import json
 import math
 import os
 import pickle
-import random
-import sys
 import threading
 import time
 import traceback
@@ -40,6 +43,7 @@ import typing
 from collections import defaultdict
 
 import bittensor as bt
+import nltk
 import torch
 import wandb
 from dotenv import load_dotenv
@@ -65,7 +69,6 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
-from transformers import GenerationConfig
 
 import constants
 import finetune as ft
@@ -92,8 +95,13 @@ class PerUIDEvalState:
     # The hugging face repo name.
     repo_name: str = "Unknown"
 
-    # The deviations per batch. Currently either losses or percent of questions wrong.
-    deviations: typing.List[float] = dataclasses.field(default=None)
+    # The model's score.
+    score: float = math.inf
+
+    # Details about the model's score.
+    score_details: typing.Dict[str, ScoreDetails] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 class Validator:
@@ -755,11 +763,11 @@ class Validator:
         Executes a step in the evaluation process of models. This function performs several key tasks:
             1. Identifies valid models for evaluation (top 5 from last run + newly updated models).
             2. Generates random pages for evaluation and prepares batches for each page from the dataset.
-            3. Computes the scoring for each model based on the deviations found on the evaluation batches.
+            3. Computes the scoring for each model based on the scores found on the evaluation batches.
             4. Calculates wins and win rates for each model to determine their performance relative to others.
             5. Updates the weights of each model based on their performance and applies a softmax normalization.
             6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
-            7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and deviations.
+            7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and scores.
         """
 
         block = self._get_current_block()
@@ -795,8 +803,19 @@ class Validator:
         # Pull the latest sample data based on the competition.
         sample_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
+        # Tokenize the data into batches for use in evaluation.
+        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
+        tokenizer = ft.model.load_tokenizer(
+            competition.constraints, cache_dir=self.config.model_dir
+        )
+        eval_tasks = []
+        pages = []
 
         if competition.id == CompetitionId.B7_MULTI_CHOICE:
+            include_word_sorting_eval = (
+                self._get_current_block() >= constants.WORD_SORTING_BLOCK
+            )
+
             with self.prompting_metagraph_lock:
                 vali_uids = metagraph_utils.get_high_stake_validators(
                     self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
@@ -805,10 +824,17 @@ class Validator:
                     [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
                 )
 
+            # Try to synchronize the data used by validators.
+            try:
+                # Synchronize on blocks roughly every 30 minutes.
+                seed = get_hash_of_sync_block(self.subtensor, 150)
+            except:
+                seed = None
+
             with load_data_perf.sample():
                 sample_data = PromptingSubsetLoader(
                     use_latest_data=True,
-                    random_seed=random.randint(0, sys.maxsize),
+                    random_seed=seed,
                     max_samples=self.config.latest_prompting_samples,
                     steps=self.config.latest_prompting_steps,
                     page_size=self.config.latest_prompting_steps,
@@ -816,47 +842,63 @@ class Validator:
                     min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
                     validator_hotkeys=vali_hotkeys,
                 )
+                pages = list(sample_data.get_selected_sample_ids())
+                # Note that the formatting of batches changes depending on where the sample data is obtained.
+                # Tuple of (prompt, ["a", "b", "c", "d"], answer)
+                eval_tasks.append(
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        samples=sample_data.tokenize(
+                            tokenizer, competition.constraints.sequence_length
+                        ),
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.95 if include_word_sorting_eval else 1.0,
+                    )
+                )
+
+                if include_word_sorting_eval:
+                    sample_data = WordSortingLoader(
+                        random_seed=seed,
+                        samples=400,
+                    )
+                    eval_tasks.append(
+                        EvalTask(
+                            name="WORD_SORTING",
+                            samples=sample_data.tokenize(
+                                tokenizer, competition.constraints.sequence_length
+                            ),
+                            method_id=EvalMethodId.REFERENCE_LOSS,
+                            normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                            normalization_kwargs={"ceiling": 40.0},
+                            weight=0.05,
+                        )
+                    )
         else:
             raise ValueError(
                 f"Competition id: {competition.id} has no sample loading logic specified."
             )
 
-        if not sample_data:
-            bt.logging.error("Failed to load sample data. Skipping evaluation.")
-            return
-
-        # Tokenize the data into batches for use in evaluation.
-        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
-        tokenizer = ft.model.load_tokenizer(
-            competition.constraints, cache_dir=self.config.model_dir
-        )
-        # Note that the formatting of batches changes depending on where the sample data is obtained.
-        batches = sample_data.tokenize(
-            tokenizer, competition.constraints.sequence_length
-        )
-
         # Prepare evaluation.
         kwargs = competition.constraints.kwargs.copy()
         kwargs["use_cache"] = True
 
-        # Compute model deviations on batches.
-        bt.logging.debug(
-            f"Computing deviations on {uids} for competition {competition.id}"
-        )
+        # Compute model score on batches.
+        bt.logging.debug(f"Computing scores on {uids} for competition {competition.id}")
         uid_to_state = defaultdict(PerUIDEvalState)
 
         load_model_perf = PerfMonitor("Eval: Load model")
-        compute_deviation_perf = PerfMonitor("Eval: Compute deviation")
+        compute_score_perf = PerfMonitor("Eval: Compute score")
 
         for uid_i in uids:
-            deviations: typing.List[float] = [math.inf for _ in range(len(batches))]
+            score: float = math.inf
+            score_details = {task.name: ScoreDetails() for task in eval_tasks}
 
             # Check that the model is in the tracker.
             with self.metagraph_lock:
                 hotkey = self.metagraph.hotkeys[uid_i]
                 uid_to_state[uid_i].hotkey = hotkey
 
-            bt.logging.trace(f"Getting metadata for uid: {uid_i}.")
             model_i_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
                 hotkey
             )
@@ -877,31 +919,24 @@ class Validator:
                         model_i_metadata
                     )
 
-                    # Get the model locally and evaluate its deviation.
+                    # Get the model locally and evaluate its score.
                     model_i = None
                     with load_model_perf.sample():
+                        # TODO: Consider loading in the subprocess.
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
 
                     if competition.id == CompetitionId.B7_MULTI_CHOICE:
-                        compute_generation_config = GenerationConfig(
-                            max_new_tokens=20,
-                            max_length=competition.constraints.sequence_length,
-                            do_sample=False,
-                            repetition_penalty=1.1,
-                            eos_token_id=tokenizer.eos_token_id,
-                            pad_token_id=tokenizer.eos_token_id,
-                        )
-                        with compute_deviation_perf.sample():
+                        with compute_score_perf.sample():
                             # Run each computation in a subprocess so that the GPU is reset between each model.
-                            deviations = utils.run_in_subprocess(
+                            score, score_details = utils.run_in_subprocess(
                                 functools.partial(
-                                    ft.validation.compute_multiple_choice_deviation,
+                                    ft.validation.score_model,
                                     model_i.pt_model,
                                     tokenizer,
-                                    compute_generation_config,
-                                    batches,
+                                    eval_tasks,
+                                    competition,
                                     self.config.device,
                                 ),
                                 ttl=400,
@@ -915,27 +950,25 @@ class Validator:
                     del model_i
                 except Exception as e:
                     bt.logging.error(
-                        f"Error in eval loop: {e}. Setting deviations for uid: {uid_i} to infinity."
+                        f"Error in eval loop: {traceback.format_exc(e)}. Setting score for uid: {uid_i} to infinity."
                     )
             else:
                 bt.logging.debug(
                     f"Unable to load the model metadata for {uid_i} or it belongs to another competition. Setting loss to infinity for this competition."
                 )
 
-            average_model_deviation = sum(deviations) / len(deviations)
-            uid_to_state[uid_i].deviations = deviations
+            uid_to_state[uid_i].score = score
+            uid_to_state[uid_i].score_details = score_details
             bt.logging.trace(
-                f"Computed model deviations for uid: {uid_i} with average deviation: {average_model_deviation}"
+                f"Computed model score for uid: {uid_i} with score: {score}. Details: {score_details}"
             )
 
         # Compute wins and win rates per uid.
-        deviations_per_uid = {
-            uid: state.deviations for uid, state in uid_to_state.items()
-        }
+        score_per_uid = {uid: state.score for uid, state in uid_to_state.items()}
         uid_to_block = {uid: state.block for uid, state in uid_to_state.items()}
         wins, win_rate = ft.validation.compute_wins(
             uids,
-            deviations_per_uid,
+            score_per_uid,
             uid_to_block,
             competition.constraints.epsilon_func,
             block,
@@ -1000,21 +1033,22 @@ class Validator:
         # Log the performance of the eval loop.
         bt.logging.debug(load_data_perf.summary_str())
         bt.logging.debug(load_model_perf.summary_str())
-        bt.logging.debug(compute_deviation_perf.summary_str())
+        bt.logging.debug(compute_score_perf.summary_str())
 
         # Log to screen and wandb.
         self.log_step(
             competition,
+            eval_tasks,
             block,
             uids,
             uid_to_state,
             self._get_uids_to_competition_ids(),
-            list(sample_data.get_selected_sample_ids()),
+            pages,
             wins,
             win_rate,
             tracker_competition_weights,
             load_model_perf,
-            compute_deviation_perf,
+            compute_score_perf,
             load_data_perf,
         )
 
@@ -1061,32 +1095,22 @@ class Validator:
             curr_block (int): The current block.
             uid_to_state (typing.Dict[int, PerUIDEvalState]): A dictionary mapping uids to their eval state.
         """
-        top_model_deviation = self._compute_avg_deviation(
-            uid_to_state[top_uid].deviations
-        )
+        top_model_score = uid_to_state[top_uid].score
         for _, state in uid_to_state.items():
             self.model_tracker.on_model_evaluated(
                 state.hotkey,
                 EvalResult(
                     block=curr_block,
-                    score=self._compute_avg_deviation(state.deviations),
+                    score=state.score,
                     winning_model_block=uid_to_state[top_uid].block,
-                    winning_model_score=top_model_deviation,
+                    winning_model_score=top_model_score,
                 ),
             )
-
-    def _compute_avg_deviation(self, deviations: typing.List[float]) -> float:
-        """Safely computes the average deviation from a list of deviations.
-        Args:
-            deviations (typing.List[float]): A list of deviations.
-        Returns:
-            float: The average deviation.
-        """
-        return sum(deviations) / len(deviations) if deviations else math.inf
 
     def log_step(
         self,
         competition: Competition,
+        eval_tasks: typing.List[EvalTask],
         current_block: int,
         uids: typing.List[int],
         uid_to_state: typing.Dict[int, PerUIDEvalState],
@@ -1096,7 +1120,7 @@ class Validator:
         win_rate: typing.Dict[int, float],
         competition_weights: torch.Tensor,
         load_model_perf: PerfMonitor,
-        compute_deviation_perf: PerfMonitor,
+        compute_score_perf: PerfMonitor,
         load_data_perf: PerfMonitor,
     ):
         """Logs the results of the step to the console and wandb (if enabled)."""
@@ -1115,9 +1139,9 @@ class Validator:
                 "block": uid_to_state[uid].block,
                 "hf": uid_to_state[uid].repo_name,
                 "competition_id": int(competition.id),
-                "average_loss": self._compute_avg_deviation(
-                    uid_to_state[uid].deviations
-                ),  # Keep the log here as loss to avoid breaking the leaderboard.
+                "average_loss": uid_to_state[
+                    uid
+                ].score,  # Keep the log here as loss to avoid breaking the leaderboard.
                 "epsilon_adv": competition.constraints.epsilon_func.compute_epsilon(
                     current_block, uid_to_state[uid].block
                 ),
@@ -1125,10 +1149,21 @@ class Validator:
                 "win_total": wins[uid],
                 "weight": self.weights[uid].item(),
             }
+            for task in eval_tasks:
+                step_log["uid_data"][str(uid)][f"{task.name}.raw_score"] = (
+                    uid_to_state[uid].score_details[task.name].raw_score
+                )
+                step_log["uid_data"][str(uid)][f"{task.name}.norm_score"] = (
+                    uid_to_state[uid].score_details[task.name].norm_score
+                )
+                step_log["uid_data"][str(uid)][f"{task.name}.weighted_norm_score"] = (
+                    uid_to_state[uid].score_details[task.name].weighted_norm_score
+                )
+
         table = Table(title="Step", expand=True)
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("hf", style="magenta", overflow="fold")
-        table.add_column("avg_deviation", style="magenta", overflow="fold")
+        table.add_column("score", style="magenta", overflow="fold")
         table.add_column("epsilon_adv", style="magenta", overflow="fold")
         table.add_column("win_rate", style="magenta", overflow="fold")
         table.add_column("total_weight", style="magenta", overflow="fold")
@@ -1188,8 +1223,6 @@ class Validator:
             uid_data = step_log["uid_data"]
 
             # Create a new dictionary with the required format
-            with self.metagraph_lock:
-                block = self.metagraph.block.item()
             graphed_data = {
                 "time": time.time(),
                 "step_competition_id": int(competition.id),
@@ -1218,10 +1251,10 @@ class Validator:
                     "P90": load_model_perf.percentile(90),
                 },
                 "compute_model_perf": {
-                    "min": compute_deviation_perf.min(),
-                    "median": compute_deviation_perf.median(),
-                    "max": compute_deviation_perf.max(),
-                    "P90": compute_deviation_perf.percentile(90),
+                    "min": compute_score_perf.min(),
+                    "median": compute_score_perf.median(),
+                    "max": compute_score_perf.max(),
+                    "P90": compute_score_perf.percentile(90),
                 },
                 "load_data_perf": {
                     "min": load_data_perf.min(),
@@ -1230,6 +1263,21 @@ class Validator:
                     "P90": load_data_perf.percentile(90),
                 },
             }
+            # Add the score details to the graphed data.
+            for task in eval_tasks:
+                graphed_data[f"{task.name}.raw_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.raw_score"]
+                    for uid in uids
+                }
+                graphed_data[f"{task.name}.norm_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.norm_score"]
+                    for uid in uids
+                }
+                graphed_data[f"{task.name}.weighted_norm_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.weighted_norm_score"]
+                    for uid in uids
+                }
+
             bt.logging.trace("Logging to Wandb")
             self.wandb_run.log(
                 {**graphed_data, "original_format_json": original_format_json},
@@ -1316,5 +1364,8 @@ class Validator:
 if __name__ == "__main__":
     # Data comes from Subnet 1's wandb project. Make sure we're logged in
     wandb_utils.login()
+
+    # Make sure we can download the needed ntlk module
+    nltk.download("words", raise_on_error=True)
 
     asyncio.run(Validator().run())

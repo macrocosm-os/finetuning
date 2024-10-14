@@ -16,9 +16,14 @@
 import random
 import typing
 
+import nltk
 import torch
 from transformers import PreTrainedTokenizerBase
-from nltk.corpus import words
+
+try:
+    from nltk.corpus import words
+except:
+    nltk.download("words", raise_on_error=True)
 
 WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: List: "
 
@@ -67,7 +72,9 @@ class WordSortingLoader:
             word_list_unsorted = random.sample(self.words, word_count)
 
             # Prepend the prompt to the challenge.
-            challenge = WORD_SORTING_CHALLENGE_PROMPT + " ".join(word_list_unsorted)
+            challenge = (
+                WORD_SORTING_CHALLENGE_PROMPT + " ".join(word_list_unsorted) + "."
+            )
 
             # Sort the list for the reference.
             reference = " ".join(sorted(word_list_unsorted))
@@ -76,7 +83,7 @@ class WordSortingLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]:
         # Each batch is a tokenized question + reference answer.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
@@ -92,13 +99,15 @@ class WordSortingLoader:
                 max_length=sequence_length,
                 add_generation_prompt=True,
             )
+            ref_ids = tokenizer.encode(reference)
 
             batches.append(
                 (
-                    torch.stack([torch.tensor(ids)]),
-                    reference,
+                    torch.tensor(ids),
+                    torch.tensor(ref_ids),
                 )
             )
+        print("WordSorting: Returning tokenized batches")
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:

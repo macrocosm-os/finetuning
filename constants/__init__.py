@@ -90,6 +90,10 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
 }
 
+# Block at which word sorting is including in the competition eval.
+# TODO: Finalize this value.
+WORD_SORTING_BLOCK = 4117341
+
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (

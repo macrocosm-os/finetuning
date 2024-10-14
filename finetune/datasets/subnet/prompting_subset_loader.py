@@ -30,6 +30,7 @@ from transformers import PreTrainedTokenizerBase
 
 import constants
 from finetune.datasets.subnet.history_scan import SampledHistoryScan
+from finetune.eval.sample import EvalSample
 
 # Multiple choice answers for the prompting subnet.
 PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
@@ -249,7 +250,7 @@ class PromptingSubsetLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]]:
         # Each batch is a tokenized question + the chocies + the correct choice.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
