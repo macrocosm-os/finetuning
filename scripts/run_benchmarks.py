@@ -134,7 +134,7 @@ def _run_benchmarks(
             "leaderboard_bbh",
             # "leaderboard_gpqa",
             # "leaderboard_ifeval",
-            "mmlu_pro",
+            # "mmlu_pro",
             "mmlu",
         ],
         verbosity="DEBUG",
