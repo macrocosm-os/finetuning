@@ -4,6 +4,7 @@ import dataclasses
 import json
 import os
 from tabnanny import verbose
+import time
 from typing import Any, Dict, Tuple
 
 import bittensor as bt
@@ -97,38 +98,21 @@ def _run_benchmarks(
 ) -> Dict[str, Any]:
     """Runs a benchmark on a given model."""
 
-    # # Download the tokenizer and model.
-    # tokenizer = AutoTokenizer.from_pretrained(
-    #     competition.constraints.tokenizer, cache_dir=hf_dir
-    # )
-    # store = HuggingFaceModelStore()
-    # model = asyncio.run(
-    #     store.download_model(model_metadata.id, hf_dir, competition.constraints)
-    # )
-    # pretrained = model.pt_model
-    # pretrained.to("cuda")
-    # print("Model device is: {}".format(pretrained.device))
-    # hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
+    # Download the tokenizer and model.
+    tokenizer = AutoTokenizer.from_pretrained(
+        competition.constraints.tokenizer, cache_dir=hf_dir
+    )
+    store = HuggingFaceModelStore()
+    model = asyncio.run(
+        store.download_model(model_metadata.id, hf_dir, competition.constraints)
+    )
+    pretrained = model.pt_model
+    pretrained.to("cuda")
+    print("Model device is: {}".format(pretrained.device))
+    hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
 
-    # return lm_eval.simple_evaluate(
-    #     model=hf_model,
-    #     tasks=[
-    #         "leaderboard_mmlu_pro",
-    #         "leaderboard_bbh",
-    #         # "leaderboard_gpqa",
-    #         # "leaderboard_ifeval",
-    #         "mmlu_pro",
-    #         "mmlu",
-    #     ],
-    #     verbosity="DEBUG",
-    #     batch_size="auto",
-    #     log_samples=True,
-    # )
-
-    # model = model_metadata.id.namespace + "/" + model_metadata.id.name
     return lm_eval.simple_evaluate(
-        model="hf",
-        model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
+        model=hf_model,
         tasks=[
             "leaderboard_mmlu_pro",
             "leaderboard_bbh",
@@ -141,6 +125,23 @@ def _run_benchmarks(
         batch_size="auto",
         log_samples=False,
     )
+
+    # model = model_metadata.id.namespace + "/" + model_metadata.id.name
+    # return lm_eval.simple_evaluate(
+    #     model="hf",
+    #     model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
+    #     tasks=[
+    #         "leaderboard_mmlu_pro",
+    #         "leaderboard_bbh",
+    #         # "leaderboard_gpqa",
+    #         # "leaderboard_ifeval",
+    #         # "mmlu_pro",
+    #         "mmlu",
+    #     ],
+    #     verbosity="DEBUG",
+    #     batch_size="auto",
+    #     log_samples=False,
+    # )
 
 
 def main(args: argparse.Namespace):
@@ -172,9 +173,6 @@ def main(args: argparse.Namespace):
     while True:
         try:
             step += 1
-            # print("Sleeping for an hour.")
-            # time.sleep(3600)
-
             # Figure out which competition we should check next.
             subtensor = bt.subtensor()
             competition_schedule = competition_utils.get_competition_schedule_for_block(
@@ -194,17 +192,18 @@ def main(args: argparse.Namespace):
                 commit=model_metadata.id.commit,
             )
 
-            # if store.contains(state):
-            #     print(
-            #         f"Model {state.repo} at commit {state.commit} has already been benchmarked."
-            #     )
-            #     continue
+            if store.contains(state):
+                print(
+                    f"Model {state.repo} at commit {state.commit} has already been benchmarked."
+                )
+                continue
 
             print(f"Running benchmarks for {state.repo}/{state.commit}.")
             results = _run_benchmarks(competition, model_metadata, args.hf_dir)
             print(f"Finished running benchmarks for {state.repo}/{state.commit}.")
 
             print("Finished evaluating model.")
+            # TODO: Make this dir if it doesn't exist.
             with open(
                 f"results/{model_metadata.id.namespace}_{model_metadata.id.name}_{model_metadata.id.commit}.json",
                 "w+",
@@ -228,8 +227,11 @@ def main(args: argparse.Namespace):
             wandb_run.log(results["results"] | lb_results)
             wandb_run.finish()
 
-            # store.add(state)
+            store.add(state)
             store.save()
+
+            print("Sleeping for an hour.")
+            time.sleep(3600)
         except KeyboardInterrupt:
             break
         except Exception as e:
@@ -249,7 +251,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb_project",
         type=str,
-        default="test-benchmark",
+        default="test-benchmarks",
         help="Wandb project to log results to.",
     )
     parser.add_argument(
