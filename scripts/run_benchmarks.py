@@ -25,6 +25,7 @@ from transformers import AutoTokenizer, PreTrainedTokenizer
 from taoverse.model import utils as model_utils
 from huggingface_hub import login
 
+import model
 from utils import benchmark_helpers
 
 import constants
@@ -116,8 +117,8 @@ def _run_benchmarks(
         tasks=[
             "leaderboard_mmlu_pro",
             "leaderboard_bbh",
-            # "leaderboard_gpqa",
-            # "leaderboard_ifeval",
+            "leaderboard_gpqa",
+            "leaderboard_ifeval",
             # "mmlu_pro",
             "mmlu",
         ],
@@ -221,6 +222,7 @@ def main(args: argparse.Namespace):
                 config={
                     "uid": uid,
                     "model": model_utils.get_hf_url(model_metadata),
+                    "block": model_metadata.block,
                 },
                 allow_val_change=True,
             )
