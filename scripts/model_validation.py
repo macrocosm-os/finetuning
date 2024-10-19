@@ -18,7 +18,7 @@ import constants
 import finetune as ft
 from competitions.data import CompetitionId
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
-from finetune.validation import compute_losses, compute_multiple_choice_deviation
+from finetune.eval.method import compute_multiple_choice_deviation
 
 
 def load_model(model_path, competition_id, allow_remote_code, kwargs) -> Model:

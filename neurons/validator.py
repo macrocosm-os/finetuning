@@ -21,7 +21,10 @@ import dataclasses
 
 from huggingface_hub.utils import disable_progress_bars
 
+from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
+from finetune.eval import normalization, sample
 from finetune.eval.task import EvalTask, EvalMethodId, NormalizationId
+from finetune.validation import ScoreDetails
 
 disable_progress_bars()
 
@@ -95,6 +98,9 @@ class PerUIDEvalState:
 
     # The model's score.
     score: float = math.inf
+
+    # Details about the model's score.
+    score_details: typing.Dict[str, ScoreDetails] = defaultdict()
 
 
 class Validator:
@@ -804,6 +810,10 @@ class Validator:
         eval_tasks = []
 
         if competition.id == CompetitionId.B7_MULTI_CHOICE:
+            include_word_sorting_eval = (
+                self._get_current_block() >= constants.WORD_SORTING_BLOCK
+            )
+
             with self.prompting_metagraph_lock:
                 vali_uids = metagraph_utils.get_high_stake_validators(
                     self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
@@ -824,20 +834,32 @@ class Validator:
                     validator_hotkeys=vali_hotkeys,
                 )
                 # Note that the formatting of batches changes depending on where the sample data is obtained.
-                # Tuple of prompt, ["a",b", "c", "d"], answer
+                # Tuple of (prompt, ["a", "b", "c", "d"], answer)
                 eval_tasks.append(
                     EvalTask(
                         name="SYNTHETIC_MMLU",
                         samples=sample_data.tokenize(
                             tokenizer, competition.constraints.sequence_length
                         ),
-                        method=EvalMethodId.MULTIPLE_CHOICE,
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
                         normalization_id=NormalizationId.NONE,
+                        weight=0.95 if include_word_sorting_eval else 1.0,
                     )
                 )
 
-                # TODO: Add a block number and add additional data.
-                # TODO: Load more data here
+                if include_word_sorting_eval:
+                    sample_data = WordSortingLoader()
+                    eval_tasks.append(
+                        name="WORD_SORTING",
+                        samples=sample_data.tokenize(
+                            tokenizer, competition.constraints.sequence_length
+                        ),
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        # TODO: Tune the ceiling
+                        normalization_kwargs={"ceiling": 10.0},
+                        weight=0.05,
+                    )
         else:
             raise ValueError(
                 f"Competition id: {competition.id} has no sample loading logic specified."
@@ -858,14 +880,13 @@ class Validator:
 
         for uid_i in uids:
             score: float = math.inf
-            score_details = {}
+            score_details = {task.name: ScoreDetails() for task in eval_tasks}
 
             # Check that the model is in the tracker.
             with self.metagraph_lock:
                 hotkey = self.metagraph.hotkeys[uid_i]
                 uid_to_state[uid_i].hotkey = hotkey
 
-            bt.logging.trace(f"Getting metadata for uid: {uid_i}.")
             model_i_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
                 hotkey
             )
@@ -906,7 +927,6 @@ class Validator:
                                     competition,
                                     self.config.device,
                                 ),
-                                # TODO: Bump the TTL
                                 ttl=400,
                                 mode="spawn",
                             )
@@ -926,6 +946,7 @@ class Validator:
                 )
 
             uid_to_state[uid_i].score = score
+            uid_to_state[uid_i].score_details = score_details
             bt.logging.trace(
                 f"Computed model score for uid: {uid_i} with score: {score}. Details: {score_details}"
             )
@@ -1005,6 +1026,7 @@ class Validator:
         # Log to screen and wandb.
         self.log_step(
             competition,
+            eval_tasks,
             block,
             uids,
             uid_to_state,
@@ -1061,30 +1083,22 @@ class Validator:
             curr_block (int): The current block.
             uid_to_state (typing.Dict[int, PerUIDEvalState]): A dictionary mapping uids to their eval state.
         """
-        top_model_deviation = self._compute_avg_deviation(uid_to_state[top_uid].score)
+        top_model_deviation = uid_to_state[top_uid].score
         for _, state in uid_to_state.items():
             self.model_tracker.on_model_evaluated(
                 state.hotkey,
                 EvalResult(
                     block=curr_block,
-                    score=self._compute_avg_deviation(state.score),
+                    score=state.score,
                     winning_model_block=uid_to_state[top_uid].block,
                     winning_model_score=top_model_deviation,
                 ),
             )
 
-    def _compute_avg_deviation(self, deviations: typing.List[float]) -> float:
-        """Safely computes the average deviation from a list of deviations.
-        Args:
-            deviations (typing.List[float]): A list of deviations.
-        Returns:
-            float: The average deviation.
-        """
-        return sum(deviations) / len(deviations) if deviations else math.inf
-
     def log_step(
         self,
         competition: Competition,
+        eval_tasks: typing.List[EvalTask],
         current_block: int,
         uids: typing.List[int],
         uid_to_state: typing.Dict[int, PerUIDEvalState],
@@ -1113,9 +1127,9 @@ class Validator:
                 "block": uid_to_state[uid].block,
                 "hf": uid_to_state[uid].repo_name,
                 "competition_id": int(competition.id),
-                "average_loss": self._compute_avg_deviation(
-                    uid_to_state[uid].score
-                ),  # Keep the log here as loss to avoid breaking the leaderboard.
+                "average_loss": uid_to_state[
+                    uid
+                ].score,  # Keep the log here as loss to avoid breaking the leaderboard.
                 "epsilon_adv": competition.constraints.epsilon_func.compute_epsilon(
                     current_block, uid_to_state[uid].block
                 ),
@@ -1123,10 +1137,21 @@ class Validator:
                 "win_total": wins[uid],
                 "weight": self.weights[uid].item(),
             }
+            for task in eval_tasks:
+                step_log["uid_data"][str(uid)][f"{task.name}.raw_score"] = (
+                    uid_to_state[uid].score_details[task.name].raw_score
+                )
+                step_log["uid_data"][str(uid)][f"{task.name}.norm_score"] = (
+                    uid_to_state[uid].score_details[task.name].norm_score
+                )
+                step_log["uid_data"][str(uid)][f"{task.name}.weighted_norm_score"] = (
+                    uid_to_state[uid].score_details[task.name].weighted_norm_score
+                )
+
         table = Table(title="Step", expand=True)
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("hf", style="magenta", overflow="fold")
-        table.add_column("avg_deviation", style="magenta", overflow="fold")
+        table.add_column("score", style="magenta", overflow="fold")
         table.add_column("epsilon_adv", style="magenta", overflow="fold")
         table.add_column("win_rate", style="magenta", overflow="fold")
         table.add_column("total_weight", style="magenta", overflow="fold")
@@ -1186,8 +1211,6 @@ class Validator:
             uid_data = step_log["uid_data"]
 
             # Create a new dictionary with the required format
-            with self.metagraph_lock:
-                block = self.metagraph.block.item()
             graphed_data = {
                 "time": time.time(),
                 "step_competition_id": int(competition.id),
@@ -1228,6 +1251,21 @@ class Validator:
                     "P90": load_data_perf.percentile(90),
                 },
             }
+            # Add the score details to the graphed data.
+            for task in eval_tasks:
+                graphed_data[f"{task.name}.raw_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.raw_score"]
+                    for uid in uids
+                }
+                graphed_data[f"{task.name}.norm_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.norm_score"]
+                    for uid in uids
+                }
+                graphed_data[f"{task.name}.weighted_norm_score"] = {
+                    str(uid): uid_data[str(uid)][f"{task.name}.weighted_norm_score"]
+                    for uid in uids
+                }
+
             bt.logging.trace("Logging to Wandb")
             self.wandb_run.log(
                 {**graphed_data, "original_format_json": original_format_json},

@@ -30,7 +30,7 @@ from transformers import PreTrainedTokenizerBase
 
 import constants
 from finetune.datasets.subnet.history_scan import SampledHistoryScan
-from finetune.eval.task import EvalSample
+from finetune.eval.sample import EvalSample
 
 # Multiple choice answers for the prompting subnet.
 PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
