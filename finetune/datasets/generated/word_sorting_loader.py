@@ -18,6 +18,7 @@ import typing
 
 import torch
 from transformers import PreTrainedTokenizerBase
+from finetune.eval.sample import EvalSample
 from nltk.corpus import words
 
 WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: List: "
@@ -76,7 +77,7 @@ class WordSortingLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[EvalSample]:
         # Each batch is a tokenized question + reference answer.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.

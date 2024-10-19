@@ -18,6 +18,7 @@ import typing
 
 import torch
 from transformers import PreTrainedTokenizerBase
+from finetune.eval.sample import EvalSample
 
 # Characters to use in the dycks.
 DYCK_CHARACTER_PAIRS = [("<", ">"), ("[", "]"), ("{", "}"), ("(", ")")]
@@ -136,7 +137,7 @@ class DyckLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[EvalSample]:
         # Each batch is a tokenized question + reference answer.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.

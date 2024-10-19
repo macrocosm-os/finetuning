@@ -848,6 +848,7 @@ class Validator:
                 )
 
                 if include_word_sorting_eval:
+                    # TODO: Provide a random seed based on the hash of a past block.
                     sample_data = WordSortingLoader()
                     eval_tasks.append(
                         name="WORD_SORTING",
