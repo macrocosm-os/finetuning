@@ -22,8 +22,8 @@ import dataclasses
 from huggingface_hub.utils import disable_progress_bars
 
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
-from finetune.eval import normalization, sample
-from finetune.eval.task import EvalTask, EvalMethodId, NormalizationId
+from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
+from finetune.utils import hash_of_sync_block
 from finetune.validation import ScoreDetails
 
 disable_progress_bars()
@@ -36,8 +36,6 @@ import json
 import math
 import os
 import pickle
-import random
-import sys
 import threading
 import time
 import traceback
@@ -60,13 +58,11 @@ from taoverse.model.competition.data import Competition
 from taoverse.model.data import EvalResult
 from taoverse.model.model_tracker import ModelTracker
 from taoverse.model.model_updater import MinerMisconfiguredError, ModelUpdater
-from taoverse.model.storage.chain.chain_model_metadata_store import (
-    ChainModelMetadataStore,
-)
+from taoverse.model.storage.chain.chain_model_metadata_store import \
+    ChainModelMetadataStore
 from taoverse.model.storage.disk.disk_model_store import DiskModelStore
-from taoverse.model.storage.hugging_face.hugging_face_model_store import (
-    HuggingFaceModelStore,
-)
+from taoverse.model.storage.hugging_face.hugging_face_model_store import \
+    HuggingFaceModelStore
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
@@ -74,7 +70,8 @@ from taoverse.utilities.perf_monitor import PerfMonitor
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
+from finetune.datasets.subnet.prompting_subset_loader import \
+    PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -822,10 +819,17 @@ class Validator:
                     [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
                 )
 
+            # Try to synchronize the data used by validators.
+            try:
+                # Synchronize on blocks roughly every 30 minutes.
+                seed = hash_of_sync_block(self.subtensor, 150)
+            except:
+                seed = None
+
             with load_data_perf.sample():
                 sample_data = PromptingSubsetLoader(
                     use_latest_data=True,
-                    random_seed=random.randint(0, sys.maxsize),
+                    random_seed=seed,
                     max_samples=self.config.latest_prompting_samples,
                     steps=self.config.latest_prompting_steps,
                     page_size=self.config.latest_prompting_steps,
@@ -849,7 +853,9 @@ class Validator:
 
                 if include_word_sorting_eval:
                     # TODO: Provide a random seed based on the hash of a past block.
-                    sample_data = WordSortingLoader()
+                    sample_data = WordSortingLoader(
+                        random_seed=seed,
+                    )
                     eval_tasks.append(
                         name="WORD_SORTING",
                         samples=sample_data.tokenize(
