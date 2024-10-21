@@ -18,21 +18,21 @@
 
 # Tools for performing validation over models.
 
+import dataclasses
 import typing
 
 import torch
-import dataclasses
 import transformers
+from taoverse.model.competition.data import Competition
 from taoverse.model.competition.epsilon import EpsilonFunc
 from transformers import GenerationConfig
-from taoverse.model.competition.data import Competition
+
 from finetune.eval.method import (
     compute_multiple_choice_deviation,
     compute_reference_loss,
 )
 from finetune.eval.normalization import normalize_score
-
-
+from finetune.eval.sample import EvalSample
 from finetune.eval.task import EvalMethodId, EvalTask
 
 
@@ -132,7 +132,7 @@ class ScoreDetails:
 def score_model(
     model,
     tokenizer: transformers.PreTrainedTokenizer,
-    evals: typing.List[EvalTask],
+    evals: typing.Dict[EvalTask, typing.List[EvalSample]],
     competition: Competition,
     device: str,
 ) -> typing.Tuple[float, dict]:
@@ -148,7 +148,7 @@ def score_model(
         score = 0
         score_details = {task.name: ScoreDetails() for task in evals}
 
-        for task in evals:
+        for task, samples in evals.items():
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
                     compute_generation_config = GenerationConfig(
@@ -163,13 +163,13 @@ def score_model(
                         model=model,
                         tokenizer=tokenizer,
                         generation_config=compute_generation_config,
-                        batches=task.samples,
+                        batches=samples,
                         device=device,
                     )
                 case EvalMethodId.REFERENCE_LOSS:
                     score = compute_reference_loss(
                         model=model,
-                        batches=task.samples,
+                        batches=samples,
                         device=device,
                     )
                 case _:

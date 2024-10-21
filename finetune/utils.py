@@ -1,4 +1,7 @@
 import bittensor as bt
+from typing import Dict
+from finetune.datasets.ids import DatasetId
+from finetune.eval.task import EvalTask
 
 
 # TODO: Move to taoverse

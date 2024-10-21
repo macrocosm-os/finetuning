@@ -1,9 +1,8 @@
 import dataclasses
-from typing import List
 
+from finetune.datasets.ids import DatasetId
 from finetune.eval.method import EvalMethodId
 from finetune.eval.normalization import NormalizationId
-from finetune.eval.sample import EvalSample
 
 
 @dataclasses.dataclass
@@ -13,8 +12,8 @@ class EvalTask:
     # Friendly name for the task.
     name: str
 
-    # List of samples to provide to the evaluation method.
-    samples: List[EvalSample]
+    # The dataset to use for this evaluation task.
+    dataset_id: DatasetId
 
     # The identifier of the evaluation method to use.
     method_id: EvalMethodId
@@ -45,19 +44,20 @@ class EvalTask:
                         "Normalization kwargs must contain a 'ceiling' value."
                     )
 
-        # Validate samples based on the evaluation method.
-        match self.method_id:
-            case EvalMethodId.MULTIPLE_CHOICE:
-                for sample in self.samples:
-                    if len(sample) != 3:
-                        raise ValueError(
-                            "For multiple choice evaluation, each sample should be a tuple of "
-                            "(context, choices, answer)."
-                        )
-            case EvalMethodId.REFERENCE_LOSS:
-                for sample in self.samples:
-                    if len(sample) != 2:
-                        raise ValueError(
-                            "For reference loss evaluation, each sample should be a tuple of "
-                            "(context, reference)."
-                        )
+        # Verify the evaluation method is compatible with the dataset.
+        match self.dataset_id:
+            case DatasetId.MMLU:
+                if self.method_id not in (EvalMethodId.MULTIPLE_CHOICE):
+                    raise ValueError(
+                        f"{self.method_id} is not a valid eval for {self.dataset_id}"
+                    )
+            case DatasetId.WORD_SORTING:
+                if self.method_id not in (EvalMethodId.REFERENCE_LOSS):
+                    raise ValueError(
+                        f"{self.method_id} is not a valid eval for {self.dataset_id}"
+                    )
+            case DatasetId.DYCK_LANGUAGE:
+                if self.method_id not in (EvalMethodId.REFERENCE_LOSS):
+                    raise ValueError(
+                        f"{self.method_id} is not a valid eval for {self.dataset_id}"
+                    )

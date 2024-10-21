@@ -21,6 +21,10 @@ from transformers import (
 )
 
 from competitions.data import CompetitionId
+from finetune.datasets.ids import DatasetId
+from finetune.eval.method import EvalMethodId
+from finetune.eval.normalization import NormalizationId
+from finetune.eval.task import EvalTask
 
 # ---------------------------------
 # Project Constants.
@@ -90,29 +94,73 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
 }
 
-# Block at which word sorting is including in the competition eval.
-# TODO: Finalize this value.
-WORD_SORTING_BLOCK = 4117341
-
 # Schedule of competitions by block.
-COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
+COMPETITION_SCHEDULE_BY_BLOCK: List[
+    Tuple[int, List[Tuple[Competition, List[EvalTask]]]]
+] = [
     (
         0,
         [
-            Competition(
-                CompetitionId.B7_MULTI_CHOICE,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                1.0,
-            ),
+            (
+                Competition(
+                    CompetitionId.B7_MULTI_CHOICE,
+                    MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
+                    1.0,
+                ),
+                [
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        dataset_id=DatasetId.MMLU,
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        normalization_id=NormalizationId.NONE,
+                        weight=1.0,
+                    )
+                ],
+            )
+        ],
+    ),
+    (
+        4117341,
+        [
+            (
+                Competition(
+                    CompetitionId.B7_MULTI_CHOICE,
+                    MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
+                    1.0,
+                ),
+                [
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        dataset_id=DatasetId.MMLU,
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.95,
+                    ),
+                    EvalTask(
+                        name="WORD_SORTING",
+                        dataset_id=DatasetId.WORD_SORTING,
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 10.0},
+                        weight=0.05,
+                    ),
+                ],
+            )
         ],
     ),
 ]
 
-for block_and_competitions in COMPETITION_SCHEDULE_BY_BLOCK:
+for block_and_comp_evals in COMPETITION_SCHEDULE_BY_BLOCK:
+    comps_and_evals = block_and_comp_evals[1]
     assert math.isclose(
-        sum(competition.reward_percentage for competition in block_and_competitions[1]),
+        sum(comp_and_evals[0].reward_percentage for comp_and_evals in comps_and_evals),
         1.0,
     )
+    for comp_and_evals in comps_and_evals:
+        assert math.isclose(
+            sum(eval.weight for eval in comp_and_evals[1]),
+            1.0,
+        )
 
 # ---------------------------------
 # Miner/Validator Model parameters.
