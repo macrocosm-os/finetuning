@@ -49,7 +49,7 @@ def _normalize_inverse_exponential(score: float, ceiling: float) -> float:
     if score >= ceiling:
         return 1.0
 
-    return 1 - math.exp(-score / ceiling) / (1 - math.exp(-1))
+    return (1 - math.exp(-score / ceiling)) / (1 - math.exp(-1))
 
 
 def _normalize_none(score: float) -> float:

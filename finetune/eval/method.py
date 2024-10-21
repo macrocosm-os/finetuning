@@ -9,7 +9,6 @@ import bittensor as bt
 import torch
 import transformers
 from transformers import PreTrainedModel
-from finetune.eval.sample import EvalSample
 
 
 class EvalMethodId(IntEnum):
@@ -27,7 +26,7 @@ class EvalMethodId(IntEnum):
 
 def compute_reference_loss(
     model: PreTrainedModel,
-    batches: typing.List[EvalSample],
+    batches: typing.List[typing.Tuple[torch.Tensor, torch.Tensor]],
     device: str,
 ) -> float:
     """Given batches of [context, ref] pairs, computes the average loss on the reference portion.
