@@ -3,8 +3,6 @@ import asyncio
 import dataclasses
 import json
 import os
-from tabnanny import verbose
-import time
 from typing import Any, Dict, Tuple
 
 import bittensor as bt
@@ -12,7 +10,6 @@ import dotenv
 import lm_eval
 import wandb
 from lm_eval.models.huggingface import HFLM
-from taoverse.model.competition import utils as competition_utils
 from taoverse.model.competition.data import Competition
 from taoverse.model.data import ModelMetadata
 from taoverse.model.storage.chain.chain_model_metadata_store import (
@@ -21,11 +18,7 @@ from taoverse.model.storage.chain.chain_model_metadata_store import (
 from taoverse.model.storage.hugging_face.hugging_face_model_store import (
     HuggingFaceModelStore,
 )
-from transformers import AutoTokenizer, PreTrainedTokenizer
-from taoverse.model import utils as model_utils
 from huggingface_hub import login
-
-from utils import benchmark_helpers
 
 import constants
 
