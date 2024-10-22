@@ -25,7 +25,6 @@ from transformers import AutoTokenizer, PreTrainedTokenizer
 from taoverse.model import utils as model_utils
 from huggingface_hub import login
 
-import model
 from utils import benchmark_helpers
 
 import constants
@@ -100,25 +99,41 @@ def _run_benchmarks(
     """Runs a benchmark on a given model."""
 
     # Download the tokenizer and model.
-    tokenizer = AutoTokenizer.from_pretrained(
-        competition.constraints.tokenizer, cache_dir=hf_dir
-    )
-    store = HuggingFaceModelStore()
-    model = asyncio.run(
-        store.download_model(model_metadata.id, hf_dir, competition.constraints)
-    )
-    pretrained = model.pt_model
-    pretrained.to("cuda")
-    print("Model device is: {}".format(pretrained.device))
-    hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     competition.constraints.tokenizer, cache_dir=hf_dir
+    # )
+    # store = HuggingFaceModelStore()
+    # model = asyncio.run(
+    #     store.download_model(model_metadata.id, hf_dir, competition.constraints)
+    # )
+    # pretrained = model.pt_model
+    # pretrained.to("cuda")
+    # print("Model device is: {}".format(pretrained.device))
+    # hf_model = HFLM(model.pt_model, tokenizer=tokenizer)
+
+    # return lm_eval.simple_evaluate(
+    #     model=hf_model,
+    #     tasks=[
+    #         "leaderboard_mmlu_pro",
+    #         "leaderboard_bbh",
+    #         "leaderboard_gpqa",
+    #         "leaderboard_ifeval",
+    #         # "mmlu_pro",
+    #         "mmlu",
+    #     ],
+    #     verbosity="DEBUG",
+    #     batch_size="auto",
+    #     log_samples=False,
+    # )
 
     return lm_eval.simple_evaluate(
-        model=hf_model,
+        model="hf",
+        model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
         tasks=[
-            "leaderboard_mmlu_pro",
-            "leaderboard_bbh",
-            "leaderboard_gpqa",
-            "leaderboard_ifeval",
+            # "leaderboard_mmlu_pro",
+            # "leaderboard_bbh",
+            # "leaderboard_gpqa",
+            # "leaderboard_ifeval",
             # "mmlu_pro",
             "mmlu",
         ],
@@ -127,22 +142,23 @@ def _run_benchmarks(
         log_samples=False,
     )
 
-    # model = model_metadata.id.namespace + "/" + model_metadata.id.name
-    # return lm_eval.simple_evaluate(
-    #     model="hf",
-    #     model_args=f"pretrained=rwh/bigone,tokenizer=Xenova/gpt-4,dtype=bfloat16",
-    #     tasks=[
-    #         "leaderboard_mmlu_pro",
-    #         "leaderboard_bbh",
-    #         # "leaderboard_gpqa",
-    #         # "leaderboard_ifeval",
-    #         # "mmlu_pro",
-    #         "mmlu",
-    #     ],
-    #     verbosity="DEBUG",
-    #     batch_size="auto",
-    #     log_samples=False,
-    # )
+
+def run_mmlu(model: str):
+    return lm_eval.simple_evaluate(
+        model="hf",
+        model_args=f"pretrained={model}",
+        tasks=[
+            # "leaderboard_mmlu_pro",
+            # "leaderboard_bbh",
+            # "leaderboard_gpqa",
+            # "leaderboard_ifeval",
+            # "mmlu_pro",
+            "mmlu",
+        ],
+        verbosity="DEBUG",
+        batch_size="auto",
+        log_samples=False,
+    )
 
 
 def main(args: argparse.Namespace):
@@ -165,79 +181,25 @@ def main(args: argparse.Namespace):
     if args.hf_dir:
         os.environ["HF_HOME"] = args.hf_dir
 
-    step = 0
+    for model in [
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "google/gemma-2-9b-it",
+    ]:
+        print(f"Running benchmarks for {model}.")
+        results = run_mmlu(model)
 
-    store = CompletedEvalStore(args.file)
-    store.load()
-    print("Loaded state for completed evaluations.")
-
-    while True:
-        try:
-            step += 1
-            # Figure out which competition we should check next.
-            subtensor = bt.subtensor()
-            competition_schedule = competition_utils.get_competition_schedule_for_block(
-                block=subtensor.block,
-                schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
-            )
-            competition = competition_schedule[step % len(competition_schedule)]
-            print(f"Checking if a benchmark is needed for competition {competition.id}")
-
-            uid, model_metadata = _get_top_model_metadata(subtensor, competition)
-            if not model_metadata:
-                print(f"Didn't find a top model for competition {competition.id}.")
-                continue
-
-            state = CompletedEvalStore.State(
-                repo=f"{model_metadata.id.namespace}/{model_metadata.id.name}",
-                commit=model_metadata.id.commit,
-            )
-
-            if store.contains(state):
-                print(
-                    f"Model {state.repo} at commit {state.commit} has already been benchmarked."
-                )
-                continue
-
-            print(f"Running benchmarks for {state.repo}/{state.commit}.")
-            results = _run_benchmarks(competition, model_metadata, args.hf_dir)
-            print(f"Finished running benchmarks for {state.repo}/{state.commit}.")
-
-            print("Finished evaluating model.")
-            # TODO: Make this dir if it doesn't exist.
-            with open(
-                f"results/{model_metadata.id.namespace}_{model_metadata.id.name}_{model_metadata.id.commit}.json",
-                "w+",
-                encoding="utf-8",
-            ) as f:
-                json.dump(results["results"], f)
-
-            lb_results = benchmark_helpers.get_leaderboard_scores(results["results"])
-            print(f"Leaderboard results: {lb_results}")
-
-            # Log to wandb.
-            wandb_run = wandb.init(
-                project=args.wandb_project,
-                entity=args.wandb_entity,
-                config={
-                    "uid": uid,
-                    "model": model_utils.get_hf_url(model_metadata),
-                    "block": model_metadata.block,
-                },
-                allow_val_change=True,
-            )
-            wandb_run.log(results["results"] | lb_results)
-            wandb_run.finish()
-
-            store.add(state)
-            store.save()
-
-            print("Sleeping for an hour.")
-            time.sleep(3600)
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            print(f"Caught error: {e}")
+        # Log to wandb.
+        wandb_run = wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            config={
+                "model": model,
+            },
+            allow_val_change=True,
+        )
+        wandb_run.log(results["results"])
+        wandb_run.finish()
 
 
 if __name__ == "__main__":
@@ -245,15 +207,9 @@ if __name__ == "__main__":
         description="Run benchmarks and track completed evaluations."
     )
     parser.add_argument(
-        "--file",
-        type=str,
-        default="completed_evals.json",
-        help="Path to the JSON file for storing completed evaluations.",
-    )
-    parser.add_argument(
         "--wandb_project",
         type=str,
-        default="test-benchmarks",
+        default="test-benchmark",
         help="Wandb project to log results to.",
     )
     parser.add_argument(
