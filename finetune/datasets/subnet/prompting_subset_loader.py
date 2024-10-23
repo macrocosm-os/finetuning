@@ -140,7 +140,7 @@ class PromptingSubsetLoader:
 
                     # # Validator hotkeys are used to ensure the authenticity of the run.
                     if validator_hotkeys:
-                        hotkey = run.config["HOTKEY_SS58"]
+                        hotkey = run.config.get("HOTKEY_SS58", None)
                         # First check that the hotkey is in fact a desired validator hotkey.
                         if hotkey not in validator_hotkeys:
                             bt.logging.debug(
