@@ -50,7 +50,7 @@ class TestMining(unittest.TestCase):
         assert_model_equality(self, self.tiny_model, model)
 
     def _test_push(
-        self, min_expected_block: int = 1, competition_id=CompetitionId.SN9_MODEL
+        self, min_expected_block: int = 1, competition_id=CompetitionId.B7_MULTI_CHOICE
     ):
         asyncio.run(
             ft.mining.push(
