@@ -853,7 +853,7 @@ class Validator:
                         ),
                         method_id=EvalMethodId.MULTIPLE_CHOICE,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.95 if include_word_sorting_eval else 1.0,
+                        weight=0.975 if include_word_sorting_eval else 1.0,
                     )
                 )
 
@@ -871,7 +871,7 @@ class Validator:
                             method_id=EvalMethodId.REFERENCE_LOSS,
                             normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
                             normalization_kwargs={"ceiling": 40.0},
-                            weight=0.05,
+                            weight=0.025,
                         )
                     )
         else:
