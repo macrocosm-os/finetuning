@@ -148,9 +148,9 @@ class PromptingSubsetLoader:
                             )
                             continue
 
-                        signature = run.config["SIGNATURE"]
+                        signature = run.config.get("SIGNATURE", None)
                         # Then verify the signature using the hotkey.
-                        if not bt.Keypair(ss58_address=hotkey).verify(
+                        if not signature or not bt.Keypair(ss58_address=hotkey).verify(
                             run.id, bytes.fromhex(signature)
                         ):
                             bt.logging.debug(
