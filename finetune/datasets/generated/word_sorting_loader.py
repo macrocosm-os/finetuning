@@ -25,7 +25,7 @@ try:
 except:
     nltk.download("words", raise_on_error=True)
 
-WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: List: "
+WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: "
 
 
 class WordSortingLoader:
@@ -73,7 +73,7 @@ class WordSortingLoader:
 
             # Prepend the prompt to the challenge.
             challenge = (
-                WORD_SORTING_CHALLENGE_PROMPT + " ".join(word_list_unsorted) + "."
+                WORD_SORTING_CHALLENGE_PROMPT + " ".join(word_list_unsorted) + ". "
             )
 
             # Sort the list for the reference.
@@ -107,7 +107,6 @@ class WordSortingLoader:
                     torch.tensor(ref_ids),
                 )
             )
-        print("WordSorting: Returning tokenized batches")
         return batches
 
     def get_sample(self) -> typing.Tuple[str, str]:

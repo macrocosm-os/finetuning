@@ -18,7 +18,6 @@ import typing
 
 import torch
 from transformers import PreTrainedTokenizerBase
-from finetune.eval.sample import EvalSample
 
 # Characters to use in the dycks.
 DYCK_CHARACTER_PAIRS = [("<", ">"), ("[", "]"), ("{", "}"), ("(", ")")]

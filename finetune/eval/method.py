@@ -33,7 +33,7 @@ def compute_reference_loss(
 
     Args:
         model (PreTrainedModel): The model to eval
-        batches (typing.List[EvalSample]): List of [context, ref] pairs
+        batches (typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]): List of [context, ref] pairs
         device (str): The device to run the evaluation on.
 
     Returns:

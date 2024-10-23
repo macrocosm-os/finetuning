@@ -150,7 +150,7 @@ def score_model(
         score_details = {task.name: ScoreDetails() for task in evals}
 
         for task in evals:
-            bt.logging.info(f"Scoring model on task: {task.name}")
+            bt.logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
                     compute_generation_config = GenerationConfig(
