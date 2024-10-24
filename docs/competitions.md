@@ -8,11 +8,9 @@ The purpose of this competition is to finetune the top models from the [pretrain
 
 ### Evaluation
 
-Models submitted to this competition are evaluated using a synthetic MMLU-like dataset from the [Text Prompting subnet](https://www.macrocosmos.ai/sn1). This new dataset is a multiple choice dataset with a large array of multiple choice questions, spanning a domain of topics and difficulty levels, akin to MMLU. Currently, the dataset is generated using Wikipedia as the source-of-truth, though this will be expanded over time to include more domain-focused sources.
-
-Our early testing of this dataset, shows promising correlation between this competition's evaluation function and the model performance on MMLU-pro, as shown by the graph below.
-
-![Synthetic MMLU evaluation](b7_mc_eval.png)
+Models submitted to this competition are evaluated on a set of evaluation tasks, where each task is worth a subportion of the overall score. The current evaluations are:
+1) SYNTHENTIC_MMLU: a synthetic MMLU-like dataset from the [Text Prompting subnet](https://www.macrocosmos.ai/sn1). This dataset is a multiple choice dataset with a large array of multiple choice questions, spanning a domain of topics and difficulty levels, akin to MMLU. Currently, the dataset is generated using Wikipedia as the source-of-truth, though this will be expanded over time to include more domain-focused sources.
+2) WORD_SORTING: In this task, the model is given a list of words and are required to sort them alphabetically. [Code](https://github.com/macrocosm-os/finetuning/blob/main/finetune/datasets/generated/dyck_loader.py)
 
 ### Definitions
 

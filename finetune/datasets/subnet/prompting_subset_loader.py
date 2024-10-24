@@ -140,7 +140,7 @@ class PromptingSubsetLoader:
 
                     # # Validator hotkeys are used to ensure the authenticity of the run.
                     if validator_hotkeys:
-                        hotkey = run.config["HOTKEY_SS58"]
+                        hotkey = run.config.get("HOTKEY_SS58", None)
                         # First check that the hotkey is in fact a desired validator hotkey.
                         if hotkey not in validator_hotkeys:
                             bt.logging.debug(
@@ -148,9 +148,9 @@ class PromptingSubsetLoader:
                             )
                             continue
 
-                        signature = run.config["SIGNATURE"]
+                        signature = run.config.get("SIGNATURE", None)
                         # Then verify the signature using the hotkey.
-                        if not bt.Keypair(ss58_address=hotkey).verify(
+                        if not signature or not bt.Keypair(ss58_address=hotkey).verify(
                             run.id, bytes.fromhex(signature)
                         ):
                             bt.logging.debug(
@@ -249,7 +249,7 @@ class PromptingSubsetLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]]:
         # Each batch is a tokenized question + the chocies + the correct choice.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.

@@ -136,7 +136,7 @@ class DyckLoader:
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, int]]:
+    ) -> typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]:
         # Each batch is a tokenized question + reference answer.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
@@ -152,11 +152,12 @@ class DyckLoader:
                 max_length=sequence_length,
                 add_generation_prompt=True,
             )
+            ref_ids = tokenizer.encode(reference)
 
             batches.append(
                 (
-                    torch.stack([torch.tensor(ids)]),
-                    reference,
+                    torch.tensor(ids),
+                    torch.tensor(ref_ids),
                 )
             )
         return batches
