@@ -26,7 +26,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.1.2"
+__version__ = "2.2.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -89,6 +89,9 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         max_bytes=15 * 1024 * 1024 * 1024,
     ),
 }
+
+# Block at which word sorting is including in the competition eval.
+WORD_SORTING_BLOCK = 4139465
 
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
