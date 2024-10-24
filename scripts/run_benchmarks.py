@@ -153,6 +153,8 @@ def main(args: argparse.Namespace):
 
     while True:
         try:
+            print("Sleeping for 15 mins.")
+            time.sleep(900)
             step += 1
             # Figure out which competition we should check next.
             subtensor = bt.subtensor()
@@ -212,9 +214,6 @@ def main(args: argparse.Namespace):
 
             store.add(state)
             store.save()
-
-            print("Sleeping for 15 mins.")
-            time.sleep(900)
         except KeyboardInterrupt:
             break
         except Exception as e:
