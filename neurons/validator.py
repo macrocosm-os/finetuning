@@ -730,6 +730,7 @@ class Validator:
                 bt.logging.info("Synced metagraph")
                 self.metagraph = copy.deepcopy(metagraph)
                 self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+                self.model_tracker.on_hotkeys_updated(set(self.metagraph.hotkeys))
         else:
             bt.logging.error(
                 f"Unexpected subnet uid in subnet metagraph syncer: {netuid}"
