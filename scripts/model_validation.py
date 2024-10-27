@@ -3,6 +3,7 @@
 It can be used to estimate the performance of a model before submitting it."""
 
 import argparse
+import datetime as dt
 import math
 import random
 import sys
@@ -61,15 +62,9 @@ def main():
         help="Random seed to use while loading data. If 0 then randomize.",
     )
     parser.add_argument(
-        "--latest_prompting_steps",
-        type=int,
-        default=500,
-        help="Number of most recent prompting steps to sample data from",
-    )
-    parser.add_argument(
         "--latest_prompting_samples",
         type=int,
-        default=100,
+        default=400,
         help="Number of most recent prompting samples to eval against",
     )
     parser.add_argument(
@@ -147,12 +142,9 @@ def main():
         print("Getting latest sample data from prompting.")
         with pull_data_perf.sample():
             sample_data = PromptingSubsetLoader(
-                use_latest_data=True,
                 random_seed=seed,
                 max_samples=args.latest_prompting_samples,
-                steps=args.latest_prompting_steps,
-                page_size=args.latest_prompting_steps,
-                min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
+                oldest_sample_timestamp=dt.datetime.now() - dt.timedelta(hours=4),
             )
     else:
         print(

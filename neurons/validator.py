@@ -20,7 +20,7 @@
 import dataclasses
 
 from huggingface_hub.utils import disable_progress_bars
-from taoverse.metagraph.utils import get_hash_of_sync_block
+from retry import retry
 
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
 from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
@@ -128,6 +128,7 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
+        # self.archive_subtensor = bt.subtensor("archive")
         # If running on testnet, default to using finney for the dataset subtensor.
         if self.config.using_test_subtensor:
             self.dataset_subtensor = bt.subtensor()
@@ -215,6 +216,8 @@ class Validator:
         self.competition_tracker = CompetitionTracker(
             num_neurons=len(self.metagraph.uids), alpha=constants.alpha
         )
+        # Keep track of the most recent sync block used when the competition was last evaluated.
+        self.last_run_by_competition = defaultdict(int)
 
         # Construct the filepaths to save/load state.
         state_dir = self.state_path()
@@ -510,7 +513,7 @@ class Validator:
             except MinerMisconfiguredError as e:
                 bt.logging.trace(e)
             except Exception as e:
-                bt.logging.error(
+                bt.logging.trace(
                     f"Error in update loop: {e} \n {traceback.format_exc()}"
                 )
 
@@ -681,7 +684,7 @@ class Validator:
             with self.metagraph_lock:
                 uids = self.metagraph.uids
             try:
-                self.subtensor.set_weights(
+                success, message = self.subtensor.set_weights(
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=uids,
@@ -689,8 +692,13 @@ class Validator:
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
-                # We only update the last epoch when we successfully set weights.
-                self.last_epoch = block
+                if not success:
+                    bt.logging.warning(
+                        f"Failed to set weights (will retry later): {message}"
+                    )
+                else:
+                    # We only update the last epoch when we successfully set weights.
+                    self.last_epoch = block
             except:
                 bt.logging.warning("Failed to set weights. Trying again later.")
 
@@ -746,6 +754,62 @@ class Validator:
                 f"Unexpected subnet uid in dataset metagraph syncer: {netuid}"
             )
 
+    def _create_prompting_subset_loader(
+        self, seed: int, current_block: int, eval_delay_blocks: int
+    ) -> PromptingSubsetLoader:
+        with self.prompting_metagraph_lock:
+            vali_uids = metagraph_utils.get_high_stake_validators(
+                self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
+            )
+            vali_hotkeys = set(
+                [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
+            )
+
+        # We want to ensure we only include data that is strictly older than eval_delay_blocks ago and younger than the current
+        # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
+        oldest_sync_block = ft.utils.get_next_sync_block(
+            current_block - eval_delay_blocks,
+            constants.SYNC_BLOCK_CADENCE,
+            constants.GENESIS_BLOCK,
+        )
+        current_sync_block = ft.utils.get_sync_block(
+            current_block, constants.SYNC_BLOCK_CADENCE, constants.GENESIS_BLOCK
+        )
+
+        # Find the timestamps of the sync blocks, but fall back to a rough estimate if the subtensor call fails.
+        now = dt.datetime.now(dt.timezone.utc)
+        oldest_sample_timestamp = now - dt.timedelta(
+            seconds=constants.SECONDS_PER_BLOCK * eval_delay_blocks
+        )
+        newest_sample_timestamp = now - dt.timedelta(
+            seconds=constants.SECONDS_PER_BLOCK * (current_block - current_sync_block)
+        )
+
+        @retry(tries=5, delay=1, backoff=2)
+        def _get_block_timestamp_with_retry(block):
+            archive = bt.subtensor("archive")
+            return ft.utils.get_block_timestamp(archive, block)
+
+        try:
+            oldest_sample_timestamp = _get_block_timestamp_with_retry(oldest_sync_block)
+            newest_sample_timestamp = _get_block_timestamp_with_retry(
+                current_sync_block
+            )
+        except Exception as e:
+            # Well, we tried our best. Let us pray this does not stir the wrath of the v-trust Gods.
+            bt.logging.trace(
+                f"Failed to get block timestamps for the sync blocks. Error={e}. Using fallback timestamps."
+            )
+            pass
+
+        return PromptingSubsetLoader(
+            random_seed=seed,
+            max_samples=self.config.latest_prompting_samples,
+            oldest_sample_timestamp=oldest_sample_timestamp,
+            newest_sample_timestamp=newest_sample_timestamp,
+            validator_hotkeys=vali_hotkeys,
+        )
+
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
 
@@ -770,12 +834,29 @@ class Validator:
             6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
             7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and scores.
         """
-
-        block = self._get_current_block()
+        current_block = self._get_current_block()
+        sync_block = ft.utils.get_sync_block(
+            current_block, constants.SYNC_BLOCK_CADENCE, constants.GENESIS_BLOCK
+        )
         competition_schedule = competition_utils.get_competition_schedule_for_block(
-            block=block, schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK
+            block=current_block,
+            schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
         )
         competition = competition_schedule[self.global_step % len(competition_schedule)]
+
+        # If we've already run this competition in this sync_block, wait until the next sync_block, then run again.
+        if self.last_run_by_competition[competition.id] == sync_block:
+            next_sync_block = ft.utils.get_next_sync_block(
+                current_block, constants.SYNC_BLOCK_CADENCE, constants.GENESIS_BLOCK
+            )
+            wait_time = (next_sync_block - current_block) * constants.SECONDS_PER_BLOCK
+            bt.logging.trace(
+                f"Already evaluated competition {competition.id} for sync block {sync_block}. Waiting {wait_time} seconds for next sync block."
+            )
+            time.sleep(wait_time)
+            await self.run_step()
+            return
+
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
@@ -813,35 +894,23 @@ class Validator:
         pages = []
 
         if competition.id == CompetitionId.B7_MULTI_CHOICE:
-            include_word_sorting_eval = (
-                self._get_current_block() >= constants.WORD_SORTING_BLOCK
-            )
-
-            with self.prompting_metagraph_lock:
-                vali_uids = metagraph_utils.get_high_stake_validators(
-                    self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
-                )
-                vali_hotkeys = set(
-                    [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
-                )
-
-            # Try to synchronize the data used by validators.
+            # Synchronize the random seed used by validators.
             try:
-                # Synchronize on blocks roughly every 30 minutes.
-                seed = get_hash_of_sync_block(self.subtensor, 150)
+
+                @retry(tries=3, delay=1, backoff=2)
+                def _get_seed_with_retry():
+                    return ft.utils.get_hash_of_block(self.subtensor, sync_block)
+
+                seed = _get_seed_with_retry()
             except:
+                bt.logging.trace(
+                    f"Failed to get hash of block {sync_block}. Using fallback seed."
+                )
                 seed = None
 
             with load_data_perf.sample():
-                sample_data = PromptingSubsetLoader(
-                    use_latest_data=True,
-                    random_seed=seed,
-                    max_samples=self.config.latest_prompting_samples,
-                    steps=self.config.latest_prompting_steps,
-                    page_size=self.config.latest_prompting_steps,
-                    max_run_age=constants.PROMPTING_MAX_AGE,
-                    min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
-                    validator_hotkeys=vali_hotkeys,
+                sample_data = self._create_prompting_subset_loader(
+                    seed, current_block, competition.constraints.eval_block_delay
                 )
                 if len(sample_data) > constants.MIN_ALLOWED_SAMPLES:
                     pages = list(sample_data.get_selected_sample_ids())
@@ -855,7 +924,7 @@ class Validator:
                             ),
                             method_id=EvalMethodId.MULTIPLE_CHOICE,
                             normalization_id=NormalizationId.NONE,
-                            weight=0.975 if include_word_sorting_eval else 1.0,
+                            weight=0.975,
                         )
                     )
                 else:
@@ -863,23 +932,22 @@ class Validator:
                         f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
                     )
 
-                if include_word_sorting_eval:
-                    sample_data = WordSortingLoader(
-                        random_seed=seed,
-                        samples=400,
+                sample_data = WordSortingLoader(
+                    random_seed=seed,
+                    samples=400,
+                )
+                eval_tasks.append(
+                    EvalTask(
+                        name="WORD_SORTING",
+                        samples=sample_data.tokenize(
+                            tokenizer, competition.constraints.sequence_length
+                        ),
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.025,
                     )
-                    eval_tasks.append(
-                        EvalTask(
-                            name="WORD_SORTING",
-                            samples=sample_data.tokenize(
-                                tokenizer, competition.constraints.sequence_length
-                            ),
-                            method_id=EvalMethodId.REFERENCE_LOSS,
-                            normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                            normalization_kwargs={"ceiling": 40.0},
-                            weight=0.025,
-                        )
-                    )
+                )
         else:
             raise ValueError(
                 f"Competition id: {competition.id} has no sample loading logic specified."
@@ -956,7 +1024,7 @@ class Validator:
                     del model_i
                 except Exception as e:
                     bt.logging.error(
-                        f"Error in eval loop: {traceback.format_exc(e)}. Setting score for uid: {uid_i} to infinity."
+                        f"Error in eval loop: {traceback.format_exc()}. Setting score for uid: {uid_i} to infinity."
                     )
             else:
                 bt.logging.debug(
@@ -977,17 +1045,18 @@ class Validator:
             score_per_uid,
             uid_to_block,
             competition.constraints.epsilon_func,
-            block,
+            current_block,
         )
 
         top_uid = max(win_rate, key=win_rate.get)
-        self._record_eval_results(top_uid, block, uid_to_state)
+        best_win_rate = max(win_rate.values())
+        self._record_eval_results(top_uid, current_block, uid_to_state)
 
-        # Compute softmaxed weights based on win rate.
-        model_weights = torch.tensor(
-            [win_rate[uid] for uid in uids], dtype=torch.float32
+        # Give weight to the model(s) with the highest win rate.
+        step_weights = torch.tensor(
+            [1 if win_rate[uid] == best_win_rate else 0 for uid in uids],
+            dtype=torch.float32,
         )
-        step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
         # Fill in metagraph sized tensor with the step weights of the evaluated models.
         with self.metagraph_lock:
@@ -1007,6 +1076,7 @@ class Validator:
         self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
         self.weights = self.competition_tracker.get_subnet_weights(competition_schedule)
+        self.weights[self.weights < constants.MIN_WEIGHT_THRESHOLD] = 0.0
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
@@ -1034,6 +1104,7 @@ class Validator:
         )
 
         # Save state
+        self.last_run_by_competition[competition.id] = sync_block
         self.save_state()
 
         # Log the performance of the eval loop.
@@ -1045,7 +1116,7 @@ class Validator:
         self.log_step(
             competition,
             eval_tasks,
-            block,
+            current_block,
             uids,
             uid_to_state,
             self._get_uids_to_competition_ids(),
@@ -1373,5 +1444,12 @@ if __name__ == "__main__":
 
     # Make sure we can download the needed ntlk module
     nltk.download("words", raise_on_error=True)
+
+    # As we continue to increase the number of samples sent across the subprocess
+    # boundary, we have hit the systems default limit for the maximum number of file
+    # descriptors that can be open at once.
+    # It's not always possible for validators to increase this limit (e.g. Runpod may lack
+    # root perms), so instead we use the file_system shared memory strategy to work around the issue..
+    torch.multiprocessing.set_sharing_strategy("file_system")
 
     asyncio.run(Validator().run())
