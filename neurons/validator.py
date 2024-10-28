@@ -22,6 +22,7 @@ import dataclasses
 from huggingface_hub.utils import disable_progress_bars
 from taoverse.metagraph.utils import get_hash_of_sync_block
 
+import competitions.missing_samples_patch
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
 from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
 from finetune.validation import ScoreDetails
@@ -73,6 +74,7 @@ from taoverse.utilities.perf_monitor import PerfMonitor
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
+from competitions.missing_samples_patch import ORDERED_HOTKEYS_FOR_REWARDS
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
@@ -746,6 +748,33 @@ class Validator:
                 f"Unexpected subnet uid in dataset metagraph syncer: {netuid}"
             )
 
+    def _reward_historical_top_models(
+        self, competition_schedule: typing.List[Competition]
+    ):
+        index = 0
+        next_reward = [60, 30, 10]
+        with self.metagraph_lock:
+            competition_weights = torch.zeros_like(self.metagraph.S)
+            for hotkey in ORDERED_HOTKEYS_FOR_REWARDS:
+                try:
+                    uid = self.metagraph.hotkeys.index(hotkey)
+                    competition_weights[uid] = next_reward[index]
+                    bt.logging.info(
+                        f"Setting weight to {competition_weights[uid]} for historical top model UID: {str(uid)}"
+                    )
+                    index += 1
+                except ValueError:
+                    pass
+        # Record weights for the current competition.
+        self.competition_tracker.record_competition_weights(
+            CompetitionId.B7_MULTI_CHOICE, competition_weights
+        )
+
+        # Update self.weights to the merged values across active competitions.
+        self.weights = self.competition_tracker.get_subnet_weights(competition_schedule)
+
+        self._print_weight_table(self._get_uids_to_competition_ids())
+
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
 
@@ -843,6 +872,20 @@ class Validator:
                     min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
                     validator_hotkeys=vali_hotkeys,
                 )
+                # We weren't able to get the expected minimum samples from SN 1,
+                # so we fall back to rewarding the previous top models that are still registered.
+                # We reward the past top 3 models with weights: 60, 30, 10.
+                # NOTE: This patch is only necessary because we weren't previously skipping evaluations
+                # when there were too few samples. This will be addressed in the same release that
+                # this temporary code is removed.
+                # TODO: Remove this once SN 1 data is available and exit early instead.
+                if len(sample_data) < constants.MIN_ALLOWED_SAMPLES:
+                    bt.logging.info(
+                        "Did not find enough samples for the latest SN 1 data. Falling back to rewarding historical top models as a temporary patch."
+                    )
+                    self._reward_historical_top_models(competition_schedule)
+                    return
+
                 pages = list(sample_data.get_selected_sample_ids())
                 # Note that the formatting of batches changes depending on where the sample data is obtained.
                 # Tuple of (prompt, ["a", "b", "c", "d"], answer)
@@ -1108,6 +1151,23 @@ class Validator:
                 ),
             )
 
+    def _print_weight_table(
+        self, uid_to_competition_id: typing.Dict[int, typing.Optional[int]]
+    ):
+        """Prints a table to console with all models that have weights."""
+        ws, ui = self.weights.topk(len(self.weights))
+        table = Table(title="Weights > 0.001")
+        table.add_column("uid", justify="right", style="cyan", no_wrap=True)
+        table.add_column("weight", style="magenta")
+        table.add_column("comp", style="magenta")
+        for index, weight in list(zip(ui.tolist(), ws.tolist())):
+            if weight > 0.001:
+                table.add_row(
+                    str(index), str(round(weight, 4)), str(uid_to_competition_id[index])
+                )
+        console = Console()
+        console.print(table)
+
     def log_step(
         self,
         competition: Competition,
@@ -1190,18 +1250,7 @@ class Validator:
         console = Console()
         console.print(table)
 
-        ws, ui = self.weights.topk(len(self.weights))
-        table = Table(title="Weights > 0.001")
-        table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-        table.add_column("weight", style="magenta")
-        table.add_column("comp", style="magenta")
-        for index, weight in list(zip(ui.tolist(), ws.tolist())):
-            if weight > 0.001:
-                table.add_row(
-                    str(index), str(round(weight, 4)), str(uid_to_competition_id[index])
-                )
-        console = Console()
-        console.print(table)
+        self._print_weight_table(uid_to_competition_id)
 
         # Sink step log.
         bt.logging.trace(f"Step results: {step_log}")

@@ -52,6 +52,8 @@ PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Percentage of promping miners who must have gotten the question correct to include in the eval set.
 PROMPTING_MIN_CORRECT_MINERS = 0
+# The minimum number of samples allowed to run the validation.
+MIN_ALLOWED_SAMPLES = 100
 # Minimum stake to consider a validator when checking for miners with weights.
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.
