@@ -843,20 +843,25 @@ class Validator:
                     min_percent_correct=constants.PROMPTING_MIN_CORRECT_MINERS,
                     validator_hotkeys=vali_hotkeys,
                 )
-                pages = list(sample_data.get_selected_sample_ids())
-                # Note that the formatting of batches changes depending on where the sample data is obtained.
-                # Tuple of (prompt, ["a", "b", "c", "d"], answer)
-                eval_tasks.append(
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        samples=sample_data.tokenize(
-                            tokenizer, competition.constraints.sequence_length
-                        ),
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.975 if include_word_sorting_eval else 1.0,
+                if len(sample_data) > constants.MIN_ALLOWED_SAMPLES:
+                    pages = list(sample_data.get_selected_sample_ids())
+                    # Note that the formatting of batches changes depending on where the sample data is obtained.
+                    # Tuple of (prompt, ["a", "b", "c", "d"], answer)
+                    eval_tasks.append(
+                        EvalTask(
+                            name="SYNTHETIC_MMLU",
+                            samples=sample_data.tokenize(
+                                tokenizer, competition.constraints.sequence_length
+                            ),
+                            method_id=EvalMethodId.MULTIPLE_CHOICE,
+                            normalization_id=NormalizationId.NONE,
+                            weight=0.975 if include_word_sorting_eval else 1.0,
+                        )
                     )
-                )
+                else:
+                    bt.logging.warning(
+                        f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
+                    )
 
                 if include_word_sorting_eval:
                     sample_data = WordSortingLoader(
@@ -960,7 +965,7 @@ class Validator:
 
             uid_to_state[uid_i].score = score
             uid_to_state[uid_i].score_details = score_details
-            bt.logging.trace(
+            bt.logging.info(
                 f"Computed model score for uid: {uid_i} with score: {score}. Details: {score_details}"
             )
 
