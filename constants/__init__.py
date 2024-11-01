@@ -26,7 +26,7 @@ from competitions.data import CompetitionId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.2.1"
+__version__ = "2.3.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -38,6 +38,16 @@ __spec_version__ = (
 # to start from a fresh state.
 VALIDATOR_STATE_VERSION = 3
 
+# Block the subnet was registered.
+GENESIS_BLOCK = 3138611
+# Define the number of blocks per vali "sync". This cadence is used to align validator behavior for better vtrust.
+SYNC_BLOCK_CADENCE = 90
+# Rough estimate of the number of seconds per block.
+SECONDS_PER_BLOCK = 12
+# Any miners with a combined competition weight below this threshold will instead receive 0 weight.
+# This is to help vtrust by more quickly deprecating previous top models that are being phased out.
+# At 1 eval per 90 blocks, this should mean a model is phased out in ~1.5 epochs.
+MIN_WEIGHT_THRESHOLD = 0.005
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
 WANDB_ENTITY = "rusticluftig"
@@ -52,8 +62,6 @@ PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
 # Minimum number of samples allowed to consider MMLU as an eval task.
 MIN_ALLOWED_SAMPLES = 50
-# Percentage of promping miners who must have gotten the question correct to include in the eval set.
-PROMPTING_MIN_CORRECT_MINERS = 0
 # Minimum stake to consider a validator when checking for miners with weights.
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.
@@ -91,9 +99,6 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         max_bytes=15 * 1024 * 1024 * 1024,
     ),
 }
-
-# Block at which word sorting is including in the competition eval.
-WORD_SORTING_BLOCK = 4139465
 
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
@@ -134,5 +139,5 @@ model_retry_cadence = 300  # Roughly 1 hour
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
 sample_min = 4
-# We allow the sample_min per competition + 10 additional models to be held at any one time.
-updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 10
+# We allow the sample_min per competition + 16 additional models to be held at any one time.
+updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 16

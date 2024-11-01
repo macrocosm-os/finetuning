@@ -24,8 +24,6 @@ import typing
 import bittensor as bt
 import torch
 import wandb
-from taoverse.utilities import utils
-from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
 
 import constants
@@ -39,26 +37,33 @@ EARLIEST_DATE = dt.datetime(2024, 8, 29, tzinfo=dt.timezone.utc)
 
 
 class PromptingSubsetLoader:
+    @staticmethod
     def _get_filters(
-        self, use_latest_data, random_seed, validator_hotkeys
+        validator_hotkeys: typing.List[str],
+        oldest_sample_timestamp: typing.Optional[dt.datetime] = None,
+        newest_sample_timestamp: typing.Optional[dt.datetime] = None,
     ) -> typing.Dict[str, typing.List[str]]:
         filters_and = []
         filters_or = []
 
-        if use_latest_data:
-            filters_and.append({"state": "running"})
-        else:
-            # If we're not fetching the latest data, then pick a random timepoint and iterate through runs
-            # from that timepoint. We do this instead of randomly picking runs across time because wandb's
-            # library processes runs serially. i.e., if you ask for run[N] it has to first fetch all N-1 runs.
-            # createdAt is is in UTC, so make sure we use UTC tz-aware datetimes.
-            random_date = utils.random_date(
-                EARLIEST_DATE,
-                dt.datetime.now(tz=dt.timezone.utc) - dt.timedelta(days=1),
-                random_seed,
-            )
+        filters_and.append(
+            {"createdAt": {"$gte": EARLIEST_DATE.strftime("%Y-%m-%d %H:%M:%S")}}
+        )
+        if newest_sample_timestamp:
             filters_and.append(
-                {"createdAt": {"$gte": random_date.strftime("%Y-%m-%d %H:%M:%S")}}
+                {
+                    "createdAt": {
+                        "$lt": newest_sample_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                }
+            )
+        if oldest_sample_timestamp:
+            filters_and.append(
+                {
+                    "updatedAt": {
+                        "$gte": oldest_sample_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                }
             )
         if validator_hotkeys:
             # 'IN' is not supported in the query language so we add a series of 'OR'.
@@ -74,178 +79,175 @@ class PromptingSubsetLoader:
 
     def __init__(
         self,
-        use_latest_data: bool = False,
         random_seed: typing.Optional[int] = None,
         max_samples: int = 100,
-        steps: int = 300,
-        progress: bool = False,
-        retry_limit: int = 10,
-        page_size: int = 300,
         prompting_project: str = constants.PROMPTING_WANDB_PROJECT,
-        max_run_age: typing.Optional[dt.timedelta] = None,
-        min_percent_correct: typing.Optional[float] = None,
+        oldest_sample_timestamp: typing.Optional[dt.datetime] = None,
+        newest_sample_timestamp: typing.Optional[dt.datetime] = None,
         validator_hotkeys: typing.Optional[typing.Set[str]] = None,
     ):
         """Loads prompt/response data from Subnet 1.
 
+        Please note: this loader assumes that it's going to fetch recent data (past few hours) and will likely perform poorly if you try to fetch data from a long time ago.
+
         Args:
-            use_latest_data (bool, optional): When true, loads data from actively running runs and gets data from the run's latest step.
-            random_seed (typing.Optional[int], optional): Seed to use for all random operations.
             max_samples (int, optional): The number of prompt/response samples to load.
             steps (int, optional): Within a run, how many steps to look for samples.
-            progress (bool, optional): Whether to log progress of the data loading.
-            retry_limit (int, optional): How many times to retry, given any failure.
-            page_size (int, optional): The number of steps to fetch from a run at a time. Recommended to be >= steps.
             prompting_project (_type_, optional): The wandb project used for subnet 1. Defaults to constants.PROMPTING_WANDB_PROJECT.
-            max_run_age (typing.Optional[dt.timedelta], optional): If set, only considers data from runs that were created within the past `max_run_age`
-            min_percent_correct (typing.Optional[float], optional): If set, only include prompt/responses at least "min_percent_correct" sn 1 miners answered correctly.
+            oldest_sample_timestamp (typing.Optional[dt.datetime], optional): If set, only considers data that was created after this timestamp. Must be in UTC.
+            newest_sample_timestamp (typing.Optional[dt.datetime], optional): If set, only considers data that was before this timestamp. Must be in UTC.
             validator_hotkeys (typing.Optional[typing.Set[str]], optional): If provided, only considers data from one of these validators.
         """
         api = wandb.Api(timeout=100)
 
-        filters = self._get_filters(use_latest_data, random_seed, validator_hotkeys)
+        if oldest_sample_timestamp:
+            oldest_sample_timestamp = oldest_sample_timestamp.astimezone(
+                dt.timezone.utc
+            )
+        if newest_sample_timestamp:
+            newest_sample_timestamp = newest_sample_timestamp.astimezone(
+                dt.timezone.utc
+            )
 
-        bt.logging.debug(f"Fetching runs using filters {filters}")
+        filters = PromptingSubsetLoader._get_filters(
+            validator_hotkeys, oldest_sample_timestamp, newest_sample_timestamp
+        )
+
+        bt.logging.trace(f"Fetching runs using filters {filters}")
 
         # Get the runs, oldest first.
-        runs = api.runs(prompting_project, filters, order="+created_at")
+        runs = list(api.runs(prompting_project, filters, order="+created_at"))
+        bt.logging.trace(f"Found {len(runs)} runs")
 
-        bt.logging.debug(f"Found {len(runs)} runs")
+        all_samples: typing.Set[str] = set()
+        self.buffer: typing.List[typing.Tuple[str, str]] = []
+        self.selected_samples: typing.Set[str] = set()
+
+        def _collect_samples(run: wandb.apis.public.Run) -> bool:
+            """Collects samples from the provided run into all_samples.
+
+            Args:
+                run (wandb.apis.public.Run): The run to collect samples from.
+
+            Returns:
+                bool: True only if all_samples now contains the desired number of samples.
+            """
+            # Validator hotkeys are used to ensure the authenticity of the run.
+            if validator_hotkeys:
+                hotkey = run.config.get("HOTKEY_SS58", None)
+                # First check that the hotkey is in fact a desired validator hotkey.
+                if hotkey not in validator_hotkeys:
+                    bt.logging.trace(
+                        f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
+                    )
+                    return False
+
+                signature = run.config.get("SIGNATURE", None)
+                # Then verify the signature using the hotkey.
+                if not signature or not bt.Keypair(ss58_address=hotkey).verify(
+                    run.id, bytes.fromhex(signature)
+                ):
+                    bt.logging.trace(
+                        f"Failed Signature: {signature} is not valid for {run.id}."
+                    )
+                    return False
+
+            max_step = run.lastHistoryStep + 1
+            # Dynamically compute how far to look back based on oldest_sample_timestamp.
+            if oldest_sample_timestamp:
+                delta = dt.datetime.now(dt.timezone.utc) - oldest_sample_timestamp
+                # On average, 20 seconds per step, then include a 50 step buffer.
+                steps = int(delta.total_seconds() // 20) + 50
+            else:
+                steps = 1000
+            min_step = max(0, max_step - steps)
+
+            samples = SampledHistoryScan(
+                run.client,
+                run,
+                [
+                    "_timestamp",
+                    "_step",
+                    "task",
+                    "challenge",
+                    "reference",
+                ],
+                min_step,
+                max_step,
+                page_size=steps,
+            )
+            for sample in samples:
+                # Skip any samples that occurred before the oldest allowed sample.
+                if (
+                    oldest_sample_timestamp
+                    and dt.datetime.fromtimestamp(sample["_timestamp"]).astimezone(
+                        dt.timezone.utc
+                    )
+                    < oldest_sample_timestamp
+                ):
+                    continue
+                # Skip any samples that occurred after the newest allowed sample.
+                if (
+                    newest_sample_timestamp
+                    and dt.datetime.fromtimestamp(sample["_timestamp"]).astimezone(
+                        dt.timezone.utc
+                    )
+                    > newest_sample_timestamp
+                ):
+                    # Since samples are processed in time order, we can break here since the remaining samples will also be too new.
+                    break
+
+                # Only check samples that are multiple choice based.
+                if sample.get("task", None) != "multi_choice":
+                    continue
+
+                challenge = sample.get("challenge", None)
+                reference = sample.get("reference", None)
+
+                if (
+                    isinstance(challenge, str)
+                    and isinstance(reference, str)
+                    and reference in PROMPTING_SUBNET_CHOICES
+                ):
+                    step = sample.get("_step", "Unknown")
+                    run_step = f"{run.id}_{step}"
+                    all_samples.add((challenge, reference))
+                    self.selected_samples.add(run_step)
+                    if len(all_samples) >= max_samples:
+                        return True
+            return False
 
         if random_seed is not None:
             random.seed(random_seed)
+        random.shuffle(list(runs))
 
-        retry_delay = 5  # Seconds to wait between retries
-        attempt = 0
-
-        while attempt < retry_limit:
-            try:
-                run_order = list(range(len(runs)))
-
-                # If we're only using the latest data, there are a small enough set of runs
-                # that it's okay for us to randomize the order. For cases where we're not using
-                # the latest data, we've already randomly picked data by choosing a random
-                # timestamp to get runs from.
-                if use_latest_data:
-                    random.shuffle(run_order)
-
-                self.buffer: typing.List[typing.Tuple[str, str]] = []
-                self.selected_samples: typing.Set[str] = set()
-
-                for run_index in tqdm(
-                    run_order, desc="Run", leave=False, disable=not progress
-                ):
-                    run = runs[run_index]
-                    bt.logging.trace(f"Processing run: {run.id}")
-
-                    # # Validator hotkeys are used to ensure the authenticity of the run.
-                    if validator_hotkeys:
-                        hotkey = run.config.get("HOTKEY_SS58", None)
-                        # First check that the hotkey is in fact a desired validator hotkey.
-                        if hotkey not in validator_hotkeys:
-                            bt.logging.debug(
-                                f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
-                            )
-                            continue
-
-                        signature = run.config.get("SIGNATURE", None)
-                        # Then verify the signature using the hotkey.
-                        if not signature or not bt.Keypair(ss58_address=hotkey).verify(
-                            run.id, bytes.fromhex(signature)
-                        ):
-                            bt.logging.debug(
-                                f"Failed Signature: {signature} is not valid for {run.id}."
-                            )
-                            continue
-
-                    if use_latest_data:
-                        last_step: int = run.lastHistoryStep
-                    else:
-                        last_step = random.randint(
-                            min(steps, run.lastHistoryStep), run.lastHistoryStep
-                        )
-                    max_step = last_step + 1
-                    min_step = max(0, max_step - steps)
-
-                    samples = SampledHistoryScan(
-                        run.client,
-                        run,
-                        [
-                            "_timestamp",
-                            "_step",
-                            "task",
-                            "MultiChoiceRewardModel_rewards",
-                            "challenge",
-                            "reference",
-                        ],
-                        min_step,
-                        max_step,
-                        page_size=page_size,
+        done = False
+        for run in runs:
+            attempt = 1
+            max_attempts = 3
+            # Try a max of 3 times per run.
+            while attempt <= max_attempts:
+                try:
+                    done = _collect_samples(run)
+                    break
+                except Exception:
+                    attempt += 1
+                    bt.logging.trace(
+                        f"Failed to fetch data. {traceback.format_exc()}, retrying. Attempt {attempt}/{max_attempts}"
                     )
-                    for sample in samples:
-                        # Skip any samples older than max_run_age.
-                        if (
-                            max_run_age
-                            and dt.datetime.now()
-                            - dt.datetime.fromtimestamp(sample["_timestamp"])
-                            > max_run_age
-                        ):
-                            continue
+                    if attempt < max_attempts:
+                        time.sleep(5)
 
-                        # Only check samples that are multiple choice based.
-                        if sample.get("task", "none") == "multi_choice":
-                            try:
-                                # Check if a baseline threshold of SN1 miners answered the question correctly.
-                                if min_percent_correct:  # min_percent_correct:
-                                    rewards = sample["MultiChoiceRewardModel_rewards"]
-                                    if isinstance(rewards, list) and isinstance(
-                                        rewards[0], (int, float)
-                                    ):
-                                        # 1 for correct, 0 for incorrect.
-                                        percent_correct = sum(rewards) / len(rewards)
-                                        if percent_correct < min_percent_correct:
-                                            continue
+            if done:
+                break
 
-                                # If not found these get caught in the KeyError catch below.
-                                challenge = sample["challenge"]
-                                reference = sample["reference"]
-
-                                if (
-                                    isinstance(challenge, str)
-                                    and isinstance(reference, str)
-                                    and reference in PROMPTING_SUBNET_CHOICES
-                                ):
-                                    step = sample.get("_step", "Unknown")
-                                    run_step = f"{run.id}_{step}"
-                                    # Check that we haven't already seen this exact step to avoid duplicates.
-                                    if run_step not in self.selected_samples:
-                                        self.buffer.append((challenge, reference))
-                                        self.selected_samples.add(run_step)
-                                        if len(self.buffer) == max_samples:
-                                            bt.logging.debug(
-                                                f"Collected {max_samples} samples"
-                                            )
-                                            return
-
-                            except KeyError:
-                                pass
-
-                bt.logging.warning(
-                    f"Did not collect {max_samples}, only got {len(self.buffer)}"
-                )
-                return
-            except Exception:
-                attempt += 1
-                bt.logging.warning(
-                    f"Failed to fetch data. {traceback.format_exc()}, retrying. Attempt {attempt}/{retry_limit}"
-                )
-                if attempt < retry_limit:
-                    time.sleep(retry_delay)  # Wait before the next retry
-                else:
-                    bt.logging.error(
-                        "Maximum retry limit reached. Unable to fetch data."
-                    )
-                    raise
+        self.buffer = list(all_samples)
+        if len(self.buffer) < max_samples:
+            bt.logging.debug(
+                f"Did not collect {max_samples}, only got {len(self.buffer)}"
+            )
+        else:
+            bt.logging.trace(f"Collected {max_samples} samples")
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
