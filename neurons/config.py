@@ -41,15 +41,9 @@ def validator_config():
         help="Number of blocks to wait before setting weights.",
     )
     parser.add_argument(
-        "--latest_prompting_steps",
-        type=int,
-        default=500,  # Sample more steps since prompting runs this less frequently.
-        help="Number of most recent Prompting steps to sample data from",
-    )
-    parser.add_argument(
         "--latest_prompting_samples",
         type=int,
-        default=400,
+        default=700,
         help="Number of most recent Prompting samples to eval against",
     )
     parser.add_argument(
