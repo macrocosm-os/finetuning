@@ -139,5 +139,5 @@ model_retry_cadence = 300  # Roughly 1 hour
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
 sample_min = 4
-# We allow the sample_min per competition + 10 additional models to be held at any one time.
+# We allow the sample_min per competition + 16 additional models to be held at any one time.
 updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 16

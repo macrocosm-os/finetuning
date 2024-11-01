@@ -128,7 +128,6 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
-        # self.archive_subtensor = bt.subtensor("archive")
         # If running on testnet, default to using finney for the dataset subtensor.
         if self.config.using_test_subtensor:
             self.dataset_subtensor = bt.subtensor()
@@ -513,7 +512,7 @@ class Validator:
             except MinerMisconfiguredError as e:
                 bt.logging.trace(e)
             except Exception as e:
-                bt.logging.trace(
+                bt.logging.debug(
                     f"Error in update loop: {e} \n {traceback.format_exc()}"
                 )
 
@@ -765,7 +764,7 @@ class Validator:
                 [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
             )
 
-        # We want to ensure we only include data that is strictly older than eval_delay_blocks ago and younger than the current
+        # We want to ensure we only include data that is strictly newer than eval_delay_blocks ago and older than the current
         # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
         oldest_sync_block = ft.utils.get_next_sync_block(
             current_block - eval_delay_blocks,
