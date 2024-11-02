@@ -61,11 +61,13 @@ from taoverse.model.competition.data import Competition
 from taoverse.model.data import EvalResult
 from taoverse.model.model_tracker import ModelTracker
 from taoverse.model.model_updater import MinerMisconfiguredError, ModelUpdater
-from taoverse.model.storage.chain.chain_model_metadata_store import \
-    ChainModelMetadataStore
+from taoverse.model.storage.chain.chain_model_metadata_store import (
+    ChainModelMetadataStore,
+)
 from taoverse.model.storage.disk.disk_model_store import DiskModelStore
-from taoverse.model.storage.hugging_face.hugging_face_model_store import \
-    HuggingFaceModelStore
+from taoverse.model.storage.hugging_face.hugging_face_model_store import (
+    HuggingFaceModelStore,
+)
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
@@ -73,8 +75,7 @@ from taoverse.utilities.perf_monitor import PerfMonitor
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.prompting_subset_loader import \
-    PromptingSubsetLoader
+from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -302,7 +303,7 @@ class Validator:
                         f"Because the uids to eval state failed to load, deleting model tracker state at {self.model_tracker_filepath} so everything is re-evaluated."
                     )
                     os.remove(self.model_tracker_filepath)
-                    
+
         # Initialize the eval task fingerprints.
         self.eval_task_fingerprints: typing.Dict[int, str] = defaultdict(str)
         if os.path.exists(self.eval_task_fingerprints_filepath):
@@ -372,7 +373,7 @@ class Validator:
             with open(self.uids_filepath, "wb") as f:
                 pickle.dump(self.uids_to_eval, f)
                 pickle.dump(self.pending_uids_to_eval, f)
-                
+
         with open(self.eval_task_fingerprints_filepath, "wb") as f:
             pickle.dump(self.eval_task_fingerprints, f)
 
@@ -856,6 +857,18 @@ class Validator:
             )
             return None
 
+    def _maybe_reset_eval_history(self, competition: Competition):
+        """Checks if a competitions eval tasks have changed and resets the eval history if they have."""
+        fingerprint = utils.fingerprint(competition.eval_tasks)
+        previous_fingerprint = self.eval_task_fingerprints.get(competition.id, None)
+        if previous_fingerprint != fingerprint:
+            bt.logging.info(
+                f"Eval tasks for competition {competition.id} have changed. Clearing eval history"
+            )
+            self.model_tracker.clear_eval_results(competition.id)
+            self.eval_task_fingerprints[competition.id] = fingerprint
+            self.save_state()
+
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
 
@@ -906,13 +919,7 @@ class Validator:
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
         # If the competition's eval tasks have changed, make sure all models are re-evaluated.
-        fingerprint = utils.fingerprint(competition.eval_tasks)
-        previous_fingerprint = self.eval_task_fingerprints.get(competition.id, None)
-        if previous_fingerprint != fingerprint:
-            bt.logging.info(f"Eval tasks for competition {competition.id} have changed. Clearing eval history")
-            self.model_tracker.clear_eval_history(competition.id)
-            self.eval_task_fingerprints[competition.id] = fingerprint
-            self.save_state()
+        self._maybe_reset_eval_history(competition)
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
