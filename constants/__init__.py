@@ -10,6 +10,8 @@ from taoverse.model.competition.data import (
     NormValidationConstraints,
 )
 from taoverse.model.competition.epsilon import FixedEpsilon, LinearDecay
+from taoverse.model.eval.normalization import NormalizationId
+from taoverse.model.eval.task import EvalTask
 from transformers import (
     BartForCausalLM,
     FalconForCausalLM,
@@ -21,12 +23,14 @@ from transformers import (
 )
 
 from competitions.data import CompetitionId
+from finetune.datasets.ids import DatasetId
+from finetune.eval.method import EvalMethodId
 
 # ---------------------------------
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -109,6 +113,23 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                 CompetitionId.B7_MULTI_CHOICE,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
                 1.0,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        dataset_id=DatasetId.SYNTHETIC_MMLU,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.975,
+                    ),
+                    EvalTask(
+                        name="WORD_SORTING",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.WORD_SORTING,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.025,
+                    ),
+                ],
             ),
         ],
     ),
@@ -119,6 +140,11 @@ for block_and_competitions in COMPETITION_SCHEDULE_BY_BLOCK:
         sum(competition.reward_percentage for competition in block_and_competitions[1]),
         1.0,
     )
+    for comp in block_and_competitions[1]:
+        assert math.isclose(
+            sum(task.weight for task in comp.eval_tasks),
+            1.0,
+        )
 
 # ---------------------------------
 # Miner/Validator Model parameters.
