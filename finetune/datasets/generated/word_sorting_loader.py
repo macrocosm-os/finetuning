@@ -35,7 +35,7 @@ class WordSortingLoader:
         max_word_count: int = 20,
         min_word_length: int = 3,
         random_seed: typing.Optional[int] = None,
-        samples: int = 100,
+        samples: int = 400,
     ):
         """Loads prompt/response data from generated word sorting tasks.
 

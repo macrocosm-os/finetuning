@@ -18,23 +18,24 @@
 
 # Tools for performing validation over models.
 
+import dataclasses
 import typing
 
-import torch
-import dataclasses
 import bittensor as bt
+import torch
 import transformers
-from taoverse.model.competition.epsilon import EpsilonFunc
-from transformers import GenerationConfig
 from taoverse.model.competition.data import Competition
+from taoverse.model.competition.epsilon import EpsilonFunc
+from taoverse.model.eval.normalization import normalize_score
+from taoverse.model.eval.task import EvalTask
+from transformers import GenerationConfig
+
 from finetune.eval.method import (
+    EvalMethodId,
     compute_multiple_choice_deviation,
     compute_reference_loss,
 )
-from finetune.eval.normalization import normalize_score
-
-
-from finetune.eval.task import EvalMethodId, EvalTask
+from finetune.eval.sample import EvalSample
 
 
 def _is_win(
@@ -134,13 +135,25 @@ def score_model(
     model,
     tokenizer: transformers.PreTrainedTokenizer,
     evals: typing.List[EvalTask],
+    samples: typing.List[typing.List[EvalSample]],
     competition: Competition,
     device: str,
 ) -> typing.Tuple[float, dict]:
     """Scores a model based on the provided eval tasks.
 
+    Args:
+        model (torch.nn.Module): The model to score.
+        tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use for tokenization.
+        evals (list): A list of EvalTasks to score the model on.
+        samples (list): A list of samples to use for scoring for the eval tasks. Must be the same length as evals.
+        competition (Competition): The competition to score the model for.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+
     Returns:
         tuple: A tuple containing the score and a dictionary of score details."""
+
+    if len(evals) != len(samples):
+        raise ValueError("Number of eval tasks and samples must match.")
 
     with torch.inference_mode():
         model.to(device)
@@ -149,7 +162,7 @@ def score_model(
         score = 0
         score_details = {task.name: ScoreDetails() for task in evals}
 
-        for task in evals:
+        for task, samples in zip(evals, samples):
             bt.logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
@@ -165,13 +178,13 @@ def score_model(
                         model=model,
                         tokenizer=tokenizer,
                         generation_config=compute_generation_config,
-                        batches=task.samples,
+                        batches=samples,
                         device=device,
                     )
                 case EvalMethodId.REFERENCE_LOSS:
                     raw_score = compute_reference_loss(
                         model=model,
-                        batches=task.samples,
+                        batches=samples,
                         device=device,
                     )
                 case _:
