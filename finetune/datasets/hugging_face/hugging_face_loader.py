@@ -37,7 +37,7 @@ class HuggingFaceLoader:
     def __init__(
         self,
         name: str,
-        num_pages: int = None,
+        num_pages: int = 4,
         num_rows_per_page: int = 100,
         random_seed: typing.Optional[int] = None,
     ):
@@ -45,7 +45,7 @@ class HuggingFaceLoader:
 
         Args:
             name (str): Name of the dataset from hugging face. Must match url path.
-            num_pages (int, optional): Number of pages of data to fetch. Defaults to None.
+            num_pages (int, optional): Number of pages of data to fetch. Defaults to 4.
             num_rows_per_page (int, optional): Number of rows to read from each fetched page. Defaults to 100.
             random_seed (typing.Optional[int], optional): Seed to use for all random operations. Defaults to None.
         """

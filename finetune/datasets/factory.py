@@ -1,5 +1,9 @@
 from finetune.datasets.generated.dyck_loader import DyckLoader
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
+from finetune.datasets.hugging_face.hugging_face_loader import (
+    HuggingFaceLoader,
+    FINEWEB_EDU_SCORE_2_NAME,
+)
 from finetune.datasets.ids import DatasetId
 from typing import Dict, Any
 
@@ -20,5 +24,9 @@ class DatasetLoader:
                 )
             case DatasetId.WORD_SORTING:
                 return WordSortingLoader(**dataset_kwargs, random_seed=seed)
+            case DatasetId.FINEWEB:
+                return HuggingFaceLoader(
+                    name=FINEWEB_EDU_SCORE_2_NAME, random_seed=seed
+                )
             case _:
                 raise ValueError(f"Unknown dataset_id: {dataset_id}")
