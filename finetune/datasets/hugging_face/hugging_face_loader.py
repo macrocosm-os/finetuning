@@ -263,7 +263,9 @@ class HuggingFaceLoader:
                 "input_ids"
             ]
 
-            batches.append(torch.stack([torch.tensor(input_ids)]))
+            batches.append(
+                torch.stack([torch.tensor(input_ids + [tokenizer.eos_token_id])])
+            )
 
         return batches
 
