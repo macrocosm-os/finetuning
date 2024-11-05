@@ -157,13 +157,16 @@ def score_model(
         raise ValueError("Number of eval tasks and samples must match.")
 
     with torch.inference_mode():
+        print(f"XXX: Loading model on device {device}")
         model.to(device)
+        print(f"XXX: Putting model into eval mode")
         model.eval()
 
         score = 0
         score_details = {task.name: ScoreDetails() for task in evals}
 
         for task, samples in zip(evals, samples):
+            print(f"XXX: Scoring model on task {task.name}")
             bt.logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
