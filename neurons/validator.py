@@ -990,12 +990,6 @@ class Validator:
             score: float = math.inf
             score_details = {task.name: ScoreDetails() for task in eval_tasks}
 
-            if uid_i == 176:
-                bt.logging.info(
-                    f"Skipping uid: {uid_i} for competition {competition.id}."
-                )
-                continue
-
             # Check that the model is in the tracker.
             with self.metagraph_lock:
                 hotkey = self.metagraph.hotkeys[uid_i]
@@ -1021,13 +1015,6 @@ class Validator:
                         model_i_metadata
                     )
 
-                    bt.logging.info(f"Clearing the cache")
-                    # Clearing the cache alone did not work.
-                    torch.cuda.empty_cache()
-                    torch.cuda.reset_max_memory_allocated()
-                    torch.cuda.reset_max_memory_cached()
-
-                    bt.logging.info("XXX: About to load model")
                     # Get the model locally and evaluate its score.
                     with load_model_perf.sample():
                         # TODO: Consider loading in the subprocess.
@@ -1036,7 +1023,6 @@ class Validator:
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
-                        bt.logging.info("XXX: Loaded model")
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
