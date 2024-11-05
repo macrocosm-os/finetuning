@@ -106,8 +106,8 @@ def compute_text_loss(
     # Grab 100 tokens from the first two batches as 'prompts'. (1 x Seq Length tensors.)
     try:
         prompt_length = 100
-        token_inputs_1 = torch.tensor(batches[0][:, :prompt_length]).to(device)
-        token_inputs_2 = torch.tensor(batches[1][:, :prompt_length]).to(device)
+        token_inputs_1 = batches[0][:prompt_length].to(device)
+        token_inputs_2 = batches[1][:prompt_length].to(device)
 
         if not check_for_reasonable_output(
             model, token_inputs_1, token_inputs_2, pad_token_id
