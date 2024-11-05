@@ -840,7 +840,7 @@ class Validator:
                 f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
             )
             return None
-        return list(sample_data)
+        return sample_data
 
     def _get_seed(self, sync_block):
         # Synchronize the random seed used by validators.
