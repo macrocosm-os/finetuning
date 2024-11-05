@@ -152,6 +152,7 @@ def score_model(
 
     Returns:
         tuple: A tuple containing the score and a dictionary of score details."""
+    print(f"XXX: In score_model")
 
     if len(evals) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")

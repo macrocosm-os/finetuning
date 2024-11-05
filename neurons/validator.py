@@ -1015,6 +1015,12 @@ class Validator:
                         model_i_metadata
                     )
 
+                    bt.logging.info(f"Clearing the cache")
+                    torch.cuda.empty_cache()
+                    # torch.cuda.reset_max_memory_allocated()
+                    # torch.cuda.reset_max_memory_cached()
+
+                    bt.logging.info("XXX: About to load model")
                     # Get the model locally and evaluate its score.
                     with load_model_perf.sample():
                         # TODO: Consider loading in the subprocess.
@@ -1023,6 +1029,7 @@ class Validator:
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
+                        bt.logging.info("XXX: Loaded model")
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
