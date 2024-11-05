@@ -158,7 +158,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
                         normalization_kwargs={"ceiling": 40.0},
                         # TODO: Revert to 0.05
-                        weight=0.1,
+                        weight=1,
                     ),
                     # EvalTask(
                     #     name="FINEWEB",
