@@ -60,8 +60,8 @@ class HuggingFaceLoader:
         self.num_rows_per_page = num_rows_per_page
         self.duplicate_page_threshold = 100
 
-        # Buffer to hold pages loaded from the api
-        self.buffer = []
+        # Buffer to hold rows of pages loaded from the api
+        self.buffer: typing.List[str] = []
 
         # Get the dataset configs and their row sizes
         self.configs_data = self.fetch_dataset_configs()

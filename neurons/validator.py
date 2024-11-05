@@ -964,7 +964,9 @@ class Validator:
                     )
                 else:
                     data_loader = DatasetLoader.get_loader(
-                        seed, eval_task.dataset_id, eval_task.dataset_kwargs
+                        dataset_id=eval_task.dataset_id,
+                        dataset_kwargs=eval_task.dataset_kwargs,
+                        seed=seed,
                     )
 
                 if data_loader:
