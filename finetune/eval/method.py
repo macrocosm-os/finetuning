@@ -60,9 +60,7 @@ def check_for_reasonable_output(
 
     # Check if too many of the generated ids are the same between the two outputs.
     if torch.sum(torch.eq(generate_id1s, generate_id2s)).item() >= output_length / 2:
-        bt.logging.info(
-            f"Model with config {model.config} had too much overlap between generated outputs."
-        )
+        bt.logging.info(f"Model had too much overlap between generated outputs.")
         return False
 
     # Check if internally both responses are too repetitive.
@@ -115,7 +113,7 @@ def compute_text_loss(
             return math.inf
     except Exception as e:
         bt.logging.error(
-            f"Exception occurred in checking for reasonable output: {traceback.format_exc(e)}"
+            f"Exception occurred in checking for reasonable output: {traceback.format_exc()}"
         )
         return math.inf
 
@@ -140,7 +138,7 @@ def compute_text_loss(
                 losses.append(loss_fct(shift_logits, shift_labels).item())
             except Exception as e:
                 bt.logging.error(
-                    f"Exception occurred in reference loss computation: {traceback.format_exc(e)}"
+                    f"Exception occurred in reference loss computation: {traceback.format_exc()}"
                 )
                 return math.inf
     return sum(losses) / len(losses) if losses else math.inf
