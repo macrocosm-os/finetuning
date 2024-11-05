@@ -144,13 +144,13 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
                 1.0,
                 eval_tasks=[
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        dataset_id=DatasetId.SYNTHETIC_MMLU,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.9,
-                    ),
+                    # EvalTask(
+                    #     name="SYNTHETIC_MMLU",
+                    #     method_id=EvalMethodId.MULTIPLE_CHOICE,
+                    #     dataset_id=DatasetId.SYNTHETIC_MMLU,
+                    #     normalization_id=NormalizationId.NONE,
+                    #     weight=0.9,
+                    # ),
                     EvalTask(
                         name="WORD_SORTING",
                         method_id=EvalMethodId.REFERENCE_LOSS,

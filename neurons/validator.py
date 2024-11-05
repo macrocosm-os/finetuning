@@ -1016,9 +1016,10 @@ class Validator:
                     )
 
                     bt.logging.info(f"Clearing the cache")
+                    # Clearing the cache alone did not work.
                     torch.cuda.empty_cache()
-                    # torch.cuda.reset_max_memory_allocated()
-                    # torch.cuda.reset_max_memory_cached()
+                    torch.cuda.reset_max_memory_allocated()
+                    torch.cuda.reset_max_memory_cached()
 
                     bt.logging.info("XXX: About to load model")
                     # Get the model locally and evaluate its score.
