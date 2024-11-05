@@ -104,6 +104,7 @@ def compute_text_loss(
     """
     # First check that model generates reasonable looking outputs.
     # Grab 100 tokens from the first two batches as 'prompts'. (1 x Seq Length tensors.)
+    # TODO: Is this necessary?
     try:
         prompt_length = 100
         token_inputs_1 = batches[0][:prompt_length].to(device)
