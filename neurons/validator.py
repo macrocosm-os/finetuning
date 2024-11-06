@@ -1471,12 +1471,10 @@ if __name__ == "__main__":
     # As we continue to increase the number of samples sent across the subprocess
     # boundary, we can hit the systems default limit for the maximum number of file
     # descriptors that can be open at once.
-
-    # If the user running this validator does not have a high enough file descriptor limit, fallback to shm.
     soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
 
     # It's not always possible for validators to increase this limit (e.g. Runpod may lack
-    # root perms), so instead we use the file_system shared memory strategy to work around the issue.
+    # root perms), so we fallback to use the file_system shared memory strategy to work around the issue.
     if hard_limit < 64000:
         bt.logging.warning(
             f"Your ulimit of {hard_limit} is below the recommended 64k. " 
