@@ -1471,13 +1471,14 @@ if __name__ == "__main__":
     # As we continue to increase the number of samples sent across the subprocess
     # boundary, we can hit the systems default limit for the maximum number of file
     # descriptors that can be open at once.
+    # Soft limit is the actual limit for this process. Hard limit is the limit the soft lmiit can be set to.
     soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
 
     # It's not always possible for validators to increase this limit (e.g. Runpod may lack
     # root perms), so we fallback to use the file_system shared memory strategy to work around the issue.
-    if hard_limit < 64_000:
+    if soft_limit < 64_000:
         bt.logging.warning(
-            f"Your ulimit of {hard_limit} is below the recommended 64k. "
+            f"Your ulimit of {soft_limit} is below the recommended 64k. "
              "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
              "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
         )
