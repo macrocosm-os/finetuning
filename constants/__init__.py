@@ -164,7 +164,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.TEXT_LOSS,
                         dataset_id=DatasetId.FINEWEB,
                         normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
+                        normalization_kwargs={"ceiling": 20.0},
                         weight=0.05,
                     ),
                 ],
