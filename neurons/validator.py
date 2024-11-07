@@ -21,9 +21,11 @@ import dataclasses
 
 from huggingface_hub.utils import disable_progress_bars
 from retry import retry
+from taoverse.model.eval.task import EvalTask
 
-from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
-from finetune.eval.task import EvalMethodId, EvalTask, NormalizationId
+from finetune.datasets.factory import DatasetLoader
+from finetune.datasets.ids import DatasetId
+from finetune.eval.sample import EvalSample
 from finetune.validation import ScoreDetails
 
 disable_progress_bars()
@@ -36,6 +38,7 @@ import json
 import math
 import os
 import pickle
+import resource
 import threading
 import time
 import traceback
@@ -109,6 +112,7 @@ class Validator:
     COMPETITION_TRACKER_FILENAME = "competition_tracker.pickle"
     UIDS_FILENAME = "uids.pickle"
     VERSION_FILENAME = "version.txt"
+    EVAL_TASK_FINGERPRINTS = "eval_task_fingerprints.pickle"
 
     def state_path(self) -> str:
         """
@@ -230,6 +234,9 @@ class Validator:
             state_dir, Validator.COMPETITION_TRACKER_FILENAME
         )
         self.version_filepath = os.path.join(state_dir, Validator.VERSION_FILENAME)
+        self.eval_task_fingerprints_filepath = os.path.join(
+            state_dir, Validator.EVAL_TASK_FINGERPRINTS
+        )
 
         # Check if the version has changed since we last restarted.
         previous_version = utils.get_version(self.version_filepath)
@@ -298,6 +305,17 @@ class Validator:
                     )
                     os.remove(self.model_tracker_filepath)
 
+        # Initialize the eval task fingerprints.
+        self.eval_task_fingerprints: typing.Dict[int, str] = defaultdict(str)
+        if os.path.exists(self.eval_task_fingerprints_filepath):
+            try:
+                with open(self.eval_task_fingerprints_filepath, "rb") as f:
+                    self.eval_task_fingerprints = pickle.load(f)
+            except Exception as e:
+                bt.logging.warning(
+                    f"Failed to load eval task fingerprints. Reason: {e}. Starting from scratch."
+                )
+
         # Setup a miner iterator to ensure we update all miners.
         # This subnet does not differentiate between miner and validators so this is passed all uids.
         self.miner_iterator = MinerIterator(self.metagraph.uids.tolist())
@@ -356,6 +374,9 @@ class Validator:
             with open(self.uids_filepath, "wb") as f:
                 pickle.dump(self.uids_to_eval, f)
                 pickle.dump(self.pending_uids_to_eval, f)
+
+        with open(self.eval_task_fingerprints_filepath, "wb") as f:
+            pickle.dump(self.eval_task_fingerprints, f)
 
         # Save the state of the trackers to file.
         self.model_tracker.save_state(self.model_tracker_filepath)
@@ -458,7 +479,9 @@ class Validator:
                     )
                     if competition is not None and not is_queued_for_eval:
                         eval_history = (
-                            self.model_tracker.get_eval_results_for_miner_hotkey(hotkey)
+                            self.model_tracker.get_eval_results_for_miner_hotkey(
+                                hotkey, competition.id
+                            )
                         )
                         force_sync = should_retry_model(
                             competition.constraints.epsilon_func,
@@ -483,6 +506,7 @@ class Validator:
                 except MinerMisconfiguredError as e:
                     self.model_tracker.on_model_evaluated(
                         hotkey,
+                        CompetitionId.NONE,
                         EvalResult(
                             block=curr_block,
                             score=math.inf,
@@ -562,10 +586,12 @@ class Validator:
         for uid in uids_to_add:
             # Check when we last evaluated this model.
             hotkey = metagraph.hotkeys[uid]
-            eval_history = self.model_tracker.get_eval_results_for_miner_hotkey(hotkey)
-            last_eval_block = eval_history[-1].block if eval_history else 0
+            last_eval_block = self.model_tracker.get_block_last_evaluated(hotkey)
             curr_block = self._get_current_block()
-            if curr_block - last_eval_block >= constants.model_retry_cadence:
+            if (
+                not last_eval_block
+                or curr_block - last_eval_block >= constants.model_retry_cadence
+            ):
                 try:
                     # It's been long enough - redownload this model and schedule it for eval.
                     # This still respects the eval block delay so that previously top uids can't bypass it.
@@ -581,6 +607,7 @@ class Validator:
                     except MinerMisconfiguredError as e:
                         self.model_tracker.on_model_evaluated(
                             hotkey,
+                            CompetitionId.NONE,
                             EvalResult(
                                 block=curr_block,
                                 score=math.inf,
@@ -801,13 +828,47 @@ class Validator:
             )
             pass
 
-        return PromptingSubsetLoader(
+        sample_data = PromptingSubsetLoader(
             random_seed=seed,
             max_samples=self.config.latest_prompting_samples,
             oldest_sample_timestamp=oldest_sample_timestamp,
             newest_sample_timestamp=newest_sample_timestamp,
             validator_hotkeys=vali_hotkeys,
         )
+
+        if len(sample_data) < constants.MIN_ALLOWED_SAMPLES:
+            bt.logging.warning(
+                f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
+            )
+            return None
+        return sample_data
+
+    def _get_seed(self, sync_block):
+        # Synchronize the random seed used by validators.
+        try:
+
+            @retry(tries=3, delay=1, backoff=2)
+            def _get_seed_with_retry():
+                return ft.utils.get_hash_of_block(self.subtensor, sync_block)
+
+            return _get_seed_with_retry()
+        except:
+            bt.logging.trace(
+                f"Failed to get hash of block {sync_block}. Using fallback seed."
+            )
+            return None
+
+    def _maybe_reset_eval_history(self, competition: Competition):
+        """Checks if a competitions eval tasks have changed and resets the eval history if they have."""
+        fingerprint = utils.fingerprint(competition.eval_tasks)
+        previous_fingerprint = self.eval_task_fingerprints.get(competition.id, None)
+        if previous_fingerprint != fingerprint:
+            bt.logging.info(
+                f"Eval tasks for competition {competition.id} have changed. Clearing eval history"
+            )
+            self.model_tracker.clear_eval_results(competition.id)
+            self.eval_task_fingerprints[competition.id] = fingerprint
+            self.save_state()
 
     async def try_run_step(self, ttl: int):
         """Runs a step with ttl in a background process, without raising exceptions if it times out."""
@@ -858,6 +919,9 @@ class Validator:
 
         bt.logging.info("Starting evaluation for competition: " + str(competition.id))
 
+        # If the competition's eval tasks have changed, make sure all models are re-evaluated.
+        self._maybe_reset_eval_history(competition)
+
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
             self.uids_to_eval[competition.id].update(
@@ -882,82 +946,42 @@ class Validator:
             return
 
         # Pull the latest sample data based on the competition.
-        sample_data = None
         load_data_perf = PerfMonitor("Eval: Load data")
         # Tokenize the data into batches for use in evaluation.
         # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
         tokenizer = ft.model.load_tokenizer(
             competition.constraints, cache_dir=self.config.model_dir
         )
-        eval_tasks = []
-        pages = []
+        seed = self._get_seed(sync_block)
+        eval_tasks: typing.List[EvalTask] = []
+        samples: typing.List[typing.List[EvalSample]] = []
 
-        if competition.id == CompetitionId.B7_MULTI_CHOICE:
-            # Synchronize the random seed used by validators.
-            try:
-
-                @retry(tries=3, delay=1, backoff=2)
-                def _get_seed_with_retry():
-                    return ft.utils.get_hash_of_block(self.subtensor, sync_block)
-
-                seed = _get_seed_with_retry()
-            except:
-                bt.logging.trace(
-                    f"Failed to get hash of block {sync_block}. Using fallback seed."
-                )
-                seed = None
-
-            with load_data_perf.sample():
-                sample_data = self._create_prompting_subset_loader(
-                    seed, current_block, competition.constraints.eval_block_delay
-                )
-                if len(sample_data) > constants.MIN_ALLOWED_SAMPLES:
-                    pages = list(sample_data.get_selected_sample_ids())
-                    # Note that the formatting of batches changes depending on where the sample data is obtained.
-                    # Tuple of (prompt, ["a", "b", "c", "d"], answer)
-                    eval_tasks.append(
-                        EvalTask(
-                            name="SYNTHETIC_MMLU",
-                            samples=sample_data.tokenize(
-                                tokenizer, competition.constraints.sequence_length
-                            ),
-                            method_id=EvalMethodId.MULTIPLE_CHOICE,
-                            normalization_id=NormalizationId.NONE,
-                            weight=0.975,
-                        )
+        # Load data based on the competition.
+        with load_data_perf.sample():
+            for eval_task in competition.eval_tasks:
+                if eval_task.dataset_id == DatasetId.SYNTHETIC_MMLU:
+                    data_loader = self._create_prompting_subset_loader(
+                        seed, current_block, competition.constraints.eval_block_delay
                     )
                 else:
-                    bt.logging.warning(
-                        f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
+                    data_loader = DatasetLoader.get_loader(
+                        dataset_id=eval_task.dataset_id,
+                        dataset_kwargs=eval_task.dataset_kwargs,
+                        seed=seed,
                     )
 
-                sample_data = WordSortingLoader(
-                    random_seed=seed,
-                    samples=400,
-                )
-                eval_tasks.append(
-                    EvalTask(
-                        name="WORD_SORTING",
-                        samples=sample_data.tokenize(
+                if data_loader:
+                    eval_tasks.append(eval_task)
+                    samples.append(
+                        data_loader.tokenize(
                             tokenizer, competition.constraints.sequence_length
-                        ),
-                        method_id=EvalMethodId.REFERENCE_LOSS,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
-                        weight=0.025,
+                        )
                     )
-                )
-        else:
-            raise ValueError(
-                f"Competition id: {competition.id} has no sample loading logic specified."
-            )
-
-        # Prepare evaluation.
-        kwargs = competition.constraints.kwargs.copy()
-        kwargs["use_cache"] = True
 
         # Compute model score on batches.
-        bt.logging.debug(f"Computing scores on {uids} for competition {competition.id}")
+        bt.logging.debug(
+            f"Computing scores on {uids} for competition {competition.id}, using evals: {[e.name for e in eval_tasks]}"
+        )
         uid_to_state = defaultdict(PerUIDEvalState)
 
         load_model_perf = PerfMonitor("Eval: Load model")
@@ -993,31 +1017,28 @@ class Validator:
                     )
 
                     # Get the model locally and evaluate its score.
-                    model_i = None
                     with load_model_perf.sample():
                         # TODO: Consider loading in the subprocess.
+                        kwargs = competition.constraints.kwargs.copy()
+                        kwargs["use_cache"] = True
                         model_i = self.local_store.retrieve_model(
                             hotkey, model_i_metadata.id, kwargs
                         )
 
-                    if competition.id == CompetitionId.B7_MULTI_CHOICE:
-                        with compute_score_perf.sample():
-                            # Run each computation in a subprocess so that the GPU is reset between each model.
-                            score, score_details = utils.run_in_subprocess(
-                                functools.partial(
-                                    ft.validation.score_model,
-                                    model_i.pt_model,
-                                    tokenizer,
-                                    eval_tasks,
-                                    competition,
-                                    self.config.device,
-                                ),
-                                ttl=400,
-                                mode="spawn",
-                            )
-                    else:
-                        raise ValueError(
-                            f"Competition id: {competition.id} has no evaluation logic specified."
+                    with compute_score_perf.sample():
+                        # Run each computation in a subprocess so that the GPU is reset between each model.
+                        score, score_details = utils.run_in_subprocess(
+                            functools.partial(
+                                ft.validation.score_model,
+                                model_i.pt_model,
+                                tokenizer,
+                                eval_tasks,
+                                samples,
+                                competition,
+                                self.config.device,
+                            ),
+                            ttl=400,
+                            mode="spawn",
                         )
 
                     del model_i
@@ -1049,7 +1070,7 @@ class Validator:
 
         top_uid = max(win_rate, key=win_rate.get)
         best_win_rate = max(win_rate.values())
-        self._record_eval_results(top_uid, current_block, uid_to_state)
+        self._record_eval_results(top_uid, current_block, uid_to_state, competition.id)
 
         # Give weight to the model(s) with the highest win rate.
         step_weights = torch.tensor(
@@ -1119,7 +1140,7 @@ class Validator:
             uids,
             uid_to_state,
             self._get_uids_to_competition_ids(),
-            pages,
+            seed,
             wins,
             win_rate,
             tracker_competition_weights,
@@ -1164,17 +1185,20 @@ class Validator:
         top_uid: int,
         curr_block: int,
         uid_to_state: typing.Dict[int, PerUIDEvalState],
+        competition_id: int,
     ) -> None:
         """Records the results of the evaluation step to the model tracker.
         Args:
             top_uid (int): The uid of the model with the higest win rate.
             curr_block (int): The current block.
             uid_to_state (typing.Dict[int, PerUIDEvalState]): A dictionary mapping uids to their eval state.
+            competition_id (int): The competition id.
         """
         top_model_score = uid_to_state[top_uid].score
         for _, state in uid_to_state.items():
             self.model_tracker.on_model_evaluated(
                 state.hotkey,
+                competition_id,
                 EvalResult(
                     block=curr_block,
                     score=state.score,
@@ -1191,7 +1215,7 @@ class Validator:
         uids: typing.List[int],
         uid_to_state: typing.Dict[int, PerUIDEvalState],
         uid_to_competition_id: typing.Dict[int, typing.Optional[int]],
-        samples_ids: typing.List[str],
+        seed: int,
         wins: typing.Dict[int, int],
         win_rate: typing.Dict[int, float],
         competition_weights: torch.Tensor,
@@ -1205,7 +1229,7 @@ class Validator:
         step_log = {
             "timestamp": time.time(),
             "competition_id": competition.id,
-            "sample_ids": samples_ids,
+            "seed": seed,
             "uids": uids,
             "uid_data": {},
         }
@@ -1445,10 +1469,18 @@ if __name__ == "__main__":
     nltk.download("words", raise_on_error=True)
 
     # As we continue to increase the number of samples sent across the subprocess
-    # boundary, we have hit the systems default limit for the maximum number of file
+    # boundary, we can hit the systems default limit for the maximum number of file
     # descriptors that can be open at once.
+    soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+
     # It's not always possible for validators to increase this limit (e.g. Runpod may lack
-    # root perms), so instead we use the file_system shared memory strategy to work around the issue..
-    torch.multiprocessing.set_sharing_strategy("file_system")
+    # root perms), so we fallback to use the file_system shared memory strategy to work around the issue.
+    if hard_limit < 64_000:
+        bt.logging.warning(
+            f"Your ulimit of {hard_limit} is below the recommended 64k. "
+             "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
+             "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
+        )
+        torch.multiprocessing.set_sharing_strategy("file_system")
 
     asyncio.run(Validator().run())
