@@ -104,6 +104,9 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
 }
 
+# Block to start including fineweb data.
+FINEWEB_BLOCK = 4_250_808
+
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
@@ -128,6 +131,41 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
                         normalization_kwargs={"ceiling": 40.0},
                         weight=0.025,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    (
+        FINEWEB_BLOCK,
+        [
+            Competition(
+                CompetitionId.B7_MULTI_CHOICE,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
+                1.0,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        dataset_id=DatasetId.SYNTHETIC_MMLU,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.9,
+                    ),
+                    EvalTask(
+                        name="WORD_SORTING",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.WORD_SORTING,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.05,
+                    ),
+                    EvalTask(
+                        name="FINEWEB",
+                        method_id=EvalMethodId.TEXT_LOSS,
+                        dataset_id=DatasetId.FINEWEB,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.05,
                     ),
                 ],
             ),

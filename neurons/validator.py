@@ -38,6 +38,7 @@ import json
 import math
 import os
 import pickle
+import resource
 import threading
 import time
 import traceback
@@ -840,7 +841,7 @@ class Validator:
                 f"Only loaded {len(sample_data)} samples for MMLU, so skipping it as an eval task."
             )
             return None
-        return list(sample_data)
+        return sample_data
 
     def _get_seed(self, sync_block):
         # Synchronize the random seed used by validators.
@@ -964,7 +965,9 @@ class Validator:
                     )
                 else:
                     data_loader = DatasetLoader.get_loader(
-                        seed, eval_task.dataset_id, eval_task.dataset_kwargs
+                        dataset_id=eval_task.dataset_id,
+                        dataset_kwargs=eval_task.dataset_kwargs,
+                        seed=seed,
                     )
 
                 if data_loader:
@@ -1466,10 +1469,18 @@ if __name__ == "__main__":
     nltk.download("words", raise_on_error=True)
 
     # As we continue to increase the number of samples sent across the subprocess
-    # boundary, we have hit the systems default limit for the maximum number of file
+    # boundary, we can hit the systems default limit for the maximum number of file
     # descriptors that can be open at once.
+    soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+
     # It's not always possible for validators to increase this limit (e.g. Runpod may lack
-    # root perms), so instead we use the file_system shared memory strategy to work around the issue..
-    torch.multiprocessing.set_sharing_strategy("file_system")
+    # root perms), so we fallback to use the file_system shared memory strategy to work around the issue.
+    if hard_limit < 64_000:
+        bt.logging.warning(
+            f"Your ulimit of {hard_limit} is below the recommended 64k. "
+             "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
+             "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
+        )
+        torch.multiprocessing.set_sharing_strategy("file_system")
 
     asyncio.run(Validator().run())
