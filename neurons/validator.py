@@ -1478,7 +1478,7 @@ if __name__ == "__main__":
     # root perms), so we fallback to use the file_system shared memory strategy to work around the issue.
     if soft_limit < 64_000:
         bt.logging.warning(
-            f"Your ulimit of {soft_limit} is below the recommended 64k. "
+            f"Your current ulimit of {soft_limit} is below the recommended 64k. Your max ulimit is {hard_limit}. "
              "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
              "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
         )
