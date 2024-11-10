@@ -6,13 +6,16 @@ from finetune.datasets.hugging_face.hugging_face_loader import (
     FINEWEB_EDU_SCORE_2_NAME,
 )
 from finetune.datasets.ids import DatasetId
-from typing import Dict, Any
+from typing import Dict, Any, Set
 
 
 class DatasetLoader:
     @staticmethod
     def get_loader(
-        dataset_id: DatasetId, dataset_kwargs: Dict[str, Any], seed: int
+        dataset_id: DatasetId,
+        dataset_kwargs: Dict[str, Any],
+        seed: int,
+        validator_hotkeys: Set[str],
     ) -> "DatasetLoader":
         """Loads data samples from the appropriate dataset."""
 
@@ -30,6 +33,10 @@ class DatasetLoader:
                     name=FINEWEB_EDU_SCORE_2_NAME, random_seed=seed
                 )
             case DatasetId.SYNTHETIC_IF_EVAL:
-                return IfEvalLoader(random_seed=seed, **dataset_kwargs)
+                return IfEvalLoader(
+                    random_seed=seed,
+                    validator_hotkeys=validator_hotkeys,
+                    **dataset_kwargs,
+                )
             case _:
                 raise ValueError(f"Unknown dataset_id: {dataset_id}")

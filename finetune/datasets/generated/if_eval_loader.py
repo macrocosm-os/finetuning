@@ -1,5 +1,6 @@
 import random
-from typing import List, Tuple
+from typing import List, Set, Tuple
+
 import torch
 from transformers import PreTrainedTokenizerBase
 
@@ -7,7 +8,12 @@ from finetune.eval.if_eval.rule import IFEvalRule
 
 
 class IfEvalLoader:
-    def __init__(self, random_seed: int = None, samples: int = 100):
+    def __init__(
+        self,
+        random_seed: int = None,
+        samples: int = 100,
+        validator_hotkeys: Set[str] = None,
+    ):
         self.buffer: List[List[str], List[IFEvalRule]] = []
 
         if random_seed:
