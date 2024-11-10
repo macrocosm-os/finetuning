@@ -8,3 +8,4 @@ class DatasetId(IntEnum):
     WORD_SORTING = 2
     DYCK_LANGUAGE = 3
     FINEWEB = 4
+    SYNTHETIC_IF_EVAL = 5
