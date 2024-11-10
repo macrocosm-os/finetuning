@@ -1,3 +1,4 @@
+import difflib
 from enum import IntEnum
 
 import math
@@ -9,6 +10,8 @@ import bittensor as bt
 import torch
 import transformers
 from transformers import PreTrainedModel, DynamicCache
+from finetune.eval.if_eval.rule import IFEvalRule
+from transformers import GenerationConfig
 
 
 class EvalMethodId(IntEnum):
@@ -26,6 +29,10 @@ class EvalMethodId(IntEnum):
     # Evalutes the model's performance on a text generation task by computing average cross entropy loss
     # on the entirety of the provided text.
     TEXT_LOSS = 3
+
+    # Evalutes the model's performance on a prompt response task that contains a set of rules that the response
+    # must satisfy.
+    IF_EVAL = 4
 
 
 def check_for_reasonable_output(
@@ -254,6 +261,69 @@ def compute_multiple_choice_deviation(
     )
 
 
+def compute_if_eval(
+    model: PreTrainedModel,
+    tokenizer: transformers.PreTrainedTokenizer,
+    sequence_length: int,
+    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[IFEvalRule]]],
+    device: str,
+) -> float:
+    scores = []
+    duplicate_count = 0
+
+    # TODO: Figure out the right config to use.
+    generation_config = GenerationConfig(
+        max_length=sequence_length,
+        do_sample=False,
+        repetition_penalty=1.1,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.eos_token_id,
+    )
+
+    for (
+        inputs,
+        rules,
+    ) in batches:
+        try:
+            responses = []
+            for input in inputs:
+                responses.append(
+                    generate_output(
+                        model=model,
+                        input_ids=input,
+                        generation_config=generation_config,
+                        device=device,
+                        tokenizer=tokenizer,
+                    )
+                )
+
+            # Check for overlap in the response
+            if len(responses) != 2:
+                raise ValueError(f"Expected 2 responses, got {len(responses)}")
+            if compute_similarity_score(responses[0], responses[1]) > 0.6:
+                duplicate_count += 1
+
+            for response in responses:
+                for rule in rules:
+                    if rule.matches(response):
+                        scores.append(0)
+                    else:
+                        scores.append(1)
+        except Exception as e:
+            bt.logging.error(
+                f"Exception occurred in multiple choice deviation computation: {e}"
+            )
+            traceback.print_exc()
+            scores.append(1)  # Use 1 to indicate failure
+
+    # Penalize models that are generating too many duplicated repsonses for different prompts.
+    if duplicate_count > len(batches) * 0.1:
+        return 1
+
+    # Return the % of rules that were not satisfied.
+    return sum(scores) / len(scores) if scores else 1
+
+
 def generate_output(
     model,
     input_ids: torch.Tensor,
@@ -283,3 +353,9 @@ def generate_output(
         output[0][len(input_ids[0]) :], skip_special_tokens=True
     )
     return response
+
+
+def compute_similarity_score(a: str, b: str) -> float:
+    """Returns a similarity score between [0,1] for the two provided strings."""
+    # Use difflib to compute the similarity score, ignoring whitespace deltas.
+    return difflib.SequenceMatcher(lambda x: x in " \t", a, b).ratio()

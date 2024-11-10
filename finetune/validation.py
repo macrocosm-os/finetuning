@@ -35,6 +35,7 @@ from finetune.eval.method import (
     compute_multiple_choice_deviation,
     compute_reference_loss,
     compute_text_loss,
+    compute_if_eval,
 )
 from finetune.eval.sample import EvalSample
 
@@ -194,6 +195,13 @@ def score_model(
                         batches=samples,
                         device=device,
                         pad_token_id=tokenizer.eos_token_id,
+                    )
+                case EvalMethodId.IF_EVAL:
+                    raw_score = compute_if_eval(
+                        model=model,
+                        tokenizer=tokenizer,
+                        samples=samples,
+                        device=device,
                     )
                 case _:
                     raise ValueError(f"Unhandled evaluation method {task.method_id}.")
