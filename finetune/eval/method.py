@@ -322,10 +322,14 @@ def compute_if_eval(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()
-            scores.append(1)  # Use 1 to indicate failure
+            for _ in range(len(rules) * len(inputs)):
+                scores.append(1)
 
-    # Penalize models that are generating too many duplicated repsonses for different prompts.
+    # Penalize models that are generating too many duplicated responses for different prompts.
     if duplicate_count > len(batches) * 0.1:
+        bt.logging.trace(
+            f"Model had too many duplicated responses ({duplicate_count}/{len(batches)}). Setting score to 1."
+        )
         return 1
 
     # Return the % of rules that were not satisfied.
