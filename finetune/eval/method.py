@@ -264,6 +264,14 @@ def compute_if_eval(
     batches: typing.List[typing.Tuple[torch.Tensor, typing.List[IFEvalRule]]],
     device: str,
 ) -> float:
+    """Computes the IFEval score for a given model on provided batches.
+
+    Args:
+        model (PreTrainedModel): The model for which losses are to be computed.
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
+        sequence_length (int): The maximum length of the generated sequences.
+        batches (list): A list of batches containing prompts and rules.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu')."""
     scores = []
     duplicate_count = 0
 

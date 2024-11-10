@@ -200,6 +200,7 @@ def score_model(
                     raw_score = compute_if_eval(
                         model=model,
                         tokenizer=tokenizer,
+                        sequence_length=competition.constraints.sequence_length,
                         samples=samples,
                         device=device,
                     )
