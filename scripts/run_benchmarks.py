@@ -3,7 +3,9 @@ import asyncio
 import dataclasses
 import json
 import os
+import shutil
 import time
+import traceback
 from typing import Any, Dict, Tuple
 
 import bittensor as bt
@@ -27,6 +29,7 @@ from huggingface_hub import login
 from utils import benchmark_helpers
 
 import constants
+import pickle
 
 
 class CompletedEvalStore:
@@ -125,6 +128,52 @@ def _run_benchmarks(
     )
 
 
+def save_state(state: CompletedEvalStore.State, filepath: str):
+    with open(filepath, "wb") as f:
+        pickle.dump(state, f)
+
+
+def load_state(filepath: str) -> CompletedEvalStore.State:
+    with open(filepath, "rb") as f:
+        return pickle.load(f)
+
+
+def _model_result_filepath(model_metadata: ModelMetadata, dir: str) -> str:
+    return f"{dir}/{model_metadata.id.namespace}_{model_metadata.id.name}_{model_metadata.id.commit}.json"
+
+
+def save_model_results(
+    model_metadata: ModelMetadata, results: Dict[str, Any], dir: str
+):
+    with open(
+        _model_result_filepath(model_metadata, dir),
+        "w+",
+        encoding="utf-8",
+    ) as f:
+        json.dump(results, f)
+
+
+def load_model_results(model_metadata: ModelMetadata, dir: str) -> Dict[str, Any]:
+    path = _model_result_filepath(model_metadata, dir)
+    print(f"Loading results from {path}")
+    with open(
+        path,
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
+
+
+def delete_dir_contents(dir: str):
+    try:
+        shutil.rmtree(dir)
+    except:
+        print(f"Failed to delete {dir}. {traceback.format_exc()}")
+
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+
 def main(args: argparse.Namespace):
     dotenv.load_dotenv()
 
@@ -147,9 +196,16 @@ def main(args: argparse.Namespace):
 
     step = 0
 
-    store = CompletedEvalStore(args.file)
-    store.load()
-    print("Loaded state for completed evaluations.")
+    # Load state from previous runs.
+    last_model = None
+    try:
+        last_model = load_state(args.file)
+    except FileNotFoundError:
+        pass
+
+    results_dir = args.results_dir
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
 
     while True:
         try:
@@ -174,28 +230,30 @@ def main(args: argparse.Namespace):
                 repo=f"{model_metadata.id.namespace}/{model_metadata.id.name}",
                 commit=model_metadata.id.commit,
             )
-
-            if store.contains(state):
+            if state == last_model:
                 print(
                     f"Model {state.repo} at commit {state.commit} has already been benchmarked."
                 )
                 continue
 
-            print(f"Running benchmarks for {state.repo}/{state.commit}.")
-            results = _run_benchmarks(competition, model_metadata, args.hf_dir)
-            print(f"Finished running benchmarks for {state.repo}/{state.commit}.")
+            try:
+                results = load_model_results(model_metadata, results_dir)
+                print(
+                    f"Model {state.repo} at commit {state.commit} has already been benchmarked. Using previous results"
+                )
+            except FileNotFoundError:
+                print(f"Did not find previous results for {state.repo}/{state.commit}.")
+                results = None
 
-            print("Finished evaluating model.")
-            if not os.path.exists("results"):
-                os.makedirs("results")
-            with open(
-                f"results/{model_metadata.id.namespace}_{model_metadata.id.name}_{model_metadata.id.commit}.json",
-                "w+",
-                encoding="utf-8",
-            ) as f:
-                json.dump(results["results"], f)
+            if not results:
+                print(f"Running benchmarks for {state.repo}/{state.commit}.")
+                results = _run_benchmarks(competition, model_metadata, args.hf_dir)
+                results = results["results"]
+                print(f"Finished running benchmarks for {state.repo}/{state.commit}.")
 
-            lb_results = benchmark_helpers.get_leaderboard_scores(results["results"])
+                save_model_results(model_metadata, results, results_dir)
+
+            lb_results = benchmark_helpers.get_leaderboard_scores(results)
             print(f"Leaderboard results: {lb_results}")
 
             # Log to wandb.
@@ -209,11 +267,15 @@ def main(args: argparse.Namespace):
                 },
                 allow_val_change=True,
             )
-            wandb_run.log(results["results"] | lb_results)
+            wandb_run.log(results | lb_results)
             wandb_run.finish()
 
-            store.add(state)
-            store.save()
+            last_model = state
+            save_state(last_model, args.file)
+
+            if step % 50:
+                print("Deleting HF cache.")
+                delete_dir_contents(args.hf_dir)
         except KeyboardInterrupt:
             break
         except Exception as e:
@@ -227,7 +289,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--file",
         type=str,
-        default="completed_evals.json",
+        default="last_model.pickle",
         help="Path to the JSON file for storing completed evaluations.",
     )
     parser.add_argument(
@@ -247,6 +309,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Directory to load models into",
+    )
+    parser.add_argument(
+        "--results_dir",
+        type=str,
+        default="../results",
+        help="Directory to store results in.",
     )
     args = parser.parse_args()
 
