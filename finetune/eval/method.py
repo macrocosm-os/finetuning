@@ -8,7 +8,7 @@ import typing
 import bittensor as bt
 import torch
 import transformers
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, DynamicCache
 
 
 class EvalMethodId(IntEnum):
@@ -125,7 +125,9 @@ def compute_text_loss(
             try:
                 # Context and ref are 1 dimensional tensors.
                 inputs = batch.to(device)
-                logits = model(inputs).logits
+                # Prepare a cache class and pass it to the model's forward.
+                past_key_values = DynamicCache()
+                logits = model(inputs, past_key_values=past_key_values).logits
 
                 # Shift the logits and labels to compute the loss.
                 shift_logits = logits[..., :-1, :].contiguous()
@@ -165,7 +167,9 @@ def compute_reference_loss(
             try:
                 # Context and ref are 1 dimensional tensors.
                 inputs = torch.stack([torch.cat([context, ref])]).to(device)
-                logits = model(inputs).logits
+                # Prepare a cache class and pass it to the model's forward.
+                past_key_values = DynamicCache()
+                logits = model(inputs, past_key_values=past_key_values).logits
 
                 # Shift the logits and labels to compute the loss.
                 shift_logits = logits[..., :-1, :].contiguous()
