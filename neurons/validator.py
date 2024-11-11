@@ -217,7 +217,7 @@ class Validator:
 
         # Setup a competition tracker to track weights across different competitions.
         self.competition_tracker = CompetitionTracker(
-            num_neurons=len(self.metagraph.uids), alpha=constants.alpha
+            num_neurons=len(self.metagraph.uids), alpha=constants.ALPHA
         )
         # Keep track of the most recent sync block used when the competition was last evaluated.
         self.last_run_by_competition = defaultdict(int)

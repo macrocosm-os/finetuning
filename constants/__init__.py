@@ -48,10 +48,15 @@ GENESIS_BLOCK = 3138611
 SYNC_BLOCK_CADENCE = 90
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
+# Validator weight moving average term.
+# At 0.05 a model will go from 0 -> 0.143 in 3 cycles and from 0 -> 0.901 in 45 cycles.
+ALPHA = 0.05
 # Any miners with a combined competition weight below this threshold will instead receive 0 weight.
-# This is to help vtrust by more quickly deprecating previous top models that are being phased out.
-# At 1 eval per 90 blocks, this should mean a model is phased out in ~1.5 epochs.
-MIN_WEIGHT_THRESHOLD = 0.005
+# This is intended to help vtrust in conjunction with a low alpha by handling the tail ends.
+# At 1 eval per 90 blocks, newly winning models will start recieving weight after ~270 blocks.
+# Previously winning models will phase out after ~4050 blocks, at which point only the new winner will have weight.
+MIN_WEIGHT_THRESHOLD = 0.1
+
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
 WANDB_ENTITY = "rusticluftig"
@@ -190,11 +195,6 @@ for block_and_competitions in COMPETITION_SCHEDULE_BY_BLOCK:
 
 weights_version_key = __spec_version__
 
-# validator weight moving average term
-alpha = 0.5
-# validator scoring exponential temperature
-# 0.01 gives ~96% to best model with only ~3 receiving any weights.
-temperature = 0.01
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
 # Number of blocks required between retrying evaluation of a model.
