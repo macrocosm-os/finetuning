@@ -25,7 +25,7 @@ class RuleId(IntEnum):
     # All letters in the output are lowercase.
     ALL_LOWER_CASE = 6
 
-    # Not commas in the output.
+    # No commas in the output.
     NO_COMMAS = 7
 
     # The specified word(s) appear at least once.
