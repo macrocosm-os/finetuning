@@ -7,19 +7,11 @@ class RuleId(IntEnum):
 
     NONE = 0
 
-    WORD_COUNT = 1
+    # Word count must be at most a specified threshold.
+    WORD_COUNT_AT_MOST = 1
 
-
-class RuleConstraint(IntEnum):
-    """Enumeration of common constraints used by rules."""
-
-    NONE = 0
-
-    GREATER_THAN_EQ = 1
-
-    LESS_THAN_EQ = 2
-
-    EQUALS = 3
+    # Word count must be at least a specified threshold.
+    WORD_COUNT_AT_LEAST = 2
 
 
 class IFEvalRule(ABC):
