@@ -1,36 +1,38 @@
-from finetune.eval.if_eval.rule import IFEvalRule, RuleConstraint, RuleId
+from finetune.eval.if_eval.rule import IFEvalRule, RuleId
 
 
-class WordCountRule(IFEvalRule):
-    """Rule that enforces a certain word count."""
+class WordCountAtMostRule(IFEvalRule):
+    """Rule that enforces word count must be at most a specified threshold."""
 
-    def __init__(self, count: int, constraint: RuleConstraint):
-        super().__init__(rule_id=RuleId.WORD_COUNT)
+    def __init__(self, count: int):
+        super().__init__(rule_id=RuleId.WORD_COUNT_AT_MOST)
 
-        if constraint not in (
-            RuleConstraint.GREATER_THAN_EQ,
-            RuleConstraint.LESS_THAN_EQ,
-        ):
-            raise ValueError(f"Invalid constraint: {constraint}")
-
+        if count < 1:
+            raise ValueError(f"WordCountAtMostRule must expect at least 1 word.")
         self.count = count
-        self.constraint = constraint
 
     def get_prompt(self) -> str:
-        constraint = (
-            "at least"
-            if self.constraint == RuleConstraint.GREATER_THAN_EQ
-            else "no more than"
-        )
         word = "word" if self.count == 1 else "words"
-        return f"The response must be {constraint} {self.count} {word}."
+        return f"The response must be no more than {self.count} {word}."
 
     def matches(self, text: str) -> bool:
-        words = text.split()
-        match self.constraint:
-            case RuleConstraint.GREATER_THAN_EQ:
-                return len(words) >= self.count
-            case RuleConstraint.LESS_THAN_EQ:
-                return len(words) <= self.count
-            case _:
-                raise ValueError(f"Invalid constraint: {self.constraint}")
+        return len(text.split()) <= self.count
+
+
+class WordCountAtLeastRule(IFEvalRule):
+    """Rule that enforces word count must at least a specified threshold."""
+
+    def __init__(self, count: int):
+        super().__init__(rule_id=RuleId.WORD_COUNT_AT_LEAST)
+
+        if count < 1:
+            raise ValueError(f"WordCountAtLeastRule must expect at least 1 word.")
+        self.count = count
+
+
+    def get_prompt(self) -> str:
+        word = "word" if self.count == 1 else "words"
+        return f"The response must be at least {self.count} {word}."
+
+    def matches(self, text: str) -> bool:
+        return len(text.split()) >= self.count
