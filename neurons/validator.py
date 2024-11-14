@@ -217,7 +217,7 @@ class Validator:
 
         # Setup a competition tracker to track weights across different competitions.
         self.competition_tracker = CompetitionTracker(
-            num_neurons=len(self.metagraph.uids), alpha=constants.alpha
+            num_neurons=len(self.metagraph.uids), alpha=constants.ALPHA
         )
         # Keep track of the most recent sync block used when the competition was last evaluated.
         self.last_run_by_competition = defaultdict(int)
@@ -1290,12 +1290,13 @@ class Validator:
         console.print(table)
 
         ws, ui = self.weights.topk(len(self.weights))
-        table = Table(title="Weights > 0.001")
+        table = Table(title=f"Weights >= {constants.MIN_WEIGHT_THRESHOLD}")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("weight", style="magenta")
         table.add_column("comp", style="magenta")
         for index, weight in list(zip(ui.tolist(), ws.tolist())):
-            if weight > 0.001:
+            # All remaining weights should be above the threshold so this check mainly filters out 0s.
+            if weight >= constants.MIN_WEIGHT_THRESHOLD:
                 table.add_row(
                     str(index), str(round(weight, 4)), str(uid_to_competition_id[index])
                 )
