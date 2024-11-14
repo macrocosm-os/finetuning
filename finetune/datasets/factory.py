@@ -1,5 +1,5 @@
 from finetune.datasets.generated.dyck_loader import DyckLoader
-from finetune.datasets.generated.if_eval_loader import IfEvalLoader
+from finetune.datasets.generated.if_eval_loader import IFEvalLoader
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
 from finetune.datasets.hugging_face.hugging_face_loader import (
     HuggingFaceLoader,
@@ -33,7 +33,7 @@ class DatasetLoader:
                     name=FINEWEB_EDU_SCORE_2_NAME, random_seed=seed
                 )
             case DatasetId.SYNTHETIC_IF_EVAL:
-                return IfEvalLoader(
+                return IFEvalLoader(
                     random_seed=seed,
                     validator_hotkeys=validator_hotkeys,
                     **dataset_kwargs,

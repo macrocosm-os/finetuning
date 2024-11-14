@@ -201,7 +201,7 @@ def score_model(
                         model=model,
                         tokenizer=tokenizer,
                         sequence_length=competition.constraints.sequence_length,
-                        samples=samples,
+                        batches=samples,
                         device=device,
                     )
                 case _:

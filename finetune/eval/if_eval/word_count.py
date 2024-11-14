@@ -11,11 +11,11 @@ class WordCountAtMostRule(IFEvalRule):
             raise ValueError(f"WordCountAtMostRule must expect at least 1 word.")
         self.count = count
 
-    def get_prompt(self) -> str:
+    def get_prompt(self, _: int) -> str:
         word = "word" if self.count == 1 else "words"
         return f"The response must be no more than {self.count} {word}."
 
-    def matches(self, text: str) -> bool:
+    def matches(self, text: str, _: int) -> bool:
         return len(text.split()) <= self.count
 
 
@@ -29,10 +29,9 @@ class WordCountAtLeastRule(IFEvalRule):
             raise ValueError(f"WordCountAtLeastRule must expect at least 1 word.")
         self.count = count
 
-
-    def get_prompt(self) -> str:
+    def get_prompt(self, _: int) -> str:
         word = "word" if self.count == 1 else "words"
         return f"The response must be at least {self.count} {word}."
 
-    def matches(self, text: str) -> bool:
+    def matches(self, text: str, _: int) -> bool:
         return len(text.split()) >= self.count
