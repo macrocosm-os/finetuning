@@ -8,7 +8,7 @@ class WordCountAtMostRule(IFEvalRule):
         super().__init__(rule_id=RuleId.WORD_COUNT_AT_MOST)
 
         if count < 1:
-            raise ValueError(f"WordCountAtMostRule must expect at least 1 word.")
+            raise ValueError(f"WordCountAtMostRule must allow at least 1 word.")
         self.count = count
 
     def get_prompt(self, _: int) -> str:
