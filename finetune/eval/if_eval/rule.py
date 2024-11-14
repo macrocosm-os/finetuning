@@ -5,8 +5,6 @@ from enum import IntEnum
 class RuleId(IntEnum):
     """Enumeration of IfEval rules."""
 
-    NONE = 0
-
     # Word count must be at most a specified threshold.
     WORD_COUNT_AT_MOST = 1
 
@@ -54,11 +52,21 @@ class IFEvalRule(ABC):
         self.rule_id = rule_id
 
     @abstractmethod
-    def get_prompt(self) -> str:
-        """Returns the prompt for this rule."""
+    def get_prompt(self, index: int) -> str:
+        """Returns the prompt for this rule for the given context index."""
         pass
 
     @abstractmethod
-    def matches(self, text: str) -> bool:
-        """Returns True if the text matches the rule."""
+    def matches(self, text: str, index: int) -> bool:
+        """Returns True if the text matches the rule for the given context index."""
         pass
+
+
+class DummyRule(IFEvalRule):
+    """A dummy rule for tests."""
+
+    def get_prompt(self, index: int) -> str:
+        return "This is a dummy rule."
+
+    def matches(self, text: str, _: int) -> bool:
+        return True

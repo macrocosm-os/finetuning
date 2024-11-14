@@ -1,17 +1,16 @@
 import difflib
-from enum import IntEnum
-
 import math
 import re
 import traceback
 import typing
+from enum import IntEnum
 
 import bittensor as bt
 import torch
 import transformers
-from transformers import PreTrainedModel
-from finetune.eval.if_eval.rule import IFEvalRule
-from transformers import GenerationConfig
+from transformers import GenerationConfig, PreTrainedModel
+
+from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 
 
 class EvalMethodId(IntEnum):
@@ -261,7 +260,7 @@ def compute_if_eval(
     model: PreTrainedModel,
     tokenizer: transformers.PreTrainedTokenizer,
     sequence_length: int,
-    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[IFEvalRule]]],
+    batches: typing.List[IFEvalTokenizedSample],
     device: str,
 ) -> float:
     """Computes the IFEval score for a given model on provided batches.
@@ -279,46 +278,42 @@ def compute_if_eval(
     generation_config = GenerationConfig(
         max_length=sequence_length,
         do_sample=False,
-        repetition_penalty=1.1,
+        repetition_penalty=1.2,
         eos_token_id=tokenizer.eos_token_id,
         pad_token_id=tokenizer.eos_token_id,
     )
 
-    for (
-        inputs,
-        rules,
-    ) in batches:
+    for sample in batches:
         try:
-            responses = []
-            for input in inputs:
-                responses.append(
-                    generate_output(
-                        model=model,
-                        input_ids=input,
-                        generation_config=generation_config,
-                        device=device,
-                        tokenizer=tokenizer,
-                    )
-                )
+            response_1 = generate_output(
+                model=model,
+                input_ids=sample.prompt_1,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+            response_2 = generate_output(
+                model=model,
+                input_ids=sample.prompt_2,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
 
-            # Check for overlap in the response
-            if len(responses) != 2:
-                raise ValueError(f"Expected 2 responses, got {len(responses)}")
-            if compute_similarity_score(responses[0], responses[1]) > 0.6:
+            if compute_similarity_score(response_1, response_2) > 0.6:
                 duplicate_count += 1
 
-            for response in responses:
-                for rule in rules:
-                    if rule.matches(response):
-                        scores.append(0)
-                    else:
-                        scores.append(1)
+            for rule in sample.rules:
+                scores.append(0 if rule.matches(response_1, 0) else 1)
+                scores.append(0 if rule.matches(response_2, 1) else 1)
+
         except Exception as e:
             bt.logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()
-            for _ in range(len(rules) * len(inputs)):
+            for _ in range(len(sample.rules) * 2):
+                # Fail all rules in this sample.
                 scores.append(1)
 
     # Penalize models that are generating too many duplicated responses for different prompts.
