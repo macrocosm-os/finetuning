@@ -168,7 +168,7 @@ def score_model(
             bt.logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
-                    compute_generation_config = GenerationConfig(
+                    compute_mc_generation_config = GenerationConfig(
                         max_new_tokens=20,
                         max_length=competition.constraints.sequence_length,
                         do_sample=False,
@@ -179,7 +179,7 @@ def score_model(
                     raw_score = compute_multiple_choice_deviation(
                         model=model,
                         tokenizer=tokenizer,
-                        generation_config=compute_generation_config,
+                        generation_config=compute_mc_generation_config,
                         batches=samples,
                         device=device,
                     )
@@ -197,10 +197,18 @@ def score_model(
                         pad_token_id=tokenizer.eos_token_id,
                     )
                 case EvalMethodId.IF_EVAL:
+                    # TODO: Figure out the right config to use.
+                    compute_if_generation_config = GenerationConfig(
+                        max_length=competition.constraints.sequence_length,
+                        do_sample=False,
+                        repetition_penalty=1.2,
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.eos_token_id,
+                    )
                     raw_score = compute_if_eval(
                         model=model,
                         tokenizer=tokenizer,
-                        sequence_length=competition.constraints.sequence_length,
+                        generation_config=compute_if_generation_config,
                         batches=samples,
                         device=device,
                     )
