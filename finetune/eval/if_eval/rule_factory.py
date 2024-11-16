@@ -131,6 +131,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -153,6 +154,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -209,7 +211,14 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.ENDS_WITH:
-            # Compatible with everything
-            return False
+            # Not compatible with rules that require a long length.
+            return any(
+                rule.rule_id
+                in {
+                    RuleId.WORD_COUNT_AT_LEAST,
+                    RuleId.SENTENCE_COUNT_AT_LEAST,
+                }
+                for rule in current_rules
+            )
 
     raise ValueError(f"RuleId {rule_id} not handled.")

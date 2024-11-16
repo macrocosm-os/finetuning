@@ -23,7 +23,7 @@ class IFEvalLoader:
     def __init__(
         self,
         random_seed: int = None,
-        max_samples: int = 100,
+        max_samples: int = 20,
         validator_hotkeys: Set[str] = None,
     ):
         if random_seed:

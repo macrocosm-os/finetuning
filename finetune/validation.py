@@ -197,13 +197,13 @@ def score_model(
                         pad_token_id=tokenizer.eos_token_id,
                     )
                 case EvalMethodId.IF_EVAL:
-                    # TODO: Figure out the right config to use.
                     compute_if_generation_config = GenerationConfig(
-                        max_length=competition.constraints.sequence_length,
-                        do_sample=False,
+                        max_new_tokens=200,
                         repetition_penalty=1.2,
                         eos_token_id=tokenizer.eos_token_id,
                         pad_token_id=tokenizer.eos_token_id,
+                        do_sample=False,
+                        max_time=5.0,
                     )
                     raw_score = compute_if_eval(
                         model=model,
