@@ -16,11 +16,11 @@ class SentenceCountAtMostRule(IFEvalRule):
             raise ValueError(f"SentenceCountAtMostRule must allow at least 1 sentence.")
         self.count = count
 
-    def get_prompt(self) -> str:
+    def get_prompt(self, _: int) -> str:
         sentence = "sentence" if self.count == 1 else "sentences"
         return f"The response must be no more than {self.count} {sentence}."
 
-    def matches(self, text: str) -> bool:
+    def matches(self, text: str, _: int) -> bool:
         tokenizer = PunktSentenceTokenizer()
         return len(tokenizer.tokenize(text)) <= self.count
 
@@ -36,10 +36,10 @@ class SentenceCountAtLeastRule(IFEvalRule):
         self.count = count
 
 
-    def get_prompt(self) -> str:
+    def get_prompt(self, _: int) -> str:
         sentence = "sentence" if self.count == 1 else "sentences"
         return f"The response must be at least {self.count} {sentence}."
 
-    def matches(self, text: str) -> bool:
+    def matches(self, text: str, _: int) -> bool:
         tokenizer = PunktSentenceTokenizer()
         return len(tokenizer.tokenize(text)) >= self.count
