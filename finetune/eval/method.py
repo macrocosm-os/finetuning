@@ -259,7 +259,7 @@ def compute_multiple_choice_deviation(
 def compute_if_eval(
     model: PreTrainedModel,
     tokenizer: transformers.PreTrainedTokenizer,
-    sequence_length: int,
+    generation_config: transformers.GenerationConfig,
     batches: typing.List[IFEvalTokenizedSample],
     device: str,
 ) -> float:
@@ -268,20 +268,11 @@ def compute_if_eval(
     Args:
         model (PreTrainedModel): The model for which losses are to be computed.
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
-        sequence_length (int): The maximum length of the generated sequences.
+        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         batches (list): A list of batches containing prompts and rules.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu')."""
     scores = []
     duplicate_count = 0
-
-    # TODO: Figure out the right config to use.
-    generation_config = GenerationConfig(
-        max_length=sequence_length,
-        do_sample=False,
-        repetition_penalty=1.2,
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.eos_token_id,
-    )
 
     for sample in batches:
         try:
