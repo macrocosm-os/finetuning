@@ -4,6 +4,9 @@ from typing import List, Tuple
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
 from finetune.eval.if_eval.sample import IFEvalSample
 from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
+from finetune.eval.if_eval.sentence_count import SentenceCountAtLeastRule, SentenceCountAtMostRule
+from finetune.eval.if_eval.casing import UppercaseRule, LowercaseRule
+from finetune.eval.if_eval.comma import NoCommaRule
 
 PROMPT_FORMAT = """Please answer the question below, denoted between quotes. Your response must follow these rules:
 {rules}
@@ -67,15 +70,15 @@ def generate_rule(
         case RuleId.WORD_COUNT_AT_LEAST:
             return WordCountAtLeastRule(random.choice([x for x in range(25, 250, 10)]))
         case RuleId.SENTENCE_COUNT_AT_MOST:
-            return DummyRule(rule_id)
+            return SentenceCountAtMostRule(random.choice([x for x in range(1, 5)]))
         case RuleId.SENTENCE_COUNT_AT_LEAST:
-            return DummyRule(rule_id)
+            return SentenceCountAtLeastRule(random.choice([x for x in range(2, 5)]))
         case RuleId.ALL_UPPER_CASE:
-            return DummyRule(rule_id)
+            return UppercaseRule()
         case RuleId.ALL_LOWER_CASE:
-            return DummyRule(rule_id)
+            return LowercaseRule()
         case RuleId.NO_COMMAS:
-            return DummyRule(rule_id)
+            return NoCommaRule()
         case RuleId.KEYWORD_INCLUSION:
             return DummyRule(rule_id)
         case RuleId.KEYWORD_FREQUENCY:
