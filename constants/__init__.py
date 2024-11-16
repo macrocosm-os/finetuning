@@ -45,17 +45,17 @@ VALIDATOR_STATE_VERSION = 4
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
 # Define the number of blocks per vali "sync". This cadence is used to align validator behavior for better vtrust.
-SYNC_BLOCK_CADENCE = 90
+SYNC_BLOCK_CADENCE = 180
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
 # Validator weight moving average term.
-# At 0.05 a model will go from 0 -> 0.143 in 3 cycles and from 0 -> 0.901 in 45 cycles.
-ALPHA = 0.05
+# At 0.1 a model will go from 0 -> 0.190 in 2 cycles and from 0 -> 0.83 in 17 cycles.
+ALPHA = 0.1
 # Any miners with a combined competition weight below this threshold will instead receive 0 weight.
 # This is intended to help vtrust in conjunction with a low alpha by handling the tail ends.
-# At 1 eval per 90 blocks, newly winning models will start recieving weight after ~270 blocks.
-# Previously winning models will phase out after ~4050 blocks, at which point only the new winner will have weight.
-MIN_WEIGHT_THRESHOLD = 0.1
+# At 1 eval per 180 blocks, newly winning models will start recieving weight after ~360 blocks.
+# Previously winning models will phase out after ~3060 blocks, at which point only the new winner will have weight.
+MIN_WEIGHT_THRESHOLD = 0.18
 
 # The validator WANDB project.
 WANDB_PROJECT = "finetuning"
@@ -217,6 +217,6 @@ model_retry_cadence = 300  # Roughly 1 hour
 # How frequently to check the models given weights by other large validators.
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
-sample_min = 4
-# We allow the sample_min per competition + 16 additional models to be held at any one time.
-updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 16
+sample_min = 3
+# We allow the sample_min per competition + 7 additional models to be held at any one time.
+updated_models_limit = sample_min * len(MODEL_CONSTRAINTS_BY_COMPETITION_ID) + 7
