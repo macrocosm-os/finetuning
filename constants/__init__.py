@@ -9,7 +9,7 @@ from taoverse.model.competition.data import (
     ModelConstraints,
     NormValidationConstraints,
 )
-from taoverse.model.competition.epsilon import FixedEpsilon, LinearDecay
+from taoverse.model.competition.epsilon import LinearDecay
 from taoverse.model.eval.normalization import NormalizationId
 from taoverse.model.eval.task import EvalTask
 from transformers import (
@@ -207,9 +207,6 @@ weights_version_key = __spec_version__
 
 # validator weight moving average term
 alpha = 0.5
-# validator scoring exponential temperature
-# 0.01 gives ~96% to best model with only ~3 receiving any weights.
-temperature = 0.01
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
 # Number of blocks required between retrying evaluation of a model.
