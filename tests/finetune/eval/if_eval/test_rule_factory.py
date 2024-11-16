@@ -28,6 +28,22 @@ class TestRuleFactory(unittest.TestCase):
             rule = generate_rule(rule_id, [], dummy_qa, dummy_qa)
             self.assertEqual(rule.rule_id, rule_id, f"Failed for rule_id: {rule_id}")
 
+    def test_starts_with_has_no_commas(self):
+        for _ in range(100):
+            rule = generate_rule(
+                RuleId.STARTS_WITH, [], ("question", "answer"), ("question", "answer")
+            )
+            prompt = rule.get_prompt()
+            self.assertTrue("," not in prompt)
+
+    def test_ends_with_has_no_commas(self):
+        for _ in range(100):
+            rule = generate_rule(
+                RuleId.ENDS_WITH, [], ("question", "answer"), ("question", "answer")
+            )
+            prompt = rule.get_prompt()
+            self.assertTrue("," not in prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

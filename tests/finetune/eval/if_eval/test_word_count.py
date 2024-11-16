@@ -21,25 +21,21 @@ class TestWordCountRule(unittest.TestCase):
 
     def test_get_prompt_at_least(self):
         rule = WordCountAtLeastRule(count=5)
-        self.assertEqual(rule.get_prompt(0), "The response must be at least 5 words.")
-        self.assertEqual(rule.get_prompt(1), "The response must be at least 5 words.")
+        self.assertEqual(rule.get_prompt(), "The response must be at least 5 words.")
 
     def test_get_prompt_at_most(self):
         rule = WordCountAtMostRule(count=5)
         self.assertEqual(
-            rule.get_prompt(0), "The response must be no more than 5 words."
+            rule.get_prompt(), "The response must be no more than 5 words."
         )
 
     def test_get_prompt_at_least_one(self):
         rule = WordCountAtLeastRule(count=1)
-        self.assertEqual(rule.get_prompt(0), "The response must be at least 1 word.")
-        self.assertEqual(rule.get_prompt(1), "The response must be at least 1 word.")
+        self.assertEqual(rule.get_prompt(), "The response must be at least 1 word.")
 
     def test_get_prompt_at_most_one(self):
         rule = WordCountAtMostRule(count=1)
-        self.assertEqual(
-            rule.get_prompt(0), "The response must be no more than 1 word."
-        )
+        self.assertEqual(rule.get_prompt(), "The response must be no more than 1 word.")
 
 
 if __name__ == "__main__":
