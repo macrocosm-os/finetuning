@@ -79,18 +79,18 @@ def generate_rule(
             return LowercaseRule()
         case RuleId.NO_COMMAS:
             return NoCommaRule()
-        case RuleId.KEYWORD_INCLUSION:
-            return DummyRule(rule_id)
-        case RuleId.KEYWORD_FREQUENCY:
-            return DummyRule(rule_id)
-        case RuleId.KEYWORD_FORBIDDEN:
-            return DummyRule(rule_id)
-        case RuleId.BULLET_COUNT_FREQUENCY:
-            return DummyRule(rule_id)
-        case RuleId.STARTS_WITH:
-            return DummyRule(rule_id)
-        case RuleId.ENDS_WITH:
-            return DummyRule(rule_id)
+        # case RuleId.KEYWORD_INCLUSION:
+        #     return DummyRule(rule_id)
+        # case RuleId.KEYWORD_FREQUENCY:
+        #     return DummyRule(rule_id)
+        # case RuleId.KEYWORD_FORBIDDEN:
+        #     return DummyRule(rule_id)
+        # case RuleId.BULLET_COUNT_FREQUENCY:
+        #     return DummyRule(rule_id)
+        # case RuleId.STARTS_WITH:
+        #     return DummyRule(rule_id)
+        # case RuleId.ENDS_WITH:
+        #     return DummyRule(rule_id)
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
