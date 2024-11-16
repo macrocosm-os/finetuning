@@ -65,8 +65,8 @@ class IFEvalRule(ABC):
 class DummyRule(IFEvalRule):
     """A dummy rule for tests."""
 
-    def get_prompt(self, index: int) -> str:
+    def get_prompt(self, index: int = -1) -> str:
         return "This is a dummy rule."
 
-    def matches(self, text: str, _: int) -> bool:
+    def matches(self, text: str, index: int = -1) -> bool:
         return True
