@@ -1475,8 +1475,11 @@ if __name__ == "__main__":
     # Data comes from Subnet 1's wandb project. Make sure we're logged in
     wandb_utils.login()
 
-    # Make sure we can download the needed ntlk module
+    # Make sure we can download the needed ntlk modules
+    # Used for generating words in word sorting evals
     nltk.download("words", raise_on_error=True)
+    # Used for counting sentences in sentence count evals
+    nltk.download("punkt", raise_on_error=True)
 
     # As we continue to increase the number of samples sent across the subprocess
     # boundary, we can hit the systems default limit for the maximum number of file
