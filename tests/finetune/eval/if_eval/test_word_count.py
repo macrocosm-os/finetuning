@@ -5,13 +5,13 @@ from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMo
 class TestWordCountRule(unittest.TestCase):
     def test_at_least(self):
         rule = WordCountAtLeastRule(count=5)
-        self.assertTrue(rule.matches("This  is a\n test, six words."))
-        self.assertFalse(rule.matches("Only four words here."))
+        self.assertTrue(rule.matches("This  is a\n test, six words.", 0))
+        self.assertFalse(rule.matches("Only four words here.", 0))
 
     def test_at_most(self):
         rule = WordCountAtMostRule(count=5)
-        self.assertTrue(rule.matches("This is four words."))
-        self.assertFalse(rule.matches("This is a test with six words."))
+        self.assertTrue(rule.matches("This is four words.", 0))
+        self.assertFalse(rule.matches("This is a test with six words.", 0))
 
     def test_invalid_threshold(self):
         with self.assertRaises(ValueError):
