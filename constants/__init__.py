@@ -45,7 +45,7 @@ VALIDATOR_STATE_VERSION = 4
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
 # Define the number of blocks per vali "sync". This cadence is used to align validator behavior for better vtrust.
-SYNC_BLOCK_CADENCE = 90
+SYNC_BLOCK_CADENCE = 180
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
 # Validator weight moving average term.
