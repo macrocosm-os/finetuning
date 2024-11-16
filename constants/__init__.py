@@ -9,7 +9,7 @@ from taoverse.model.competition.data import (
     ModelConstraints,
     NormValidationConstraints,
 )
-from taoverse.model.competition.epsilon import FixedEpsilon, LinearDecay
+from taoverse.model.competition.epsilon import LinearDecay
 from taoverse.model.eval.normalization import NormalizationId
 from taoverse.model.eval.task import EvalTask
 from transformers import (
