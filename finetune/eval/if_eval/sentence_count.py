@@ -6,6 +6,7 @@ try:
 except:
     nltk.download("punkt", raise_on_error=True)
 
+
 class SentenceCountAtMostRule(IFEvalRule):
     """Rule that enforces sentence count must be at most a specified threshold."""
 
@@ -16,11 +17,11 @@ class SentenceCountAtMostRule(IFEvalRule):
             raise ValueError(f"SentenceCountAtMostRule must allow at least 1 sentence.")
         self.count = count
 
-    def get_prompt(self, _: int) -> str:
+    def get_prompt(self, index: int = -1) -> str:
         sentence = "sentence" if self.count == 1 else "sentences"
         return f"The response must be no more than {self.count} {sentence}."
 
-    def matches(self, text: str, _: int) -> bool:
+    def matches(self, text: str, index: int = -1) -> bool:
         tokenizer = PunktSentenceTokenizer()
         return len(tokenizer.tokenize(text)) <= self.count
 
@@ -32,14 +33,15 @@ class SentenceCountAtLeastRule(IFEvalRule):
         super().__init__(rule_id=RuleId.SENTENCE_COUNT_AT_LEAST)
 
         if count < 1:
-            raise ValueError(f"SentenceCountAtLeastRule must expect at least 1 sentence.")
+            raise ValueError(
+                f"SentenceCountAtLeastRule must expect at least 1 sentence."
+            )
         self.count = count
 
-
-    def get_prompt(self, _: int) -> str:
+    def get_prompt(self, index: int = -1) -> str:
         sentence = "sentence" if self.count == 1 else "sentences"
         return f"The response must be at least {self.count} {sentence}."
 
-    def matches(self, text: str, _: int) -> bool:
+    def matches(self, text: str, index: int = -1) -> bool:
         tokenizer = PunktSentenceTokenizer()
         return len(tokenizer.tokenize(text)) >= self.count

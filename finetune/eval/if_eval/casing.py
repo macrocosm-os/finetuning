@@ -7,10 +7,10 @@ class UppercaseRule(IFEvalRule):
     def __init__(self):
         super().__init__(rule_id=RuleId.ALL_UPPER_CASE)
 
-    def get_prompt(self, _: int) -> str:
+    def get_prompt(self, index: int = -1) -> str:
         return "All letters in the response must be uppercase."
 
-    def matches(self, text: str, _: int) -> bool:
+    def matches(self, text: str, index: int = -1) -> bool:
         return text.isupper()
 
 
@@ -20,9 +20,8 @@ class LowercaseRule(IFEvalRule):
     def __init__(self):
         super().__init__(rule_id=RuleId.ALL_LOWER_CASE)
 
-
-    def get_prompt(self, _: int) -> str:
+    def get_prompt(self, index: int = -1) -> str:
         return "All letters in the response must be lowercase."
 
-    def matches(self, text: str, _: int) -> bool:
+    def matches(self, text: str, index: int = -1) -> bool:
         return text.islower()
