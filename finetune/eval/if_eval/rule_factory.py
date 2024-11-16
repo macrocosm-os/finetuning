@@ -4,7 +4,10 @@ from typing import List, Tuple
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
 from finetune.eval.if_eval.sample import IFEvalSample
 from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
-from finetune.eval.if_eval.sentence_count import SentenceCountAtLeastRule, SentenceCountAtMostRule
+from finetune.eval.if_eval.sentence_count import (
+    SentenceCountAtLeastRule,
+    SentenceCountAtMostRule,
+)
 from finetune.eval.if_eval.casing import UppercaseRule, LowercaseRule
 from finetune.eval.if_eval.comma import NoCommaRule
 
@@ -26,7 +29,18 @@ def generate_if_eval_sample(
         min_rules: The minimum number of rules to generate.
         max_rules: The maximum number of rules to generate.
     """
-    rule_ids = list(RuleId)
+    # Only select from implemented rules.
+    # rule_ids = list(RuleId)
+    rule_ids = [
+        RuleId.WORD_COUNT_AT_MOST,
+        RuleId.WORD_COUNT_AT_LEAST,
+        RuleId.SENTENCE_COUNT_AT_MOST,
+        RuleId.SENTENCE_COUNT_AT_LEAST,
+        RuleId.ALL_UPPER_CASE,
+        RuleId.ALL_LOWER_CASE,
+        RuleId.NO_COMMAS,
+    ]
+
     random.shuffle(rule_ids)
 
     rules = []
@@ -79,18 +93,18 @@ def generate_rule(
             return LowercaseRule()
         case RuleId.NO_COMMAS:
             return NoCommaRule()
-        # case RuleId.KEYWORD_INCLUSION:
-        #     return DummyRule(rule_id)
-        # case RuleId.KEYWORD_FREQUENCY:
-        #     return DummyRule(rule_id)
-        # case RuleId.KEYWORD_FORBIDDEN:
-        #     return DummyRule(rule_id)
-        # case RuleId.BULLET_COUNT_FREQUENCY:
-        #     return DummyRule(rule_id)
-        # case RuleId.STARTS_WITH:
-        #     return DummyRule(rule_id)
-        # case RuleId.ENDS_WITH:
-        #     return DummyRule(rule_id)
+        case RuleId.KEYWORD_INCLUSION:
+            return DummyRule(rule_id)
+        case RuleId.KEYWORD_FREQUENCY:
+            return DummyRule(rule_id)
+        case RuleId.KEYWORD_FORBIDDEN:
+            return DummyRule(rule_id)
+        case RuleId.BULLET_COUNT_FREQUENCY:
+            return DummyRule(rule_id)
+        case RuleId.STARTS_WITH:
+            return DummyRule(rule_id)
+        case RuleId.ENDS_WITH:
+            return DummyRule(rule_id)
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
