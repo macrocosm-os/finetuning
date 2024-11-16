@@ -27,22 +27,22 @@ class RuleId(IntEnum):
     NO_COMMAS = 7
 
     # The specified word(s) appear at least once.
-    KEYWORD_INCLUSION = 8
+    # KEYWORD_INCLUSION = 8
 
-    # The specified word appears a specific number of times.
-    KEYWORD_FREQUENCY = 9
+    # # The specified word appears a specific number of times.
+    # KEYWORD_FREQUENCY = 9
 
-    # The specified word(s) do not appear.
-    KEYWORD_FORBIDDEN = 10
+    # # The specified word(s) do not appear.
+    # KEYWORD_FORBIDDEN = 10
 
-    # There must be a specific number of bullet points in the output.
-    BULLET_COUNT_FREQUENCY = 11
+    # # There must be a specific number of bullet points in the output.
+    # BULLET_COUNT_FREQUENCY = 11
 
-    # The output must start with the specified content.
-    STARTS_WITH = 12
+    # # The output must start with the specified content.
+    # STARTS_WITH = 12
 
-    # The output must end with the specified content.
-    ENDS_WITH = 13
+    # # The output must end with the specified content.
+    # ENDS_WITH = 13
 
 
 class IFEvalRule(ABC):
