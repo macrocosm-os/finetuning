@@ -49,8 +49,8 @@ SYNC_BLOCK_CADENCE = 180
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
 # Validator weight moving average term.
-# At 0.1 a model will go from 0 -> 0.190 in 2 cycles and from 0 -> 0.83 in 17 cycles.
-ALPHA = 0.1
+# At 0.9 a model will go from 0 -> 0.190 in 2 cycles and from 0 -> 0.83 in 17 cycles.
+ALPHA = 0.9
 # Any miners with a combined competition weight below this threshold will instead receive 0 weight.
 # This is intended to help vtrust in conjunction with a low alpha by handling the tail ends.
 # At 1 eval per 180 blocks, newly winning models will start recieving weight after ~360 blocks.
