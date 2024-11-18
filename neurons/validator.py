@@ -1497,4 +1497,11 @@ if __name__ == "__main__":
         )
         torch.multiprocessing.set_sharing_strategy("file_system")
 
+    # Set an output width explicitly for rich table output (affects the pm2 tables that we use).
+    try:
+        width = os.get_terminal_size().columns
+    except:
+        width = 0
+    os.environ['COLUMNS'] = str(max(200,width))
+
     asyncio.run(Validator().run())
