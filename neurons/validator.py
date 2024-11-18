@@ -1046,7 +1046,7 @@ class Validator:
                                 competition,
                                 self.config.device,
                             ),
-                            ttl=600,
+                            ttl=720,
                             mode="spawn",
                         )
 
@@ -1441,7 +1441,7 @@ class Validator:
             try:
 
                 # First run a step.
-                await self.try_run_step(ttl=60 * 60)
+                await self.try_run_step(ttl=75 * 60)
                 self.global_step += 1
 
                 block = self._get_current_block()
@@ -1496,5 +1496,12 @@ if __name__ == "__main__":
             "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
         )
         torch.multiprocessing.set_sharing_strategy("file_system")
+
+    # Set an output width explicitly for rich table output (affects the pm2 tables that we use).
+    try:
+        width = os.get_terminal_size().columns
+    except:
+        width = 0
+    os.environ['COLUMNS'] = str(max(200,width))
 
     asyncio.run(Validator().run())
