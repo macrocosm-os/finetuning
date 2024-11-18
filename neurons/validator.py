@@ -1046,7 +1046,7 @@ class Validator:
                                 competition,
                                 self.config.device,
                             ),
-                            ttl=600,
+                            ttl=720,
                             mode="spawn",
                         )
 
@@ -1441,7 +1441,7 @@ class Validator:
             try:
 
                 # First run a step.
-                await self.try_run_step(ttl=60 * 60)
+                await self.try_run_step(ttl=75 * 60)
                 self.global_step += 1
 
                 block = self._get_current_block()
