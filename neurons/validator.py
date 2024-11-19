@@ -781,15 +781,12 @@ class Validator:
             )
 
     def _create_prompting_subset_loader(
-        self, seed: int, current_block: int, eval_delay_blocks: int
+        self,
+        seed: int,
+        current_block: int,
+        eval_delay_blocks: int,
+        vali_hotkeys: typing.Set[str],
     ) -> PromptingSubsetLoader:
-        with self.prompting_metagraph_lock:
-            vali_uids = metagraph_utils.get_high_stake_validators(
-                self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
-            )
-            vali_hotkeys = set(
-                [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
-            )
 
         # We want to ensure we only include data that is strictly newer than eval_delay_blocks ago and older than the current
         # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
@@ -958,16 +955,28 @@ class Validator:
 
         # Load data based on the competition.
         with load_data_perf.sample():
+            with self.prompting_metagraph_lock:
+                vali_uids = metagraph_utils.get_high_stake_validators(
+                    self.prompting_metagraph, constants.SAMPLE_VALI_MIN_STAKE
+                )
+                vali_hotkeys = set(
+                    [self.prompting_metagraph.hotkeys[uid] for uid in vali_uids]
+                )
+
             for eval_task in competition.eval_tasks:
                 if eval_task.dataset_id == DatasetId.SYNTHETIC_MMLU:
                     data_loader = self._create_prompting_subset_loader(
-                        seed, current_block, competition.constraints.eval_block_delay
+                        seed,
+                        current_block,
+                        competition.constraints.eval_block_delay,
+                        vali_hotkeys,
                     )
                 else:
                     data_loader = DatasetLoader.get_loader(
                         dataset_id=eval_task.dataset_id,
                         dataset_kwargs=eval_task.dataset_kwargs,
                         seed=seed,
+                        validator_hotkeys=vali_hotkeys,
                     )
 
                 if data_loader:
@@ -1037,7 +1046,7 @@ class Validator:
                                 competition,
                                 self.config.device,
                             ),
-                            ttl=400,
+                            ttl=720,
                             mode="spawn",
                         )
 
@@ -1432,7 +1441,7 @@ class Validator:
             try:
 
                 # First run a step.
-                await self.try_run_step(ttl=60 * 60)
+                await self.try_run_step(ttl=75 * 60)
                 self.global_step += 1
 
                 block = self._get_current_block()
@@ -1466,8 +1475,11 @@ if __name__ == "__main__":
     # Data comes from Subnet 1's wandb project. Make sure we're logged in
     wandb_utils.login()
 
-    # Make sure we can download the needed ntlk module
+    # Make sure we can download the needed ntlk modules
+    # Used for generating words in word sorting evals
     nltk.download("words", raise_on_error=True)
+    # Used for counting sentences in sentence count evals
+    nltk.download("punkt", raise_on_error=True)
 
     # As we continue to increase the number of samples sent across the subprocess
     # boundary, we can hit the systems default limit for the maximum number of file
@@ -1480,9 +1492,16 @@ if __name__ == "__main__":
     if soft_limit < 64_000:
         bt.logging.warning(
             f"Your current ulimit of {soft_limit} is below the recommended 64k. Your max ulimit is {hard_limit}. "
-             "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
-             "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
+            "We are falling back to using the file system shared memory strategy but this can fill /dev/shm/ on crashes. "
+            "We recommend increasing this limit with 'ulimit -n 64000' from your command line and restarting."
         )
         torch.multiprocessing.set_sharing_strategy("file_system")
+
+    # Set an output width explicitly for rich table output (affects the pm2 tables that we use).
+    try:
+        width = os.get_terminal_size().columns
+    except:
+        width = 0
+    os.environ['COLUMNS'] = str(max(200,width))
 
     asyncio.run(Validator().run())
