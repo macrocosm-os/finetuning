@@ -710,7 +710,8 @@ class Validator:
             with self.metagraph_lock:
                 uids = self.metagraph.uids
             try:
-                success, message = self.subtensor.set_weights(
+                weight_subtensor = bt.subtensor(config=self.config)
+                success, message = weight_subtensor.set_weights(
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=uids,
@@ -1502,6 +1503,6 @@ if __name__ == "__main__":
         width = os.get_terminal_size().columns
     except:
         width = 0
-    os.environ['COLUMNS'] = str(max(200,width))
+    os.environ["COLUMNS"] = str(max(200, width))
 
     asyncio.run(Validator().run())
