@@ -40,7 +40,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 4
+VALIDATOR_STATE_VERSION = 5
 
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
