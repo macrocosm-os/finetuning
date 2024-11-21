@@ -80,13 +80,13 @@ def generate_rule(
     """Generates a rule based on the provided rule_id and existing rules."""
     match rule_id:
         case RuleId.WORD_COUNT_AT_MOST:
-            return WordCountAtMostRule(random.choice([x for x in range(50, 150, 5)]))
+            return WordCountAtMostRule(random.choice([x for x in range(25, 50, 5)]))
         case RuleId.WORD_COUNT_AT_LEAST:
-            return WordCountAtLeastRule(random.choice([x for x in range(25, 250, 10)]))
+            return WordCountAtLeastRule(random.choice([x for x in range(25, 50, 5)]))
         case RuleId.SENTENCE_COUNT_AT_MOST:
-            return SentenceCountAtMostRule(random.choice([x for x in range(1, 5)]))
+            return SentenceCountAtMostRule(random.choice([x for x in range(1, 4)]))
         case RuleId.SENTENCE_COUNT_AT_LEAST:
-            return SentenceCountAtLeastRule(random.choice([x for x in range(2, 5)]))
+            return SentenceCountAtLeastRule(random.choice([x for x in range(2, 4)]))
         case RuleId.ALL_UPPER_CASE:
             return UppercaseRule()
         case RuleId.ALL_LOWER_CASE:
