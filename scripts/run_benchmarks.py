@@ -267,6 +267,7 @@ def main(args: argparse.Namespace):
                     "uid": uid,
                     "model": model_utils.get_hf_url(model_metadata),
                     "block": model_metadata.block,
+                    "competition_id": competition.id,
                 },
                 allow_val_change=True,
             )
