@@ -8,12 +8,13 @@ import torch
 from transformers import PreTrainedTokenizerBase
 
 from finetune.datasets.generated.mmlu_parser import extract_q_and_a_text
+from finetune.datasets.loader import DatasetLoader
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.eval.if_eval import rule_factory
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 
 
-class IFEvalLoader:
+class IFEvalLoader(DatasetLoader):
     """Generates samples for the IfEval task."""
 
     # The min/max number of rules per sample.

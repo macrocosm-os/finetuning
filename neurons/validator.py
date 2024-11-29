@@ -23,8 +23,9 @@ from huggingface_hub.utils import disable_progress_bars
 from retry import retry
 from taoverse.model.eval.task import EvalTask
 
-from finetune.datasets.factory import DatasetLoader
+from finetune.datasets.factory import DatasetLoaderFactory
 from finetune.datasets.ids import DatasetId
+from finetune.datasets.loader import DatasetLoader
 from finetune.eval.sample import EvalSample
 from finetune.validation import ScoreDetails
 
@@ -945,13 +946,17 @@ class Validator:
 
         # Pull the latest sample data based on the competition.
         load_data_perf = PerfMonitor("Eval: Load data")
-        # Tokenize the data into batches for use in evaluation.
-        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
-        tokenizer = ft.model.load_tokenizer(
-            competition.constraints, cache_dir=self.config.model_dir
-        )
+
+        use_default_tokenizer = False
+        if competition.constraints.tokenizer:
+            tokenizer = ft.model.load_tokenizer(
+                competition.constraints, cache_dir=self.config.model_dir
+            )
+            use_default_tokenizer = True
+
         seed = self._get_seed(sync_block)
         eval_tasks: typing.List[EvalTask] = []
+        data_loaders: typing.List[DatasetLoader] = []
         samples: typing.List[typing.List[EvalSample]] = []
 
         # Load data based on the competition.
@@ -973,7 +978,7 @@ class Validator:
                         vali_hotkeys,
                     )
                 else:
-                    data_loader = DatasetLoader.get_loader(
+                    data_loader = DatasetLoaderFactory.get_loader(
                         dataset_id=eval_task.dataset_id,
                         dataset_kwargs=eval_task.dataset_kwargs,
                         seed=seed,
@@ -982,11 +987,14 @@ class Validator:
 
                 if data_loader:
                     eval_tasks.append(eval_task)
-                    samples.append(
-                        data_loader.tokenize(
-                            tokenizer, competition.constraints.sequence_length
+                    data_loaders.append(data_loader)
+                    if use_default_tokenizer:
+                        assert tokenizer is not None
+                        samples.append(
+                            data_loader.tokenize(
+                                tokenizer, competition.constraints.sequence_length
+                            )
                         )
-                    )
 
         # Compute model score on batches.
         bt.logging.debug(
@@ -1035,13 +1043,29 @@ class Validator:
                             hotkey, model_i_metadata.id, kwargs
                         )
 
+                        # If the competition defines a default tokenizer, set it here.
+                        if use_default_tokenizer:
+                            model_i.tokenizer = tokenizer
+                        else:
+                            if not model_i.tokenizer:
+                                raise ValueError(
+                                    f"Model {uid_i} does not have a tokenizer."
+                                )
+
+                            samples = [
+                                loader.tokenize(
+                                    model_i.tokenizer,
+                                    competition.constraints.sequence_length,
+                                )
+                                for loader in data_loaders
+                            ]
+
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
                         score, score_details = utils.run_in_subprocess(
                             functools.partial(
                                 ft.validation.score_model,
-                                model_i.pt_model,
-                                tokenizer,
+                                model_i,
                                 eval_tasks,
                                 samples,
                                 competition,

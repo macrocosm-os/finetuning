@@ -19,6 +19,8 @@ import typing
 import torch
 from transformers import PreTrainedTokenizerBase
 
+from finetune.datasets.loader import DatasetLoader
+
 # Characters to use in the dycks.
 DYCK_CHARACTER_PAIRS = [("<", ">"), ("[", "]"), ("{", "}"), ("(", ")")]
 DYCK_ENDING_CHARS = [x[1] for x in DYCK_CHARACTER_PAIRS]
@@ -69,7 +71,7 @@ def generate_dyck(
     return dyck_word
 
 
-class DyckLoader:
+class DyckLoader(DatasetLoader):
     def __init__(
         self,
         dyck_character_pairs: typing.List[
