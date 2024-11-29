@@ -989,7 +989,7 @@ class Validator:
                     eval_tasks.append(eval_task)
                     data_loaders.append(data_loader)
                     if use_default_tokenizer:
-                        assert tokenizer is not None
+                        assert tokenizer
                         samples.append(
                             data_loader.tokenize(
                                 tokenizer, competition.constraints.sequence_length

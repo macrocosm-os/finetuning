@@ -8,7 +8,7 @@ from finetune.datasets.generated.if_eval_loader import IFEvalLoader
 
 class TestIFEvalLoader(unittest.TestCase):
     def setUp(self):
-        self.loader = IFEvalLoader(random_seed=42, max_samples=100)
+        self.loader = IFEvalLoader(random_seed=420, max_samples=100)
 
     def test_uniform_distribution_of_rules(self):
         rule_counts = [len(sample.rules) for sample in self.loader]
