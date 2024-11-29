@@ -1,22 +1,24 @@
+from typing import Any, Dict, Set
+
 from finetune.datasets.generated.dyck_loader import DyckLoader
 from finetune.datasets.generated.if_eval_loader import IFEvalLoader
 from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
 from finetune.datasets.hugging_face.hugging_face_loader import (
-    HuggingFaceLoader,
     FINEWEB_EDU_SCORE_2_NAME,
+    HuggingFaceLoader,
 )
 from finetune.datasets.ids import DatasetId
-from typing import Dict, Any, Set
+from finetune.datasets.loader import DatasetLoader
 
 
-class DatasetLoader:
+class DatasetLoaderFactory:
     @staticmethod
     def get_loader(
         dataset_id: DatasetId,
         dataset_kwargs: Dict[str, Any],
         seed: int,
         validator_hotkeys: Set[str],
-    ) -> "DatasetLoader":
+    ) -> DatasetLoader:
         """Loads data samples from the appropriate dataset."""
 
         match dataset_id:

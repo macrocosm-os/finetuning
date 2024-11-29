@@ -27,6 +27,7 @@ import wandb
 from transformers import PreTrainedTokenizerBase
 
 import constants
+from finetune.datasets.loader import DatasetLoader
 from finetune.datasets.subnet.history_scan import SampledHistoryScan
 
 # Multiple choice answers for the prompting subnet.
@@ -36,7 +37,7 @@ PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
 EARLIEST_DATE = dt.datetime(2024, 8, 29, tzinfo=dt.timezone.utc)
 
 
-class PromptingSubsetLoader:
+class PromptingSubsetLoader(DatasetLoader):
     @staticmethod
     def _get_filters(
         validator_hotkeys: typing.List[str],

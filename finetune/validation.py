@@ -135,7 +135,6 @@ class ScoreDetails:
 
 def score_model(
     model,
-    tokenizer: transformers.PreTrainedTokenizer,
     evals: typing.List[EvalTask],
     samples: typing.List[typing.List[EvalSample]],
     competition: Competition,
@@ -145,7 +144,6 @@ def score_model(
 
     Args:
         model (torch.nn.Module): The model to score.
-        tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use for tokenization.
         evals (list): A list of EvalTasks to score the model on.
         samples (list): A list of samples to use for scoring for the eval tasks. Must be the same length as evals.
         competition (Competition): The competition to score the model for.
@@ -157,12 +155,16 @@ def score_model(
     if len(evals) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
 
+    if not model.tokenizer:
+        raise ValueError("Model does not have a tokenizer")
+
     with torch.inference_mode():
         model.to(device)
         model.eval()
 
         score = 0
         score_details = {task.name: ScoreDetails() for task in evals}
+        tokenizer = model.tokenizer
 
         for task, samples in zip(evals, samples):
             bt.logging.trace(f"Scoring model on task: {task.name}")
