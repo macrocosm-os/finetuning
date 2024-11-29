@@ -3,6 +3,7 @@ import asyncio
 import dataclasses
 import json
 import os
+import pickle
 import shutil
 import time
 import traceback
@@ -12,7 +13,9 @@ import bittensor as bt
 import dotenv
 import lm_eval
 import wandb
+from huggingface_hub import login
 from lm_eval.models.huggingface import HFLM
+from taoverse.model import utils as model_utils
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.competition.data import Competition
 from taoverse.model.data import ModelMetadata
@@ -23,13 +26,9 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
     HuggingFaceModelStore,
 )
 from transformers import AutoTokenizer
-from taoverse.model import utils as model_utils
-from huggingface_hub import login
-
-from utils import benchmark_helpers
 
 import constants
-import pickle
+from utils import benchmark_helpers
 
 
 class CompletedEvalStore:
@@ -120,7 +119,11 @@ def _run_benchmarks(
             "leaderboard_bbh",
             "leaderboard_gpqa",
             "leaderboard_ifeval",
+            "leaderboard_musr",
             "mmlu",
+            "agieval_en",
+            "arc_challenge",
+            "gsm8k_cot",
         ],
         verbosity="DEBUG",
         batch_size="auto",
@@ -128,12 +131,12 @@ def _run_benchmarks(
     )
 
 
-def save_state(state: CompletedEvalStore.State, filepath: str):
+def save_state(state: Dict[int, CompletedEvalStore.State], filepath: str):
     with open(filepath, "wb") as f:
         pickle.dump(state, f)
 
 
-def load_state(filepath: str) -> CompletedEvalStore.State:
+def load_state(filepath: str) -> Dict[int, CompletedEvalStore.State]:
     with open(filepath, "rb") as f:
         return pickle.load(f)
 
@@ -197,9 +200,9 @@ def main(args: argparse.Namespace):
     step = 0
 
     # Load state from previous runs.
-    last_model = None
+    last_model_per_comp = {}
     try:
-        last_model = load_state(args.file)
+        last_model_per_comp = load_state(args.file)
     except FileNotFoundError:
         pass
 
@@ -230,7 +233,7 @@ def main(args: argparse.Namespace):
                 repo=f"{model_metadata.id.namespace}/{model_metadata.id.name}",
                 commit=model_metadata.id.commit,
             )
-            if state == last_model:
+            if state == last_model_per_comp.get(competition.id, None):
                 print(
                     f"Model {state.repo} at commit {state.commit} has already been benchmarked."
                 )
@@ -270,8 +273,8 @@ def main(args: argparse.Namespace):
             wandb_run.log(results | lb_results)
             wandb_run.finish()
 
-            last_model = state
-            save_state(last_model, args.file)
+            last_model_per_comp[competition.id] = state
+            save_state(last_model_per_comp, args.file)
 
             if step % 50:
                 print("Deleting HF cache.")
