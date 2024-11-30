@@ -22,7 +22,7 @@ Models submitted to this competition are evaluated on a set of evaluation tasks,
 
 ### Goal
 
-The goal of this competition is to train a SOTA instruct 8B model. This competition provides more freedom to miners than other competitions: there are no restrictions on the tokenizer used and miner's are allowed to use a wider range of architectures.
+The goal of this competition is to train a SOTA instruct 8B model. This competition provides more freedom to miners than other competitions: there are no restrictions on the tokenizer used and miners are allowed to use a wider range of architectures.
 
 ### Evaluation
 
