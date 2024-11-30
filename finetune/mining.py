@@ -34,7 +34,7 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
 from taoverse.model.storage.model_metadata_store import ModelMetadataStore
 from taoverse.model.storage.remote_model_store import RemoteModelStore
 from taoverse.model.utils import get_hash_of_two_strings
-from transformers import AutoModelForCausalLM, PreTrainedModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import constants
 import finetune as ft
@@ -49,7 +49,7 @@ def model_path(base_dir: str, run_id: str) -> str:
 
 
 async def push(
-    model: PreTrainedModel,
+    model: Model,
     repo: str,
     competition_id: CompetitionId,
     wallet: bt.wallet,
@@ -61,7 +61,7 @@ async def push(
     """Pushes the model to Hugging Face and publishes it on the chain for evaluation by validators.
 
     Args:
-        model (PreTrainedModel): The model to push.
+        model (Model): The model to push. ModelId is overwritten based on the other parameters.
         repo (str): The repo to push to. Must be in format "namespace/name".
         competition_id (CompetitionId): The competition the miner is participating in.
         wallet (bt.wallet): The wallet of the Miner uploading the model.
@@ -89,24 +89,28 @@ async def push(
 
     # First upload the model to HuggingFace.
     namespace, name = model_utils.validate_hf_repo_id(repo)
-    model_id = ModelId(namespace=namespace, name=name, competition_id=competition_id)
-    model_id = await remote_model_store.upload_model(
-        Model(id=model_id, pt_model=model), model_constraints
-    )
+    # Overwrite the model id with the current information.
+    model.id = ModelId(namespace=namespace, name=name, competition_id=competition_id)
+    # Get the new model id which includes hash information.
+    model_id_with_hash = await remote_model_store.upload_model(model, model_constraints)
 
     bt.logging.success("Uploaded model to hugging face.")
 
-    secure_hash = get_hash_of_two_strings(model_id.hash, wallet.hotkey.ss58_address)
-    model_id = replace(model_id, secure_hash=secure_hash)
+    secure_hash = get_hash_of_two_strings(
+        model_id_with_hash.hash, wallet.hotkey.ss58_address
+    )
+    model_id_with_hash = replace(model_id_with_hash, secure_hash=secure_hash)
 
-    bt.logging.success(f"Now committing to the chain with model_id: {model_id}")
+    bt.logging.success(
+        f"Now committing to the chain with model_id: {model_id_with_hash}"
+    )
 
     # We can only commit to the chain every 20 minutes, so run this in a loop, until
     # successful.
     while True:
         try:
             await metadata_store.store_model_metadata(
-                wallet.hotkey.ss58_address, model_id
+                wallet.hotkey.ss58_address, model_id_with_hash
             )
 
             bt.logging.info(
@@ -119,13 +123,14 @@ async def push(
 
             if (
                 not model_metadata
-                or model_metadata.id.to_compressed_str() != model_id.to_compressed_str()
+                or model_metadata.id.to_compressed_str()
+                != model_id_with_hash.to_compressed_str()
             ):
                 bt.logging.error(
-                    f"Failed to read back model metadata from the chain. Expected: {model_id}, got: {model_metadata}"
+                    f"Failed to read back model metadata from the chain. Expected: {model_id_with_hash}, got: {model_metadata}"
                 )
                 raise ValueError(
-                    f"Failed to read back model metadata from the chain. Expected: {model_id}, got: {model_metadata}"
+                    f"Failed to read back model metadata from the chain. Expected: {model_id_with_hash}, got: {model_metadata}"
                 )
 
             bt.logging.success("Committed model to the chain.")
@@ -147,16 +152,22 @@ async def push(
         bt.logging.success("Model set to public")
 
 
-def save(model: PreTrainedModel, model_dir: str):
+def save(model: Model, model_dir: str):
     """Saves a model to the provided directory"""
     if not os.path.exists(model_dir):
         os.makedirs(model_dir, exist_ok=True)
 
     # Save the model state to the specified path.
-    model.save_pretrained(
+    model.pt_model.save_pretrained(
         save_directory=model_dir,
         safe_serialization=True,
     )
+
+    if model.tokenizer is not None:
+        model.tokenizer.save_pretrained(
+            save_directory=model_dir,
+            safe_serialization=True,
+        )
 
 
 async def get_repo(
@@ -181,14 +192,34 @@ async def get_repo(
     return model_utils.get_hf_url(model_metadata)
 
 
-def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> PreTrainedModel:
+def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> Model:
     """Loads a model from a directory."""
-    return AutoModelForCausalLM.from_pretrained(
+    model_id = ModelId(
+        namespace="local_namespace",
+        name="local_model",
+        competition_id=CompetitionId.NONE,
+    )
+
+    pt_model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_dir,
         local_files_only=True,
         use_safetensors=True,
         **kwargs,
     )
+
+    # Always try to retrieve a tokenizer from the model directory. If we do not find one leave it None on the Model.
+    tokenizer = None
+    try:
+        # Do not use the kwargs for the model load here. If needed in the future a separate kwargs can be plumbed.
+        tokenizer = AutoTokenizer.from_pretrained(
+            pretrained_model_name_or_path=model_dir,
+            local_files_only=True,
+            use_safetensors=True,
+        )
+    except Exception:
+        pass
+
+    return Model(id=model_id, pt_model=pt_model, tokenizer=tokenizer)
 
 
 async def load_remote_model(
@@ -197,7 +228,7 @@ async def load_remote_model(
     metagraph: Optional[bt.metagraph] = None,
     metadata_store: Optional[ModelMetadataStore] = None,
     remote_model_store: Optional[RemoteModelStore] = None,
-) -> PreTrainedModel:
+) -> Model:
     """Loads the model currently being advertised by the Miner with the given UID.
 
     Args:
@@ -235,7 +266,7 @@ async def load_remote_model(
     model: Model = await remote_model_store.download_model(
         model_metadata.id, download_dir, model_constraints
     )
-    return model.pt_model
+    return model
 
 
 async def load_best_model(
@@ -244,7 +275,7 @@ async def load_best_model(
     metagraph: Optional[bt.metagraph] = None,
     metadata_store: Optional[ModelMetadataStore] = None,
     remote_model_store: Optional[RemoteModelStore] = None,
-) -> PreTrainedModel:
+) -> Model:
     """Loads the model from the best performing miner to download_dir"""
     best_uid = ft.graph.best_uid(competition_id=competition_id)
     if best_uid is None:
