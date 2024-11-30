@@ -215,15 +215,13 @@ class TestMining(unittest.TestCase):
 
         # Upload the model for miner 1.
         model_store = FakeRemoteModelStore()
-        model = self._get_model()
+        model = self.tiny_model
         await model_store.upload_model(
             Model(
                 id=miner_1_model_id,
                 pt_model=model,
             ),
-            model_constraints=constants.MODEL_CONSTRAINTS_BY_COMPETITION_ID.get(
-                1, None
-            ),
+            competition=CompetitionId.SN9_MODEL,
         )
 
         # Verify that miner 1's model is loaded.
