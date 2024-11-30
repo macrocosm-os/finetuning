@@ -125,6 +125,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             PhiForCausalLM,
             Qwen2ForCausalLM,
         ],
+        tokenizer=None,  # Any tokenizer can be used.
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
