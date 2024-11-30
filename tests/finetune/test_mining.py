@@ -8,13 +8,14 @@ from unittest import mock
 import bittensor as bt
 import torch
 from taoverse.model.data import Model, ModelId
+from transformers import AutoTokenizer
 
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
 from tests.model.storage.fake_model_metadata_store import FakeModelMetadataStore
 from tests.model.storage.fake_remote_model_store import FakeRemoteModelStore
-from tests.utils import assert_model_equality, get_test_model
+from tests.utils import get_test_model
 
 
 class TestMining(unittest.TestCase):
@@ -43,18 +44,57 @@ class TestMining(unittest.TestCase):
 
     def test_model_to_disk_roundtrip(self):
         """Tests that saving a model to disk and loading it gets the same model."""
+        # Use the default model id for local models.
+        model_id = ModelId(
+            namespace="local_namespace",
+            name="local_model",
+            competition_id=CompetitionId.NONE,
+        )
+        model = Model(id=model_id, pt_model=self.tiny_model, tokenizer=None)
 
-        ft.mining.save(model=self.tiny_model, model_dir=self.model_dir)
-        model = ft.mining.load_local_model(model_dir=self.model_dir, kwargs={})
+        ft.mining.save(model=model, model_dir=self.model_dir)
+        retrieved_model = ft.mining.load_local_model(
+            model_dir=self.model_dir, kwargs={}
+        )
 
-        assert_model_equality(self, self.tiny_model, model)
+        self.assertEqual(str(model), str(retrieved_model))
+
+    def test_model_with_tokenizer_to_disk_roundtrip(self):
+        """Tests that saving a model with tokenizer to disk and loading it gets the same model."""
+        # Use the default model id for local models.
+        model_id = ModelId(
+            namespace="local_namespace",
+            name="local_model",
+            competition_id=CompetitionId.NONE,
+        )
+        tokenizer = AutoTokenizer.from_pretrained("Xenova/gpt-4")
+        model = Model(id=model_id, pt_model=self.tiny_model, tokenizer=tokenizer)
+
+        ft.mining.save(model=model, model_dir=self.model_dir)
+        retrieved_model = ft.mining.load_local_model(
+            model_dir=self.model_dir, kwargs={}
+        )
+
+        # Overwrite the name of the tokenizer to avoid it using the local path.
+        retrieved_model.tokenizer.name_or_path = "Xenova/gpt-4"
+        self.assertEqual(str(model), str(retrieved_model))
 
     def _test_push(
-        self, min_expected_block: int = 1, competition_id=CompetitionId.B7_MULTI_CHOICE
+        self,
+        min_expected_block: int = 1,
+        competition_id=CompetitionId.B7_MULTI_CHOICE,
+        tokenizer=None,
     ):
+        model_id = ModelId(
+            namespace="namespace",
+            name="name",
+            competition_id=competition_id,
+        )
+        model = Model(id=model_id, pt_model=self.tiny_model, tokenizer=tokenizer)
+
         asyncio.run(
             ft.mining.push(
-                model=self.tiny_model,
+                model=model,
                 wallet=self.wallet,
                 competition_id=competition_id,
                 repo="namespace/name",
@@ -66,8 +106,10 @@ class TestMining(unittest.TestCase):
         )
 
         # Check that the model was uploaded to hugging face.
-        model: Model = self.remote_store.get_only_model()
-        assert_model_equality(self, self.tiny_model, model.pt_model)
+        retrieved_model: Model = self.remote_store.get_only_model()
+        # Align the model id with the retrieved model as the hash and such will change.
+        model.id = retrieved_model.id
+        self.assertEqual(str(model), str(retrieved_model))
 
         # Check that the model ID was published on the chain.
         model_metadata = asyncio.run(
@@ -76,10 +118,12 @@ class TestMining(unittest.TestCase):
         self.assertGreaterEqual(model_metadata.block, min_expected_block)
 
         # Check certain properties of the model metadata.
-        self.assertEqual(model_metadata.id.commit, model.id.commit)
-        self.assertEqual(model_metadata.id.name, model.id.name)
-        self.assertEqual(model_metadata.id.namespace, model.id.namespace)
-        self.assertEqual(model_metadata.id.competition_id, model.id.competition_id)
+        self.assertEqual(model_metadata.id.commit, retrieved_model.id.commit)
+        self.assertEqual(model_metadata.id.name, retrieved_model.id.name)
+        self.assertEqual(model_metadata.id.namespace, retrieved_model.id.namespace)
+        self.assertEqual(
+            model_metadata.id.competition_id, retrieved_model.id.competition_id
+        )
 
         self.metadata_store.reset()
         self.remote_store.reset()
@@ -87,6 +131,11 @@ class TestMining(unittest.TestCase):
     def test_push_success(self):
         """Tests that pushing a model to the chain is successful."""
         self._test_push()
+
+    def test_push_success_tokenizer(self):
+        """Tests that pushing a model with a tokenizer to the chain is successful."""
+        tokenizer = AutoTokenizer.from_pretrained("Xenova/gpt-4")
+        self._test_push(tokenizer=tokenizer)
 
     def test_push_model_chain_failure(self):
         """Tests that pushing a model is eventually successful even if pushes to the chain fail."""
