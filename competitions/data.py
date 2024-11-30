@@ -11,6 +11,8 @@ class CompetitionId(IntEnum):
 
     B7_MULTI_CHOICE = 2
 
+    INSTRUCT_8B = 3
+
     # Overwrite the default __repr__, which doesn't work with
     # bt.logging for some unknown reason.
     def __repr__(self) -> str:
