@@ -1129,8 +1129,10 @@ class Validator:
         # Align competition_tracker to only track active competitions.
         self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(competition_schedule)
-        self.weights[self.weights < constants.MIN_WEIGHT_THRESHOLD] = 0.0
+        self.weights = self.competition_tracker.get_subnet_weights(
+            competitions=competition_schedule,
+            min_comp_weight_threshold=constants.MIN_WEIGHT_THRESHOLD
+        )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
