@@ -78,7 +78,8 @@ MIN_ALLOWED_SAMPLES = 50
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.
 # Since there can be multiple competitions at different reward percentages we can't just check biggest.
-WEIGHT_SYNC_MINER_MIN_PERCENT = 0.10
+# Since we only set weights per competition with a threshold of 0.18 we can just take any percent here.
+WEIGHT_SYNC_MINER_MIN_PERCENT = 0.01
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
