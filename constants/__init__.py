@@ -48,16 +48,16 @@ VALIDATOR_STATE_VERSION = 5
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
 # Define the number of blocks per vali "sync". This cadence is used to align validator behavior for better vtrust.
-SYNC_BLOCK_CADENCE = 180
+SYNC_BLOCK_CADENCE = 270
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
 # Validator weight moving average term.
-# At 0.9 a model will go from 0 -> 0.190 in 2 cycles and from 0 -> 0.83 in 17 cycles.
-ALPHA = 0.9
+# At 0.85 a model will go from 0 -> 0.278 in 2 cycles and from 0 -> 0.833 in 11 cycles.
+ALPHA = 0.85
 # Any miners with a combined competition weight below this threshold will instead receive 0 weight.
 # This is intended to help vtrust in conjunction with a low alpha by handling the tail ends.
-# At 1 eval per 180 blocks, newly winning models will start recieving weight after ~360 blocks.
-# Previously winning models will phase out after ~3060 blocks, at which point only the new winner will have weight.
+# At 1 eval per 270 blocks, newly winning models will start recieving weight after ~540 blocks.
+# Previously winning models will phase out after ~2970 blocks, at which point only the new winner will have weight.
 MIN_WEIGHT_THRESHOLD = 0.18
 
 # The validator WANDB project.
@@ -78,7 +78,8 @@ MIN_ALLOWED_SAMPLES = 50
 WEIGHT_SYNC_VALI_MIN_STAKE = 100_000
 # Minimum percent of weight on a vali for a miner to be considered a top miner.
 # Since there can be multiple competitions at different reward percentages we can't just check biggest.
-WEIGHT_SYNC_MINER_MIN_PERCENT = 0.10
+# Since we only set weights per competition with a threshold of 0.18 we can just take any percent here.
+WEIGHT_SYNC_MINER_MIN_PERCENT = 0.01
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
@@ -101,7 +102,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1200,  # ~4 hours.
+        eval_block_delay=1600,  # ~5 hours.
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
@@ -129,7 +130,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1200,  # ~4 hours.
+        eval_block_delay=1600,  # ~5 hours.
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
@@ -199,7 +200,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.MULTIPLE_CHOICE,
                         dataset_id=DatasetId.SYNTHETIC_MMLU,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.75,
+                        weight=0.8,
                     ),
                     EvalTask(
                         name="WORD_SORTING",
@@ -222,7 +223,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.IF_EVAL,
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.1,
+                        weight=0.05,
                     ),
                 ],
             ),
@@ -236,7 +237,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.MULTIPLE_CHOICE,
                         dataset_id=DatasetId.SYNTHETIC_MMLU,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.75,
+                        weight=0.8,
                     ),
                     EvalTask(
                         name="WORD_SORTING",
@@ -259,7 +260,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.IF_EVAL,
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.1,
+                        weight=0.05,
                     ),
                 ],
             ),
