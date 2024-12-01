@@ -1131,7 +1131,7 @@ class Validator:
         # Update self.weights to the merged values across active competitions.
         self.weights = self.competition_tracker.get_subnet_weights(
             competitions=competition_schedule,
-            min_comp_weight_threshold=constants.MIN_WEIGHT_THRESHOLD
+            min_comp_weight_threshold=constants.MIN_WEIGHT_THRESHOLD,
         )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
@@ -1326,13 +1326,13 @@ class Validator:
         console.print(table)
 
         ws, ui = self.weights.topk(len(self.weights))
-        table = Table(title=f"Weights >= {constants.MIN_WEIGHT_THRESHOLD}")
+        table = Table(title=f"Weights >= {constants.WEIGHT_SYNC_MINER_MIN_PERCENT}")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("weight", style="magenta")
         table.add_column("comp", style="magenta")
         for index, weight in list(zip(ui.tolist(), ws.tolist())):
-            # All remaining weights should be above the threshold so this check mainly filters out 0s.
-            if weight >= constants.MIN_WEIGHT_THRESHOLD:
+            # Show anything with weight high enough to be considered for top model checks.
+            if weight >= constants.WEIGHT_SYNC_MINER_MIN_PERCENT:
                 table.add_row(
                     str(index), str(round(weight, 4)), str(uid_to_competition_id[index])
                 )
