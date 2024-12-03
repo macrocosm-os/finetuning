@@ -126,6 +126,9 @@ class Validator:
 
     def __init__(self):
         self.config = neuron_config.validator_config()
+        # Manually default to info before overriding with arguments.
+        # If this is not done then info logging does not work in the cases where other modes are not specified.
+        bt.logging.set_info()
         bt.logging(config=self.config)
 
         bt.logging.info(f"Starting validator with config: {self.config}")
@@ -201,7 +204,7 @@ class Validator:
             self._new_wandb_run()
 
         # === Running args ===
-        self.weights = torch.zeros_like(self.metagraph.S)
+        self.weights = torch.zeros_like(torch.from_numpy(self.metagraph.S))
         self.global_step = 0
         self.last_epoch = self.metagraph.block.item()
 
@@ -716,7 +719,7 @@ class Validator:
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=uids,
-                    weights=self.weights,
+                    weights=self.weights.numpy(),
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
@@ -1114,7 +1117,7 @@ class Validator:
 
         # Fill in metagraph sized tensor with the step weights of the evaluated models.
         with self.metagraph_lock:
-            competition_weights = torch.zeros_like(self.metagraph.S)
+            competition_weights = torch.zeros_like(torch.from_numpy(self.metagraph.S))
 
         for i, uid_i in enumerate(uids):
             competition_weights[uid_i] = step_weights[i]

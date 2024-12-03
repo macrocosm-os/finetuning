@@ -124,7 +124,6 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             MistralForCausalLM,
             Phi3ForCausalLM,
             PhiForCausalLM,
-            Qwen2ForCausalLM,
         ],
         tokenizer=None,  # Any tokenizer can be used.
         kwargs={
