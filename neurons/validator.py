@@ -420,6 +420,9 @@ class Validator:
         # Track how recently we checked the list of top models.
         last_checked_top_models_time = None
 
+        # Delay the first update loop until the metagraph has been synced.
+        time.sleep(60)
+
         # The below loop iterates across all miner uids and checks to see
         # if they should be updated.
         while not self.stop_event.is_set():
