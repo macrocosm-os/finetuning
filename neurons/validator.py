@@ -762,7 +762,7 @@ class Validator:
             return _get_block_with_retry()
         except:
             bt.logging.debug(
-                f"Failed to get the latest block from the chain. Using the block from the cached metagraph."
+                "Failed to get the latest block from the chain. Using the block from the cached metagraph."
             )
             # Network call failed. Fallback to using the block from the metagraph,
             # even though it'll be a little stale.
