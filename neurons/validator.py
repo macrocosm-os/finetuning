@@ -18,6 +18,7 @@
 
 # Due to the implementation of disable_progress_bars(), this has to be the first import+call in the application relating to huggingface
 import dataclasses
+import logging
 
 from huggingface_hub.utils import disable_progress_bars
 from retry import retry
@@ -50,6 +51,8 @@ import bittensor as bt
 import nltk
 import torch
 import wandb
+from bittensor.utils.btlogging.defines import BITTENSOR_LOGGER_NAME
+from bittensor.utils.btlogging.helpers import all_loggers
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
@@ -130,6 +133,11 @@ class Validator:
         # If this is not done then info logging does not work in the cases where other modes are not specified.
         bt.logging.set_info()
         bt.logging(config=self.config)
+
+        # Setting logging level on bittensor messes with all loggers, which we don't want, so set explicitly to warning here.
+        for logger in all_loggers():
+            if not logger.name.startswith(BITTENSOR_LOGGER_NAME):
+                logger.setLevel(logging.WARNING)
 
         bt.logging.info(f"Starting validator with config: {self.config}")
 
@@ -732,15 +740,6 @@ class Validator:
                     self.last_epoch = block
             except:
                 bt.logging.warning("Failed to set weights. Trying again later.")
-
-            ws, ui = self.weights.topk(len(self.weights))
-            table = Table(title="All Weights")
-            table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-            table.add_column("weight", style="magenta")
-            for index, weight in list(zip(ui.tolist(), ws.tolist())):
-                table.add_row(str(index), str(round(weight, 4)))
-            console = Console()
-            console.print(table)
 
         try:
             bt.logging.debug(f"Setting weights.")
