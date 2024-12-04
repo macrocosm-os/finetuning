@@ -145,8 +145,10 @@ class Validator:
         torch.backends.cudnn.benchmark = True
 
         # Setup metagraph syncer for the subnet based on config. This is non-lite for getting weights by vali.
+        # Use a separate subtensor for the metagraph syncer because subtensors are not concurrency safe.
+        syncer_subtensor = bt.subtensor(config=self.config)
         self.subnet_metagraph_syncer = MetagraphSyncer(
-            self.subtensor,
+            syncer_subtensor,
             config={
                 self.config.netuid: dt.timedelta(minutes=20).total_seconds(),
             },
@@ -158,7 +160,7 @@ class Validator:
 
         # Setup metagraph syncer for dataset subnets that always point to prod chain + subnet uids.
         self.dataset_metagraph_syncer = MetagraphSyncer(
-            self.dataset_subtensor,
+            syncer_subtensor,
             config={
                 constants.PROMPTING_SUBNET_UID: dt.timedelta(hours=12).total_seconds(),
             },
