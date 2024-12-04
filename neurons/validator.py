@@ -18,6 +18,7 @@
 
 # Due to the implementation of disable_progress_bars(), this has to be the first import+call in the application relating to huggingface
 import dataclasses
+import logging
 
 from huggingface_hub.utils import disable_progress_bars
 from retry import retry
@@ -47,11 +48,11 @@ import typing
 from collections import defaultdict
 
 import bittensor as bt
-from bittensor.utils.btlogging.helpers import all_loggers
-from bittensor.utils.btlogging.defines import BITTENSOR_LOGGER_NAME
 import nltk
 import torch
 import wandb
+from bittensor.utils.btlogging.defines import BITTENSOR_LOGGER_NAME
+from bittensor.utils.btlogging.helpers import all_loggers
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
