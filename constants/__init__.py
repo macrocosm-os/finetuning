@@ -140,7 +140,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
 }
 
-INSTRUCT_8B_BLOCK = 4_423_335
+INSTRUCT_8B_BLOCK = 4_451_695
 
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
