@@ -20,6 +20,8 @@ import nltk
 import torch
 from transformers import PreTrainedTokenizerBase
 
+from finetune.datasets.loader import DatasetLoader
+
 try:
     from nltk.corpus import words
 except:
@@ -28,7 +30,7 @@ except:
 WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: "
 
 
-class WordSortingLoader:
+class WordSortingLoader(DatasetLoader):
     def __init__(
         self,
         min_word_count: int = 2,

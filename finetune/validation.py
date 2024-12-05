@@ -23,19 +23,19 @@ import typing
 
 import bittensor as bt
 import torch
-import transformers
 from taoverse.model.competition.data import Competition
 from taoverse.model.competition.epsilon import EpsilonFunc
+from taoverse.model.data import Model
 from taoverse.model.eval.normalization import normalize_score
 from taoverse.model.eval.task import EvalTask
 from transformers import GenerationConfig
 
 from finetune.eval.method import (
     EvalMethodId,
+    compute_if_eval,
     compute_multiple_choice_deviation,
     compute_reference_loss,
     compute_text_loss,
-    compute_if_eval,
 )
 from finetune.eval.sample import EvalSample
 
@@ -134,8 +134,7 @@ class ScoreDetails:
 
 
 def score_model(
-    model,
-    tokenizer: transformers.PreTrainedTokenizer,
+    model: Model,
     evals: typing.List[EvalTask],
     samples: typing.List[typing.List[EvalSample]],
     competition: Competition,
@@ -145,7 +144,6 @@ def score_model(
 
     Args:
         model (torch.nn.Module): The model to score.
-        tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use for tokenization.
         evals (list): A list of EvalTasks to score the model on.
         samples (list): A list of samples to use for scoring for the eval tasks. Must be the same length as evals.
         competition (Competition): The competition to score the model for.
@@ -157,12 +155,16 @@ def score_model(
     if len(evals) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
 
+    if not model.tokenizer:
+        raise ValueError("Model does not have a tokenizer")
+
     with torch.inference_mode():
-        model.to(device)
-        model.eval()
+        model.pt_model.to(device)
+        model.pt_model.eval()
 
         score = 0
         score_details = {task.name: ScoreDetails() for task in evals}
+        tokenizer = model.tokenizer
 
         for task, samples in zip(evals, samples):
             bt.logging.trace(f"Scoring model on task: {task.name}")
@@ -177,7 +179,7 @@ def score_model(
                         pad_token_id=tokenizer.eos_token_id,
                     )
                     raw_score = compute_multiple_choice_deviation(
-                        model=model,
+                        model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_mc_generation_config,
                         batches=samples,
@@ -185,13 +187,13 @@ def score_model(
                     )
                 case EvalMethodId.REFERENCE_LOSS:
                     raw_score = compute_reference_loss(
-                        model=model,
+                        model=model.pt_model,
                         batches=samples,
                         device=device,
                     )
                 case EvalMethodId.TEXT_LOSS:
                     raw_score = compute_text_loss(
-                        model=model,
+                        model=model.pt_model,
                         batches=samples,
                         device=device,
                         pad_token_id=tokenizer.eos_token_id,
@@ -206,7 +208,7 @@ def score_model(
                         max_time=5.0,
                     )
                     raw_score = compute_if_eval(
-                        model=model,
+                        model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_if_generation_config,
                         batches=samples,

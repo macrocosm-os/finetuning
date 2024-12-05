@@ -18,13 +18,15 @@
 
 # Due to the implementation of disable_progress_bars(), this has to be the first import+call in the application relating to huggingface
 import dataclasses
+import logging
 
 from huggingface_hub.utils import disable_progress_bars
 from retry import retry
 from taoverse.model.eval.task import EvalTask
 
-from finetune.datasets.factory import DatasetLoader
+from finetune.datasets.factory import DatasetLoaderFactory
 from finetune.datasets.ids import DatasetId
+from finetune.datasets.loader import DatasetLoader
 from finetune.eval.sample import EvalSample
 from finetune.validation import ScoreDetails
 
@@ -49,6 +51,8 @@ import bittensor as bt
 import nltk
 import torch
 import wandb
+from bittensor.utils.btlogging.defines import BITTENSOR_LOGGER_NAME
+from bittensor.utils.btlogging.helpers import all_loggers
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
@@ -125,7 +129,15 @@ class Validator:
 
     def __init__(self):
         self.config = neuron_config.validator_config()
+        # Manually default to info before overriding with arguments.
+        # If this is not done then info logging does not work in the cases where other modes are not specified.
+        bt.logging.set_info()
         bt.logging(config=self.config)
+
+        # Setting logging level on bittensor messes with all loggers, which we don't want, so set explicitly to warning here.
+        for logger in all_loggers():
+            if not logger.name.startswith(BITTENSOR_LOGGER_NAME):
+                logger.setLevel(logging.WARNING)
 
         bt.logging.info(f"Starting validator with config: {self.config}")
 
@@ -200,7 +212,7 @@ class Validator:
             self._new_wandb_run()
 
         # === Running args ===
-        self.weights = torch.zeros_like(self.metagraph.S)
+        self.weights = torch.zeros_like(torch.from_numpy(self.metagraph.S))
         self.global_step = 0
         self.last_epoch = self.metagraph.block.item()
 
@@ -407,6 +419,9 @@ class Validator:
         uid_last_checked_sequential = dict()
         # Track how recently we checked the list of top models.
         last_checked_top_models_time = None
+
+        # Delay the first update loop until the metagraph has been synced.
+        time.sleep(60)
 
         # The below loop iterates across all miner uids and checks to see
         # if they should be updated.
@@ -715,7 +730,7 @@ class Validator:
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=uids,
-                    weights=self.weights,
+                    weights=self.weights.numpy(),
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
@@ -729,15 +744,6 @@ class Validator:
             except:
                 bt.logging.warning("Failed to set weights. Trying again later.")
 
-            ws, ui = self.weights.topk(len(self.weights))
-            table = Table(title="All Weights")
-            table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-            table.add_column("weight", style="magenta")
-            for index, weight in list(zip(ui.tolist(), ws.tolist())):
-                table.add_row(str(index), str(round(weight, 4)))
-            console = Console()
-            console.print(table)
-
         try:
             bt.logging.debug(f"Setting weights.")
             await asyncio.wait_for(_try_set_weights(), ttl)
@@ -747,8 +753,13 @@ class Validator:
 
     def _get_current_block(self) -> int:
         """Returns the current block."""
-        try:
+
+        @retry(tries=5, delay=1, backoff=2)
+        def _get_block_with_retry():
             return self.subtensor.block
+
+        try:
+            return _get_block_with_retry()
         except:
             bt.logging.debug(
                 "Failed to get the latest block from the chain. Using the block from the cached metagraph."
@@ -945,13 +956,17 @@ class Validator:
 
         # Pull the latest sample data based on the competition.
         load_data_perf = PerfMonitor("Eval: Load data")
-        # Tokenize the data into batches for use in evaluation.
-        # If custom tokenizers are allowed this will need to be done on a per uid basis instead.
-        tokenizer = ft.model.load_tokenizer(
-            competition.constraints, cache_dir=self.config.model_dir
-        )
+
+        use_default_tokenizer = False
+        if competition.constraints.tokenizer:
+            tokenizer = ft.model.load_tokenizer(
+                competition.constraints, cache_dir=self.config.model_dir
+            )
+            use_default_tokenizer = True
+
         seed = self._get_seed(sync_block)
         eval_tasks: typing.List[EvalTask] = []
+        data_loaders: typing.List[DatasetLoader] = []
         samples: typing.List[typing.List[EvalSample]] = []
 
         # Load data based on the competition.
@@ -973,7 +988,7 @@ class Validator:
                         vali_hotkeys,
                     )
                 else:
-                    data_loader = DatasetLoader.get_loader(
+                    data_loader = DatasetLoaderFactory.get_loader(
                         dataset_id=eval_task.dataset_id,
                         dataset_kwargs=eval_task.dataset_kwargs,
                         seed=seed,
@@ -982,11 +997,14 @@ class Validator:
 
                 if data_loader:
                     eval_tasks.append(eval_task)
-                    samples.append(
-                        data_loader.tokenize(
-                            tokenizer, competition.constraints.sequence_length
+                    data_loaders.append(data_loader)
+                    if use_default_tokenizer:
+                        assert tokenizer
+                        samples.append(
+                            data_loader.tokenize(
+                                tokenizer, competition.constraints.sequence_length
+                            )
                         )
-                    )
 
         # Compute model score on batches.
         bt.logging.debug(
@@ -1035,13 +1053,29 @@ class Validator:
                             hotkey, model_i_metadata.id, kwargs
                         )
 
+                        # If the competition defines a default tokenizer, set it here.
+                        if use_default_tokenizer:
+                            model_i.tokenizer = tokenizer
+                        else:
+                            if not model_i.tokenizer:
+                                raise ValueError(
+                                    f"Model {uid_i} does not have a tokenizer."
+                                )
+
+                            samples = [
+                                loader.tokenize(
+                                    model_i.tokenizer,
+                                    competition.constraints.sequence_length,
+                                )
+                                for loader in data_loaders
+                            ]
+
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
                         score, score_details = utils.run_in_subprocess(
                             functools.partial(
                                 ft.validation.score_model,
-                                model_i.pt_model,
-                                tokenizer,
+                                model_i,
                                 eval_tasks,
                                 samples,
                                 competition,
@@ -1090,7 +1124,7 @@ class Validator:
 
         # Fill in metagraph sized tensor with the step weights of the evaluated models.
         with self.metagraph_lock:
-            competition_weights = torch.zeros_like(self.metagraph.S)
+            competition_weights = torch.zeros_like(torch.from_numpy(self.metagraph.S))
 
         for i, uid_i in enumerate(uids):
             competition_weights[uid_i] = step_weights[i]
@@ -1105,8 +1139,10 @@ class Validator:
         # Align competition_tracker to only track active competitions.
         self.competition_tracker.reset_competitions(active_competition_ids)
         # Update self.weights to the merged values across active competitions.
-        self.weights = self.competition_tracker.get_subnet_weights(competition_schedule)
-        self.weights[self.weights < constants.MIN_WEIGHT_THRESHOLD] = 0.0
+        self.weights = self.competition_tracker.get_subnet_weights(
+            competitions=competition_schedule,
+            min_comp_weight_threshold=constants.MIN_WEIGHT_THRESHOLD,
+        )
 
         # Prioritize models for keeping up to the sample_min for the next eval loop.
         # If the model has any significant weight, prioritize by weight with greater weights being kept first.
@@ -1300,13 +1336,13 @@ class Validator:
         console.print(table)
 
         ws, ui = self.weights.topk(len(self.weights))
-        table = Table(title=f"Weights >= {constants.MIN_WEIGHT_THRESHOLD}")
+        table = Table(title=f"Weights >= {constants.WEIGHT_SYNC_MINER_MIN_PERCENT}")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
         table.add_column("weight", style="magenta")
         table.add_column("comp", style="magenta")
         for index, weight in list(zip(ui.tolist(), ws.tolist())):
-            # All remaining weights should be above the threshold so this check mainly filters out 0s.
-            if weight >= constants.MIN_WEIGHT_THRESHOLD:
+            # Show anything with weight high enough to be considered for top model checks.
+            if weight >= constants.WEIGHT_SYNC_MINER_MIN_PERCENT:
                 table.add_row(
                     str(index), str(round(weight, 4)), str(uid_to_competition_id[index])
                 )

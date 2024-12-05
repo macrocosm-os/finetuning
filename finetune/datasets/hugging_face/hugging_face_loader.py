@@ -22,12 +22,14 @@ import torch
 import bittensor as bt
 from transformers import PreTrainedTokenizerBase
 
+from finetune.datasets.loader import DatasetLoader
+
 
 FINEWEB_EDU_SCORE_2_NAME = "HuggingFaceFW/fineweb-edu-score-2"
 FALCON_NAME = "tiiuae/falcon-refinedweb"
 
 
-class HuggingFaceLoader:
+class HuggingFaceLoader(DatasetLoader):
     rows_base_url: str = "https://datasets-server.huggingface.co/rows"
     size_base_url: str = "https://datasets-server.huggingface.co/size"
 

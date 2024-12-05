@@ -20,7 +20,6 @@ import asyncio
 import datetime as dt
 import math
 import os
-import random
 import typing
 
 import bittensor as bt
@@ -28,6 +27,7 @@ import torch
 import wandb
 from dotenv import load_dotenv
 from taoverse.metagraph import utils as metagraph_utils
+from taoverse.model.data import Model
 from taoverse.model.storage.chain.chain_model_metadata_store import (
     ChainModelMetadataStore,
 )
@@ -35,13 +35,10 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
     HuggingFaceModelStore,
 )
 from taoverse.model.storage.model_metadata_store import ModelMetadataStore
-from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
-from transformers import PreTrainedModel
 
 import constants
 import finetune as ft
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from neurons import config as neuron_config
 
 load_dotenv()  # take environment variables from .env.
@@ -54,7 +51,7 @@ async def load_starting_model(
     metagraph: bt.metagraph,
     metadata_store: ModelMetadataStore,
     kwargs: typing.Dict[str, typing.Any],
-) -> PreTrainedModel:
+) -> Model:
     """Loads the model to train based on the provided config."""
 
     # Initialize the model based on the best on the network.

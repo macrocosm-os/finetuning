@@ -18,6 +18,20 @@ Models submitted to this competition are evaluated on a set of evaluation tasks,
 
 [Code Link](https://github.com/macrocosm-os/finetuning/blob/94e8fd92ab4158e1e4a425a9562695eebafa27b1/constants/__init__.py#L128)
 
+## Competition INSTRUCT_8B:
+
+### Goal
+
+The goal of this competition is to train a SOTA instruct 8B model. This competition provides more freedom to miners than other competitions: there are no restrictions on the tokenizer used and miners are allowed to use a wider range of architectures.
+
+### Evaluation
+
+The evaluation tasks are the same as the B7_MULTICHOICE competition
+
+### Definitions
+
+TODO: Fill in post check-in
+
 # Deprecated Competitions
 
 ## Competition 1: SN9_MODEL

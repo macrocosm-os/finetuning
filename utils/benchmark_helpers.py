@@ -296,6 +296,6 @@ def get_leaderboard_scores(results: Dict[str, Any]) -> Dict[str, float]:
         "bbh": compute_bbh(results),
         # "math": compute_math(results),
         "gpqa": compute_gpqa(results),
-        # "musr": compute_musr(results),
+        "musr": compute_musr(results),
         "mmlu_pro": compute_mmlu_pro(results),
     }
