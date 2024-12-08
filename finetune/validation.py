@@ -21,7 +21,7 @@
 import dataclasses
 import typing
 
-import bittensor as bt
+import taoverse.utilities.logging as logging
 import torch
 from taoverse.model.competition.data import Competition
 from taoverse.model.competition.epsilon import EpsilonFunc
@@ -167,7 +167,7 @@ def score_model(
         tokenizer = model.tokenizer
 
         for task, samples in zip(evals, samples):
-            bt.logging.trace(f"Scoring model on task: {task.name}")
+            logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
                     compute_mc_generation_config = GenerationConfig(

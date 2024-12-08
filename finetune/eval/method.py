@@ -5,10 +5,10 @@ import traceback
 import typing
 from enum import IntEnum
 
-import bittensor as bt
+import taoverse.utilities.logging as logging
 import torch
 import transformers
-from transformers import GenerationConfig, PreTrainedModel, DynamicCache
+from transformers import DynamicCache, PreTrainedModel
 
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 
@@ -66,7 +66,7 @@ def check_for_reasonable_output(
 
     # Check if too many of the generated ids are the same between the two outputs.
     if torch.sum(torch.eq(generate_id1s, generate_id2s)).item() >= output_length / 2:
-        bt.logging.info(f"Model had too much overlap between generated outputs.")
+        logging.info(f"Model had too much overlap between generated outputs.")
         return False
 
     # Check if internally both responses are too repetitive.
@@ -80,7 +80,7 @@ def check_for_reasonable_output(
         most_common_counts.append(counts[max_count_index].item())
 
     if all(count > output_length / 2 for count in most_common_counts):
-        bt.logging.info(
+        logging.info(
             f"Model with config {model.config} had too much repetition in generated outputs."
         )
         return False
@@ -118,7 +118,7 @@ def compute_text_loss(
         ):
             return math.inf
     except Exception as e:
-        bt.logging.error(
+        logging.error(
             f"Exception occurred in checking for reasonable output: {traceback.format_exc()}"
         )
         return math.inf
@@ -145,7 +145,7 @@ def compute_text_loss(
                 shift_labels = shift_labels.view(-1)
                 losses.append(loss_fct(shift_logits, shift_labels).item())
             except Exception as e:
-                bt.logging.error(
+                logging.error(
                     f"Exception occurred in reference loss computation: {traceback.format_exc()}"
                 )
                 return math.inf
@@ -191,7 +191,7 @@ def compute_reference_loss(
                 ref_labels = ref_labels.view(-1)
                 losses.append(loss_fct(ref_logits, ref_labels).item())
             except Exception as e:
-                bt.logging.error(
+                logging.error(
                     f"Exception occurred in reference loss computation: {traceback.format_exc(e)}"
                 )
                 return math.inf
@@ -246,7 +246,7 @@ def compute_multiple_choice_deviation(
             else:
                 multiple_choice_deviations.append(1)
         except Exception as e:
-            bt.logging.error(
+            logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()  # Print the stack trace
@@ -303,7 +303,7 @@ def compute_if_eval(
                 scores.append(0 if rule.matches(response_2, 1) else 1)
 
         except Exception as e:
-            bt.logging.error(
+            logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()
@@ -313,7 +313,7 @@ def compute_if_eval(
 
     # Penalize models that are generating too many duplicated responses for different prompts.
     if duplicate_count > len(batches) * 0.1:
-        bt.logging.trace(
+        logging.trace(
             f"Model had too many duplicated responses ({duplicate_count}/{len(batches)}). Setting score to 1."
         )
         return 1

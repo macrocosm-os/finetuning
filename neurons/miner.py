@@ -40,6 +40,8 @@ from taoverse.utilities import wandb as wandb_utils
 import constants
 import finetune as ft
 from neurons import config as neuron_config
+import taoverse.utilities.logging as logging
+
 
 load_dotenv()  # take environment variables from .env.
 
@@ -62,7 +64,7 @@ async def load_starting_model(
             metagraph=metagraph,
             metadata_store=metadata_store,
         )
-        bt.logging.success(
+        logging.info(
             f"Training with best model from competition: {config.competition_id}. Model={str(model)}"
         )
         return model
@@ -76,7 +78,7 @@ async def load_starting_model(
             metagraph=metagraph,
             metadata_store=metadata_store,
         )
-        bt.logging.success(
+        logging.info(
             f"Training with model from uid: {config.load_uid}. Model={str(model)}"
         )
         return model
@@ -84,7 +86,7 @@ async def load_starting_model(
     # Check if we should load a model from a local directory.
     if config.load_model_dir:
         model = ft.mining.load_local_model(config.load_model_dir, kwargs)
-        bt.logging.success(f"Training with model from disk. Model={str(model)}")
+        logging.info(f"Training with model from disk. Model={str(model)}")
         return model
 
     raise RuntimeError(
@@ -96,6 +98,7 @@ async def main(config: bt.config):
     raise NotImplementedError("You must implement your own training logic in miner.py")
 
     # Create bittensor objects.
+    ft.utils.configure_logging(config)
     bt.logging(config=config)
 
     wallet = bt.wallet(config=config)
@@ -124,7 +127,7 @@ async def main(config: bt.config):
     use_wandb = False
     if not config.offline:
         if config.wandb_project is None or config.wandb_entity is None:
-            bt.logging.warning(
+            logging.warning(
                 "Wandb project or entity not specified. This run will not be logged to wandb"
             )
         else:
@@ -147,7 +150,7 @@ async def main(config: bt.config):
     model = model.train()
     model = model.to(config.device)
 
-    bt.logging.success(f"Saving model to path: {model_dir}.")
+    logging.info(f"Saving model to path: {model_dir}.")
     ft.mining.save(model, model_dir)
 
     # Build optimizer
@@ -178,7 +181,7 @@ async def main(config: bt.config):
             allow_val_change=True,
         )
     else:
-        bt.logging.warning(
+        logging.warning(
             "Not posting run to wandb. Either --offline is specified or the wandb settings are missing."
         )
 
@@ -198,17 +201,17 @@ async def main(config: bt.config):
             if avg_deviation < best_avg_deviation:
                 best_avg_deviation = avg_deviation  # Update the best average deviation
 
-                bt.logging.success(f"New best average deviation: {best_avg_deviation}.")
+                logging.info(f"New best average deviation: {best_avg_deviation}.")
 
                 # Save the model to your mining dir.
-                bt.logging.success(f"Saving model to path: {model_dir}.")
+                logging.info(f"Saving model to path: {model_dir}.")
                 ft.mining.save(model, model_dir)
 
-        bt.logging.success("Finished training")
+        logging.info("Finished training")
         # Push the model to your run.
         if not config.offline:
             if best_avg_deviation < config.avg_loss_upload_threshold:
-                bt.logging.success(
+                logging.info(
                     f"Trained model had a best_avg_deviation of {best_avg_deviation} which is below the threshold of {config.avg_loss_upload_threshold}. Uploading to hugging face. "
                 )
 
@@ -225,11 +228,11 @@ async def main(config: bt.config):
                     metadata_store=chain_metadata_store,
                 )
             else:
-                bt.logging.success(
+                logging.info(
                     f"This training run achieved a best_avg_deviation={best_avg_deviation}, which did not meet the upload threshold. Not uploading to hugging face."
                 )
         else:
-            bt.logging.success(
+            logging.info(
                 "Not uploading to hugging face because --offline was specified."
             )
 
