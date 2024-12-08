@@ -1,6 +1,13 @@
 import unittest
+
 from finetune.eval.if_eval.rule import RuleId
-from finetune.eval.if_eval.rule_factory import generate_rule, is_rule_incompatible
+from finetune.eval.if_eval.rule_factory import (
+    V1_RULES,
+    V2_RULES,
+    generate_if_eval_sample,
+    generate_rule,
+    is_rule_incompatible,
+)
 from finetune.eval.if_eval.version import IfEvalVersion
 
 
@@ -56,6 +63,36 @@ class TestRuleFactory(unittest.TestCase):
             )
             prompt = rule.get_prompt()
             self.assertTrue("," not in prompt)
+
+    def test_generate_if_eval_sample_v1_excludes_v2(self):
+        dummy_qa = ("", "")
+
+        for _ in range(1000):
+            sample = generate_if_eval_sample(dummy_qa, dummy_qa, 1, 1, IfEvalVersion.V1)
+            rule_id_set = set([rule.rule_id for rule in sample.rules])
+            self.assertTrue(rule_id_set.isdisjoint(V2_RULES))
+
+    def test_generate_if_eval_sample_v2_includes_v1(self):
+        dummy_qa = ("", "")
+
+        included_v1 = False
+        included_v2 = False
+
+        joint_rules = V1_RULES | V2_RULES
+
+        for _ in range(1000):
+            sample = generate_if_eval_sample(dummy_qa, dummy_qa, 1, 1, IfEvalVersion.V2)
+            rule_id_set = set([rule.rule_id for rule in sample.rules])
+            self.assertTrue(rule_id_set.issubset(joint_rules))
+            # Check if we used a v1 rule at least once.
+            if not included_v1:
+                included_v1 = not rule_id_set.isdisjoint(V1_RULES)
+            # Check if we used a v2 rule at least ocne.
+            if not included_v2:
+                included_v2 = not rule_id_set.isdisjoint(V2_RULES)
+
+        self.assertTrue(included_v1)
+        self.assertTrue(included_v2)
 
 
 if __name__ == "__main__":
