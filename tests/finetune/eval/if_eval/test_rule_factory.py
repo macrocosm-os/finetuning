@@ -1,5 +1,10 @@
 import unittest
 
+from finetune.eval.if_eval.keywords import (
+    KeywordForbiddenRule,
+    KeywordFrequencyRule,
+    KeywordInclusionRule,
+)
 from finetune.eval.if_eval.rule import RuleId
 from finetune.eval.if_eval.rule_factory import (
     V1_RULES,
@@ -80,6 +85,45 @@ class TestRuleFactory(unittest.TestCase):
 
         self.assertTrue(included_v1)
         self.assertTrue(included_v2)
+
+    def test_generate_rule_keyword_inclusion(self):
+        """Verifies that generate_rule creates a keyword rule without using existing keywords."""
+        qa1 = ("This is a question", "cat dog")
+        qa2 = ("This is another question", "cat bird")
+        for existing_rule in [
+            KeywordFrequencyRule([("cat", 1)]),
+            KeywordForbiddenRule(["cat"]),
+        ]:
+            new_rule = generate_rule(
+                RuleId.KEYWORD_INCLUSION, [existing_rule], qa1, qa2, IfEvalVersion.V2
+            )
+            self.assertEqual(new_rule.get_keywords(), ["dog", "bird"])
+
+    def test_generate_rule_keyword_frequency(self):
+        """Verifies that generate_rule creates a keyword frequency rule without using existing keywords."""
+        qa1 = ("This is a question", "cat dog")
+        qa2 = ("This is another question", "cat bird")
+        for existing_rule in [
+            KeywordInclusionRule(["cat"]),
+            KeywordForbiddenRule(["cat"]),
+        ]:
+            new_rule = generate_rule(
+                RuleId.KEYWORD_FREQUENCY, [existing_rule], qa1, qa2, IfEvalVersion.V2
+            )
+            self.assertEqual(new_rule.get_keywords(), ["dog", "bird"])
+
+    def test_generate_rule_keyword_forbidden(self):
+        """Verifies that generate_rule creates a keyword forbidden rule without using existing keywords."""
+        qa1 = ("This is a question", "cat dog")
+        qa2 = ("This is another question", "cat bird")
+        for existing_rule in [
+            KeywordInclusionRule(["cat"]),
+            KeywordFrequencyRule([("cat", 1)]),
+        ]:
+            new_rule = generate_rule(
+                RuleId.KEYWORD_FORBIDDEN, [existing_rule], qa1, qa2, IfEvalVersion.V2
+            )
+            self.assertEqual(new_rule.get_keywords(), ["dog", "bird"])
 
 
 if __name__ == "__main__":
