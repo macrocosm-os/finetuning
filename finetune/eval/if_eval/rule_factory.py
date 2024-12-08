@@ -1,22 +1,34 @@
 import random
 from typing import List, Tuple
 
+from finetune.eval.if_eval.casing import LowercaseRule, UppercaseRule
+from finetune.eval.if_eval.comma import NoCommaRule
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
 from finetune.eval.if_eval.sample import IFEvalSample
-from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 from finetune.eval.if_eval.sentence_count import (
     SentenceCountAtLeastRule,
     SentenceCountAtMostRule,
 )
-from finetune.eval.if_eval.casing import UppercaseRule, LowercaseRule
-from finetune.eval.if_eval.comma import NoCommaRule
+from finetune.eval.if_eval.start_end import EndsWithRule
 from finetune.eval.if_eval.version import IfEvalVersion
+from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 
 PROMPT_FORMAT = """Please answer the question below, denoted between quotes. Your response must follow these rules:
 {rules}
 
 \"{question}\"
 """
+
+V1_RULES = {
+    RuleId.WORD_COUNT_AT_MOST,
+    RuleId.WORD_COUNT_AT_LEAST,
+    RuleId.SENTENCE_COUNT_AT_MOST,
+    RuleId.SENTENCE_COUNT_AT_LEAST,
+    RuleId.ALL_UPPER_CASE,
+    RuleId.ALL_LOWER_CASE,
+    RuleId.NO_COMMAS,
+}
+V2_RULES = {RuleId.ENDS_WITH}
 
 
 def generate_if_eval_sample(
@@ -36,25 +48,18 @@ def generate_if_eval_sample(
         if_eval_version: The version of generation (may include new rules or logic changes).
     """
     # Only select from implemented rules per version.
-    rule_ids = []
+    rule_ids = set()
     if if_eval_version >= if_eval_version.V1:
-        rule_ids.extend(
-            [
-                RuleId.WORD_COUNT_AT_MOST,
-                RuleId.WORD_COUNT_AT_LEAST,
-                RuleId.SENTENCE_COUNT_AT_MOST,
-                RuleId.SENTENCE_COUNT_AT_LEAST,
-                RuleId.ALL_UPPER_CASE,
-                RuleId.ALL_LOWER_CASE,
-                RuleId.NO_COMMAS,
-            ]
-        )
+        rule_ids |= V1_RULES
+    if if_eval_version >= if_eval_version.V2:
+        rule_ids |= V2_RULES
 
-    random.shuffle(rule_ids)
+    rule_ids_list = list(rule_ids)
+    random.shuffle(rule_ids_list)
 
     rules = []
     n_rules = random.randint(min_rules, max_rules)
-    for rule_id in rule_ids:
+    for rule_id in rule_ids_list:
         if len(rules) == n_rules:
             break
         if is_rule_incompatible(rule_id, rules):
@@ -114,7 +119,7 @@ def generate_rule(
         case RuleId.STARTS_WITH:
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
-            return DummyRule(rule_id)
+            return EndsWithRule()
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
@@ -131,6 +136,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                     RuleId.SENTENCE_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_LEAST,
                     RuleId.BULLET_COUNT_FREQUENCY,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -141,7 +147,6 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
-                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -154,6 +159,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_LEAST,
                     RuleId.BULLET_COUNT_FREQUENCY,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -164,7 +170,6 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
-                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -221,12 +226,12 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.ENDS_WITH:
-            # Not compatible with rules that require a long length.
+            # Not compatible with rules that require a short length.
             return any(
                 rule.rule_id
                 in {
-                    RuleId.WORD_COUNT_AT_LEAST,
-                    RuleId.SENTENCE_COUNT_AT_LEAST,
+                    RuleId.WORD_COUNT_AT_MOST,
+                    RuleId.SENTENCE_COUNT_AT_MOST,
                 }
                 for rule in current_rules
             )
