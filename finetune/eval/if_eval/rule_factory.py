@@ -9,6 +9,7 @@ from finetune.eval.if_eval.sentence_count import (
     SentenceCountAtLeastRule,
     SentenceCountAtMostRule,
 )
+from finetune.eval.if_eval.start_end import EndsWithRule
 from finetune.eval.if_eval.version import IfEvalVersion
 from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 
@@ -118,7 +119,7 @@ def generate_rule(
         case RuleId.STARTS_WITH:
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
-            return DummyRule(rule_id)
+            return EndsWithRule()
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 

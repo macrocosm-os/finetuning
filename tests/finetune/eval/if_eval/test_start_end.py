@@ -11,6 +11,7 @@ class TestStardEnd(unittest.TestCase):
             self.assertTrue(rule.matches(f"UPPER CASE RESPONSE {rule.phrase.upper()}"))
             self.assertFalse(rule.matches(f"Phrase in {rule.phrase} the middle fails."))
             self.assertFalse(rule.matches(f"Extra punctuation fails {rule.phrase}."))
+            self.assertFalse(rule.matches(f"Newline fails {rule.phrase}\n"))
 
     def test_get_prompt_ends_with(self):
         for _ in range(100):
