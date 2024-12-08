@@ -1,6 +1,13 @@
 import random
 from typing import List, Tuple
 
+from finetune.eval.if_eval.keywords import (
+    KeywordForbiddenRule,
+    KeywordFrequencyRule,
+    KeywordInclusionRule,
+    KeywordRuleBase,
+    interesting_keyword,
+)
 from finetune.eval.if_eval.bullet_count import BulletFrequencyRule
 from finetune.eval.if_eval.casing import LowercaseRule, UppercaseRule
 from finetune.eval.if_eval.comma import NoCommaRule
@@ -29,7 +36,14 @@ V1_RULES = {
     RuleId.ALL_LOWER_CASE,
     RuleId.NO_COMMAS,
 }
-V2_RULES = {RuleId.ENDS_WITH, RuleId.QUOTATION, RuleId.BULLET_COUNT_FREQUENCY}
+V2_RULES = {
+    RuleId.BULLET_COUNT_FREQUENCY,
+    RuleId.ENDS_WITH,
+    RuleId.KEYWORD_INCLUSION,
+    RuleId.KEYWORD_FREQUENCY,
+    RuleId.KEYWORD_FORBIDDEN,
+    RuleId.QUOTATION,
+}
 
 
 def generate_if_eval_sample(
@@ -86,6 +100,15 @@ def generate_prompt(
     return PROMPT_FORMAT.format(rules=rule_prompts, question=question_text)
 
 
+def _extract_existing_keywords_from_rules(rules: List[IFEvalRule]) -> List[str]:
+    """Extracts the keywords used by any existing KEYWORD_X rules."""
+    keywords = []
+    for rule in rules:
+        if isinstance(rule, KeywordRuleBase):
+            keywords.extend(rule.get_keywords())
+    return keywords
+
+
 def generate_rule(
     rule_id: RuleId,
     current_rules: List[IFEvalRule],
@@ -94,6 +117,8 @@ def generate_rule(
     if_eval_version: IfEvalVersion,
 ) -> IFEvalRule:
     """Generates a rule based on the provided rule_id and existing rules."""
+    forbidden_words = _extract_existing_keywords_from_rules(current_rules)
+
     match rule_id:
         case RuleId.WORD_COUNT_AT_MOST:
             return WordCountAtMostRule(random.choice([x for x in range(25, 50, 5)]))
@@ -110,11 +135,21 @@ def generate_rule(
         case RuleId.NO_COMMAS:
             return NoCommaRule()
         case RuleId.KEYWORD_INCLUSION:
-            return DummyRule(rule_id)
+            keywords = [
+                interesting_keyword(qa[1], forbidden_words) for qa in [qa1, qa2]
+            ]
+            return KeywordInclusionRule(keywords)
         case RuleId.KEYWORD_FREQUENCY:
-            return DummyRule(rule_id)
+            keywords_and_count = [
+                (interesting_keyword(qa[1], forbidden_words), random.randint(1, 5))
+                for qa in [qa1, qa2]
+            ]
+            return KeywordFrequencyRule(keywords_and_count)
         case RuleId.KEYWORD_FORBIDDEN:
-            return DummyRule(rule_id)
+            keywords = [
+                interesting_keyword(qa[1], forbidden_words) for qa in [qa1, qa2]
+            ]
+            return KeywordForbiddenRule(keywords)
         case RuleId.BULLET_COUNT_FREQUENCY:
             return BulletFrequencyRule(random.choice([x for x in range(1, 4)]))
         case RuleId.STARTS_WITH:
@@ -198,23 +233,14 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.KEYWORD_INCLUSION:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_FREQUENCY, RuleId.KEYWORD_FORBIDDEN}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.KEYWORD_FREQUENCY:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_INCLUSION, RuleId.KEYWORD_FORBIDDEN}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.KEYWORD_FORBIDDEN:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_INCLUSION, RuleId.KEYWORD_FREQUENCY}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.BULLET_COUNT_FREQUENCY:
             # Not compatible with rules that limit the length.
             return any(
