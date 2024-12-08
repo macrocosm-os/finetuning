@@ -3,7 +3,7 @@ import math
 import random
 from typing import List, Set
 
-import bittensor as bt
+import taoverse.utilities.logging as logging
 import torch
 from transformers import PreTrainedTokenizerBase
 
@@ -46,14 +46,14 @@ class IFEvalLoader(DatasetLoader):
             )
         )
 
-        bt.logging.trace(f"Loaded {len(questions)} raw samples")
+        logging.trace(f"Loaded {len(questions)} raw samples")
 
         # Parse the question and answer text from the raw text.
         parsed_q_and_a = [
             extract_q_and_a_text(prompt, answer) for prompt, answer in questions
         ]
         parsed_q_and_a = [qa for qa in parsed_q_and_a if qa is not None]
-        bt.logging.trace(
+        logging.trace(
             f"Extracted {len(parsed_q_and_a)} questions and answers from raw samples"
         )
 
@@ -79,7 +79,7 @@ class IFEvalLoader(DatasetLoader):
                 )
             )
 
-        bt.logging.trace(f"Generated {len(self.buffer)} IFEval samples")
+        logging.trace(f"Generated {len(self.buffer)} IFEval samples")
 
     def _should_filter_question(self, question: str, answer: str) -> bool:
         # For now, just filter out 1 word answers.

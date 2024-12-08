@@ -1,6 +1,8 @@
-import math
-import bittensor as bt
 import datetime as dt
+import math
+
+import bittensor as bt
+import taoverse.utilities.logging as logging
 
 
 def get_block_timestamp(subtensor: bt.subtensor, block_number: int) -> dt.datetime:
@@ -43,3 +45,14 @@ def get_next_sync_block(block: int, sync_cadence: int, genesis: int = 0) -> int:
     if sync_block == block:
         sync_block += sync_cadence
     return sync_block
+
+
+def configure_logging(config: bt.config) -> None:
+    """Configures the Taoverse logger from a bittensor config."""
+
+    if hasattr(config, "trace") and config.trace:
+        logging.set_verbosity_trace()
+    elif hasattr(config, "debug") and config.debug:
+        logging.set_verbosity_debug()
+    else:
+        logging.set_verbosity_info()
