@@ -102,9 +102,10 @@ class TestForbiddenKeyword(unittest.TestCase):
 
 class TestKeywordFrequencyRule(unittest.TestCase):
     def test_get_prompt(self):
-        rule = KeywordFrequencyRule([("test", 2), ("example", 3)])
+        rule = KeywordFrequencyRule([("test", 2), ("example", 3), ("dog", 1)])
         self.assertEqual(rule.get_prompt(0), 'Include the word "test" 2 times.')
         self.assertEqual(rule.get_prompt(1), 'Include the word "example" 3 times.')
+        self.assertEqual(rule.get_prompt(2), 'Include the word "dog" 1 time.')
 
     def test_matches(self):
         rule = KeywordFrequencyRule([("test", 2), ("example", 3)])

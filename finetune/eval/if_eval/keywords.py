@@ -117,7 +117,8 @@ class KeywordFrequencyRule(KeywordRuleBase):
         if index >= len(self.keywords_and_counts):
             raise ValueError("Index is out of range for keywords.")
         word, count = self.keywords_and_counts[index]
-        return f'Include the word "{word}" {count} times.'
+        time_str = "time" if count == 1 else "times"
+        return f'Include the word "{word}" {count} {time_str}.'
 
     def get_keywords(self) -> List[str]:
         return [word for word, _ in self.keywords_and_counts]
