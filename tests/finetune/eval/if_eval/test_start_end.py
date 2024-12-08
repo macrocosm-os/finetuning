@@ -37,7 +37,7 @@ class TestStartEnd(unittest.TestCase):
         self.assertTrue(rule.matches('"Response in double quotes."'))
         self.assertTrue(rule.matches('"Response in double quotes with newline. \n"'))
         self.assertFalse(rule.matches('"Response starting with a double quote.'))
-        self.assertFalse(rule.matches('Response ending with a doubel quote"'))
+        self.assertFalse(rule.matches('Response ending with a double quote"'))
         self.assertFalse(rule.matches('"Response with space after quotes" '))
         self.assertFalse(rule.matches('"Response with newline after quotes"\n'))
 
