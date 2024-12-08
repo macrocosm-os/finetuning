@@ -121,7 +121,7 @@ def generate_rule(
         case RuleId.ENDS_WITH:
             return EndsWithRule()
         case RuleId.QUOTATION:
-            return QoutationRule()
+            return QuotationRule()
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
