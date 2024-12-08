@@ -51,8 +51,11 @@ def configure_logging(config: bt.config) -> None:
     """Configures the Taoverse logger from a bittensor config."""
 
     if hasattr(config, "trace") and config.trace:
+        print("Setting verbosity to trace")
         logging.set_verbosity_trace()
     elif hasattr(config, "debug") and config.debug:
+        print("Setting verbosity to debug")
         logging.set_verbosity_debug()
     else:
+        print("Setting verbosity to info")
         logging.set_verbosity_info()
