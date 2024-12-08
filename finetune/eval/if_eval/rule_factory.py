@@ -9,7 +9,7 @@ from finetune.eval.if_eval.sentence_count import (
     SentenceCountAtLeastRule,
     SentenceCountAtMostRule,
 )
-from finetune.eval.if_eval.start_end import EndsWithRule
+from finetune.eval.if_eval.start_end import EndsWithRule, QuotationRule
 from finetune.eval.if_eval.version import IfEvalVersion
 from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 
@@ -28,7 +28,7 @@ V1_RULES = {
     RuleId.ALL_LOWER_CASE,
     RuleId.NO_COMMAS,
 }
-V2_RULES = {RuleId.ENDS_WITH}
+V2_RULES = {RuleId.ENDS_WITH, RuleId.QUOTATION}
 
 
 def generate_if_eval_sample(
@@ -120,6 +120,8 @@ def generate_rule(
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
             return EndsWithRule()
+        case RuleId.QUOTATION:
+            return QuotationRule()
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
@@ -226,12 +228,22 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.ENDS_WITH:
-            # Not compatible with rules that require a short length.
+            # Not compatible with rules that require a short length or specify the end.
             return any(
                 rule.rule_id
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
+                    RuleId.QUOTATION,
+                }
+                for rule in current_rules
+            )
+        case RuleId.QUOTATION:
+            # Not compatible with rules that specify the start or end.
+            return any(
+                rule.rule_id
+                in {
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
