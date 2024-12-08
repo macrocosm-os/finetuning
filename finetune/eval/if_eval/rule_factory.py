@@ -35,7 +35,13 @@ V1_RULES = {
     RuleId.ALL_LOWER_CASE,
     RuleId.NO_COMMAS,
 }
-V2_RULES = {RuleId.ENDS_WITH, RuleId.QUOTATION}
+V2_RULES = {
+    RuleId.ENDS_WITH,
+    RuleId.KEYWORD_INCLUSION,
+    RuleId.KEYWORD_FREQUENCY,
+    RuleId.KEYWORD_FORBIDDEN,
+    RuleId.QUOTATION,
+}
 
 
 def generate_if_eval_sample(
