@@ -1,6 +1,7 @@
 import random
 from typing import List, Tuple
 
+from finetune.eval.if_eval.bullet_count import BulletFrequencyRule
 from finetune.eval.if_eval.casing import LowercaseRule, UppercaseRule
 from finetune.eval.if_eval.comma import NoCommaRule
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
@@ -28,7 +29,7 @@ V1_RULES = {
     RuleId.ALL_LOWER_CASE,
     RuleId.NO_COMMAS,
 }
-V2_RULES = {RuleId.ENDS_WITH, RuleId.QUOTATION}
+V2_RULES = {RuleId.ENDS_WITH, RuleId.QUOTATION, RuleId.BULLET_COUNT_FREQUENCY}
 
 
 def generate_if_eval_sample(
@@ -115,7 +116,7 @@ def generate_rule(
         case RuleId.KEYWORD_FORBIDDEN:
             return DummyRule(rule_id)
         case RuleId.BULLET_COUNT_FREQUENCY:
-            return DummyRule(rule_id)
+            return BulletFrequencyRule(random.choice([x for x in range(1, 4)]))
         case RuleId.STARTS_WITH:
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
