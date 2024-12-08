@@ -8,6 +8,7 @@ from finetune.eval.if_eval.keywords import (
     KeywordRuleBase,
     interesting_keyword,
 )
+from finetune.eval.if_eval.bullet_count import BulletFrequencyRule
 from finetune.eval.if_eval.casing import LowercaseRule, UppercaseRule
 from finetune.eval.if_eval.comma import NoCommaRule
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
@@ -36,6 +37,7 @@ V1_RULES = {
     RuleId.NO_COMMAS,
 }
 V2_RULES = {
+    RuleId.BULLET_COUNT_FREQUENCY,
     RuleId.ENDS_WITH,
     RuleId.KEYWORD_INCLUSION,
     RuleId.KEYWORD_FREQUENCY,
@@ -149,7 +151,7 @@ def generate_rule(
             ]
             return KeywordForbiddenRule(keywords)
         case RuleId.BULLET_COUNT_FREQUENCY:
-            return DummyRule(rule_id)
+            return BulletFrequencyRule(random.choice([x for x in range(1, 4)]))
         case RuleId.STARTS_WITH:
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
