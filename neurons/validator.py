@@ -130,9 +130,8 @@ class Validator:
 
     def _configure_logging(self, config: bt.config) -> None:
         # BT logging is noisy, so set it to only log errors.
-        # TODO: Reinitialize the taoverse logger since this removes the hander
-        # bt.logging(config=self.config)
-        # bt.logging.set_warning()
+        bt.logging(config=self.config)
+        bt.logging.set_warning()
 
         # Setting logging level on bittensor messes with all loggers, which we don't want, so set explicitly to warning here.
         for logger in all_loggers():
