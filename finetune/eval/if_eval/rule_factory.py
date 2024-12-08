@@ -10,6 +10,7 @@ from finetune.eval.if_eval.sentence_count import (
 )
 from finetune.eval.if_eval.casing import UppercaseRule, LowercaseRule
 from finetune.eval.if_eval.comma import NoCommaRule
+from finetune.eval.if_eval.version import IfEvalVersion
 
 PROMPT_FORMAT = """Please answer the question below, denoted between quotes. Your response must follow these rules:
 {rules}
@@ -19,7 +20,11 @@ PROMPT_FORMAT = """Please answer the question below, denoted between quotes. You
 
 
 def generate_if_eval_sample(
-    qa1: Tuple[str, str], qa2: Tuple[str, str], min_rules: int, max_rules: int
+    qa1: Tuple[str, str],
+    qa2: Tuple[str, str],
+    min_rules: int,
+    max_rules: int,
+    if_eval_version: IfEvalVersion,
 ) -> IFEvalSample:
     """Returns an IFEvalSample using the provided pair of Q&A.
 
@@ -28,18 +33,22 @@ def generate_if_eval_sample(
         qa2: The second question and answer pair.
         min_rules: The minimum number of rules to generate.
         max_rules: The maximum number of rules to generate.
+        if_eval_version: The version of generation (may include new rules or logic changes).
     """
-    # Only select from implemented rules.
-    # rule_ids = list(RuleId)
-    rule_ids = [
-        RuleId.WORD_COUNT_AT_MOST,
-        RuleId.WORD_COUNT_AT_LEAST,
-        RuleId.SENTENCE_COUNT_AT_MOST,
-        RuleId.SENTENCE_COUNT_AT_LEAST,
-        RuleId.ALL_UPPER_CASE,
-        RuleId.ALL_LOWER_CASE,
-        RuleId.NO_COMMAS,
-    ]
+    # Only select from implemented rules per version.
+    rule_ids = []
+    if if_eval_version >= if_eval_version.V1:
+        rule_ids.extend(
+            [
+                RuleId.WORD_COUNT_AT_MOST,
+                RuleId.WORD_COUNT_AT_LEAST,
+                RuleId.SENTENCE_COUNT_AT_MOST,
+                RuleId.SENTENCE_COUNT_AT_LEAST,
+                RuleId.ALL_UPPER_CASE,
+                RuleId.ALL_LOWER_CASE,
+                RuleId.NO_COMMAS,
+            ]
+        )
 
     random.shuffle(rule_ids)
 
@@ -51,7 +60,7 @@ def generate_if_eval_sample(
         if is_rule_incompatible(rule_id, rules):
             continue
 
-        rules.append(generate_rule(rule_id, rules, qa1, qa2))
+        rules.append(generate_rule(rule_id, rules, qa1, qa2, if_eval_version))
 
     # Now generate the sample.
     return IFEvalSample(
@@ -76,6 +85,7 @@ def generate_rule(
     current_rules: List[IFEvalRule],
     qa1: Tuple[str, str],
     qa2: Tuple[str, str],
+    if_eval_version: IfEvalVersion,
 ) -> IFEvalRule:
     """Generates a rule based on the provided rule_id and existing rules."""
     match rule_id:

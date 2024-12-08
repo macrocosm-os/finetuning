@@ -28,6 +28,7 @@ from transformers import (
 from competitions.data import CompetitionId
 from finetune.datasets.ids import DatasetId
 from finetune.eval.method import EvalMethodId
+from finetune.eval.if_eval.version import IfEvalVersion
 
 # ---------------------------------
 # Project Constants.
@@ -180,6 +181,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.IF_EVAL,
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
+                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
                         weight=0.05,
                     ),
                 ],
@@ -222,6 +224,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.IF_EVAL,
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
+                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
                         weight=0.05,
                     ),
                 ],
@@ -259,6 +262,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.IF_EVAL,
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
+                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
                         weight=0.05,
                     ),
                 ],

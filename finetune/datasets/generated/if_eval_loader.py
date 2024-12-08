@@ -12,6 +12,7 @@ from finetune.datasets.loader import DatasetLoader
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.eval.if_eval import rule_factory
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
+from finetune.eval.if_eval.version import IfEvalVersion
 
 
 class IFEvalLoader(DatasetLoader):
@@ -26,6 +27,7 @@ class IFEvalLoader(DatasetLoader):
         random_seed: int = None,
         max_samples: int = 20,
         validator_hotkeys: Set[str] = None,
+        if_eval_version: IfEvalVersion = IfEvalVersion.V1,
     ):
         if random_seed:
             random.seed(random_seed)
@@ -69,7 +71,11 @@ class IFEvalLoader(DatasetLoader):
         ):
             self.buffer.append(
                 rule_factory.generate_if_eval_sample(
-                    qa1, qa2, IFEvalLoader.MIN_RULES, IFEvalLoader.MAX_RULES
+                    qa1,
+                    qa2,
+                    IFEvalLoader.MIN_RULES,
+                    IFEvalLoader.MAX_RULES,
+                    if_eval_version,
                 )
             )
 
