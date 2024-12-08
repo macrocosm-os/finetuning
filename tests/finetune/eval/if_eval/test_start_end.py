@@ -1,6 +1,10 @@
 import unittest
 
-from finetune.eval.if_eval.start_end import ENDS_WITH_PHRASES, EndsWithRule
+from finetune.eval.if_eval.start_end import (
+    ENDS_WITH_PHRASES,
+    EndsWithRule,
+    QuotationRule,
+)
 
 
 class TestStartEnd(unittest.TestCase):
@@ -27,6 +31,21 @@ class TestStartEnd(unittest.TestCase):
             )
             # Also test that it has no commas as this rule is compatible with comma related rules.
             self.assertTrue("," not in rule.get_prompt())
+
+    def test_quotation(self):
+        rule = QuotationRule()
+        self.assertTrue(rule.matches('"Response in double quotes."'))
+        self.assertTrue(rule.matches('"Response in double quotes with newline. \n"'))
+        self.assertFalse(rule.matches('"Response starting with a double quote.'))
+        self.assertFalse(rule.matches('Response ending with a doubel quote"'))
+        self.assertFalse(rule.matches('"Response with space after quotes" '))
+        self.assertFalse(rule.matches('"Response with newline after quotes"\n'))
+
+    def test_get_prompt_quotation(self):
+        rule = QuotationRule()
+        self.assertEqual(
+            rule.get_prompt(), "Wrap your entire response in double quotation marks."
+        )
 
 
 if __name__ == "__main__":

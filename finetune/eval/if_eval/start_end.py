@@ -22,3 +22,17 @@ class EndsWithRule(IFEvalRule):
     def matches(self, text: str, index: int = -1) -> bool:
         # Check matches while ignoring casing.
         return text.lower().endswith(self.phrase.lower())
+
+
+class QuotationRule(IFEvalRule):
+    """Rule that enforces the response starts and ends with a double quotation."""
+
+    def __init__(self):
+        super().__init__(rule_id=RuleId.QUOTATION)
+
+    def get_prompt(self, index: int = -1) -> str:
+        return "Wrap your entire response in double quotation marks."
+
+    def matches(self, text: str, index: int = -1) -> bool:
+        # Check matches while ignoring casing.
+        return text.startswith('"') and text.endswith('"')
