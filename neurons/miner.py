@@ -99,8 +99,6 @@ async def main(config: bt.config):
     raise NotImplementedError("You must implement your own training logic in miner.py")
 
     # Create bittensor objects.
-    bt.logging.set_trace(on=False)
-    bt.logging.set_debug(on=False)
     bt.logging.set_warning()
     taoverse_utils.logging.reinitialize()
     taoverse_utils.configure_logging(config)

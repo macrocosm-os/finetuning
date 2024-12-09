@@ -84,8 +84,6 @@ def get_config():
 
 async def main(config: bt.config):
     # Create bittensor objects.
-    bt.logging.set_trace(on=False)
-    bt.logging.set_debug(on=False)
     bt.logging.set_warning()
     taoverse_utils.logging.reinitialize()
     taoverse_utils.configure_logging(config)
