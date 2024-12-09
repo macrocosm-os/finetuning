@@ -298,16 +298,27 @@ def compute_if_eval(
             if compute_similarity_score(response_1, response_2) > 0.6:
                 duplicate_count += 1
 
+            correct = 0
             for rule in sample.rules:
-                scores.append(0 if rule.matches(response_1, 0) else 1)
-                scores.append(0 if rule.matches(response_2, 1) else 1)
+                if rule.matches(response_1, 0):
+                    correct += 1
+                if rule.matches(response_2, 1):
+                    correct += 1
+
+            # The fraction correct is squared to give more reward to getting more/all of the rules correct.
+            correct_ratio = correct / (len(sample.rules) * 2)
+            response_score = 1 - (correct_ratio**2)
+
+            # Append this response score one time per rule to weight scores linearly with the number of rules.
+            for _ in range(len(sample.rules)):
+                scores.append(response_score)
 
         except Exception as e:
             logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
             )
             traceback.print_exc()
-            for _ in range(len(sample.rules) * 2):
+            for _ in range(len(sample.rules)):
                 # Fail all rules in this sample.
                 scores.append(1)
 
