@@ -295,6 +295,13 @@ def compute_if_eval(
                 tokenizer=tokenizer,
             )
 
+            logging.info(
+                f"Request 1: {tokenizer.decode(sample.prompt_1[0])}\n\nResponse 1:{response_1}\n\n"
+            )
+            logging.info(
+                f"Request 2: {tokenizer.decode(sample.prompt_2[0])}\n\nResponse 2:{response_2}\n\n"
+            )
+
             if compute_similarity_score(response_1, response_2) > 0.6:
                 duplicate_count += 1
 
@@ -310,6 +317,10 @@ def compute_if_eval(
 
                 # Append this response score one time per rule to weight scores linearly with the number of rules.
                 scores.extend([response_score] * len(sample.rules))
+
+                logging.info(
+                    f"Got {correct} out of {len(sample.rules)} rules correct. Scored {response_score} {len(sample.rules)} times."
+                )
 
         except Exception as e:
             logging.error(
