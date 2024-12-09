@@ -35,6 +35,7 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
     HuggingFaceModelStore,
 )
 from taoverse.model.storage.model_metadata_store import ModelMetadataStore
+from taoverse.utilities import utils as taoverse_utils
 from taoverse.utilities import wandb as wandb_utils
 
 import constants
@@ -98,8 +99,8 @@ async def main(config: bt.config):
     raise NotImplementedError("You must implement your own training logic in miner.py")
 
     # Create bittensor objects.
-    ft.utils.configure_logging(config)
     bt.logging(config=config)
+    taoverse_utils.configure_logging(config)
 
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
