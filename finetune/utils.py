@@ -2,7 +2,6 @@ import datetime as dt
 import math
 
 import bittensor as bt
-import taoverse.utilities.logging as logging
 
 
 def get_block_timestamp(subtensor: bt.subtensor, block_number: int) -> dt.datetime:
