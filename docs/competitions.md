@@ -30,7 +30,7 @@ The evaluation tasks are the same as the B7_MULTICHOICE competition
 
 ### Definitions
 
-TODO: Fill in post check-in
+[Code Link](https://github.com/macrocosm-os/finetuning/blob/c6dce9d27d1317b9c543071913ae34df09faddc7/constants/__init__.py#L114)
 
 # Deprecated Competitions
 
