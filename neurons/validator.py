@@ -139,7 +139,7 @@ class Validator:
                 logger.setLevel(logging.WARNING)
 
         # Configure the Taoverse logger, which is our primary logger.
-        ft.utils.configure_logging(config)
+        utils.configure_logging(config)
 
     def __init__(self):
         self.config = neuron_config.validator_config()
