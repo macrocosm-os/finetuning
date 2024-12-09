@@ -145,9 +145,13 @@ def main():
 
 if __name__ == "__main__":
     # Make sure we can download the needed ntlk modules
-    # Used for generating words in word sorting evals
-    nltk.download("words", raise_on_error=True)
-    # Used for counting sentences in sentence count evals
-    nltk.download("punkt", raise_on_error=True)
+    nltk_modules = {
+        "words",
+        "punkt",
+        "punkt_tab",
+        "averaged_perceptron_tagger_eng",
+    }
+    for module in nltk_modules:
+        nltk.download(module, raise_on_error=True)
 
     main()
