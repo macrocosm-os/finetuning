@@ -141,7 +141,7 @@ def generate_rule(
             return KeywordInclusionRule(keywords)
         case RuleId.KEYWORD_FREQUENCY:
             keywords_and_count = [
-                (interesting_keyword(qa[1], forbidden_words), random.randint(1, 5))
+                (interesting_keyword(qa[1], forbidden_words), random.randint(1, 4))
                 for qa in [qa1, qa2]
             ]
             return KeywordFrequencyRule(keywords_and_count)

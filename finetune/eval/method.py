@@ -298,9 +298,18 @@ def compute_if_eval(
             if compute_similarity_score(response_1, response_2) > 0.6:
                 duplicate_count += 1
 
-            for rule in sample.rules:
-                scores.append(0 if rule.matches(response_1, 0) else 1)
-                scores.append(0 if rule.matches(response_2, 1) else 1)
+            for index, response in enumerate([response_1, response_2]):
+                correct = 0
+                for rule in sample.rules:
+                    if rule.matches(response, index):
+                        correct += 1
+
+                # The fraction correct is squared to give more reward to getting more/all of the rules correct.
+                correct_ratio = correct / (len(sample.rules))
+                response_score = 1 - (correct_ratio**2)
+
+                # Append this response score one time per rule to weight scores linearly with the number of rules.
+                scores.extend([response_score] * len(sample.rules))
 
         except Exception as e:
             logging.error(
