@@ -18,9 +18,8 @@ from finetune.eval.if_eval.version import IfEvalVersion
 class IFEvalLoader(DatasetLoader):
     """Generates samples for the IfEval task."""
 
-    # The min/max number of rules per sample.
-    MIN_RULES = 1
-    MAX_RULES = 4
+    # The min/max number of rules per sample per version.
+    VERSION_TO_RULE_COUNTS = {IfEvalVersion.V1: (1, 4), IfEvalVersion.V2: (2, 5)}
 
     def __init__(
         self,
@@ -73,8 +72,8 @@ class IFEvalLoader(DatasetLoader):
                 rule_factory.generate_if_eval_sample(
                     qa1,
                     qa2,
-                    IFEvalLoader.MIN_RULES,
-                    IFEvalLoader.MAX_RULES,
+                    IFEvalLoader.VERSION_TO_RULE_COUNTS[if_eval_version][0],
+                    IFEvalLoader.VERSION_TO_RULE_COUNTS[if_eval_version][1],
                     if_eval_version,
                 )
             )
