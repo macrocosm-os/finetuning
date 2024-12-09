@@ -318,6 +318,10 @@ def compute_if_eval(
                 # Append this response score one time per rule to weight scores linearly with the number of rules.
                 scores.extend([response_score] * len(sample.rules))
 
+            logging.info(
+                f"Got {correct} out of {len(sample.rules) * 2} rules correct. Scored {response_score} {len(sample.rules)} times."
+            )
+
         except Exception as e:
             logging.error(
                 f"Exception occurred in multiple choice deviation computation: {e}"
