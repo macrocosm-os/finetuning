@@ -1,6 +1,7 @@
-import math
-import bittensor as bt
 import datetime as dt
+import math
+
+import bittensor as bt
 
 
 def get_block_timestamp(subtensor: bt.subtensor, block_number: int) -> dt.datetime:
