@@ -372,7 +372,7 @@ weights_version_key = __spec_version__
 # time required between updates to the chain.
 chain_update_cadence = dt.timedelta(minutes=20)
 # Number of blocks required between retrying evaluation of a model.
-model_retry_cadence = 300  # Roughly 1 hour
+model_retry_cadence = 1200  # Roughly 4 hour
 # How frequently to check the models given weights by other large validators.
 scan_top_model_cadence = dt.timedelta(minutes=30)
 # validator eval batch min to keep for next loop.
