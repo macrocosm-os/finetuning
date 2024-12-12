@@ -1392,22 +1392,42 @@ class Validator:
                 },
                 "competition_id": {str(uid): int(competition.id)},
                 "load_model_perf": {
-                    "min": load_model_perf.min(),
-                    "median": load_model_perf.median(),
-                    "max": load_model_perf.max(),
-                    "P90": load_model_perf.percentile(90),
+                    "min": load_model_perf.min() if load_model_perf.samples else -1,
+                    "median": (
+                        load_model_perf.median() if load_model_perf.samples else -1
+                    ),
+                    "max": load_model_perf.max() if load_model_perf.samples else -1,
+                    "P90": (
+                        load_model_perf.percentile(90)
+                        if load_model_perf.samples
+                        else -1
+                    ),
                 },
                 "compute_model_perf": {
-                    "min": compute_score_perf.min(),
-                    "median": compute_score_perf.median(),
-                    "max": compute_score_perf.max(),
-                    "P90": compute_score_perf.percentile(90),
+                    "min": (
+                        compute_score_perf.min() if compute_score_perf.samples else -1
+                    ),
+                    "median": (
+                        compute_score_perf.median()
+                        if compute_score_perf.samples
+                        else -1
+                    ),
+                    "max": (
+                        compute_score_perf.max() if compute_score_perf.samples else -1
+                    ),
+                    "P90": (
+                        compute_score_perf.percentile(90)
+                        if compute_score_perf.samples
+                        else -1
+                    ),
                 },
                 "load_data_perf": {
-                    "min": load_data_perf.min(),
-                    "median": load_data_perf.median(),
-                    "max": load_data_perf.max(),
-                    "P90": load_data_perf.percentile(90),
+                    "min": load_data_perf.min() if load_data_perf.samples else -1,
+                    "median": load_data_perf.median() if load_data_perf.samples else -1,
+                    "max": load_data_perf.max() if load_data_perf.samples else -1,
+                    "P90": (
+                        load_data_perf.percentile(90) if load_data_perf.samples else -1
+                    ),
                 },
             }
             # Add the score details to the graphed data.
