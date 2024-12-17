@@ -99,13 +99,17 @@ def _run_benchmarks(
 ) -> Dict[str, Any]:
     """Runs a benchmark on a given model."""
 
-    # Download the tokenizer and model.
-    tokenizer = AutoTokenizer.from_pretrained(
-        competition.constraints.tokenizer, cache_dir=hf_dir
-    )
     store = HuggingFaceModelStore()
     model = asyncio.run(
         store.download_model(model_metadata.id, hf_dir, competition.constraints)
+    )
+    # Download the tokenizer and model.
+    tokenizer = (
+        model.tokenizer
+        if model.tokenizer
+        else AutoTokenizer.from_pretrained(
+            competition.constraints.tokenizer, cache_dir=hf_dir
+        )
     )
     pretrained = model.pt_model
     pretrained.to("cuda")
