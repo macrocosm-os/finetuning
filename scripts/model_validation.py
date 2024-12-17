@@ -82,7 +82,7 @@ def main():
     kwargs["use_cache"] = True
 
     logging.info(f"Loading tokenizer and model from {args.model_path}")
-    model = ft.mining.load_local_model(args.model_path, kwargs)
+    model = ft.mining.load_local_model(args.model_path, args.competition_id, kwargs)
 
     if competition.constraints.tokenizer:
         model.tokenizer = ft.model.load_tokenizer(competition.constraints)

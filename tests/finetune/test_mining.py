@@ -54,7 +54,9 @@ class TestMining(unittest.TestCase):
 
         ft.mining.save(model=model, model_dir=self.model_dir)
         retrieved_model = ft.mining.load_local_model(
-            model_dir=self.model_dir, kwargs={}
+            model_dir=self.model_dir,
+            competition_id=CompetitionId.B7_MULTI_CHOICE,
+            kwargs={},
         )
 
         self.assertEqual(str(model), str(retrieved_model))
@@ -72,12 +74,33 @@ class TestMining(unittest.TestCase):
 
         ft.mining.save(model=model, model_dir=self.model_dir)
         retrieved_model = ft.mining.load_local_model(
-            model_dir=self.model_dir, kwargs={}
+            model_dir=self.model_dir,
+            competition_id=CompetitionId.INSTRUCT_8B,
+            kwargs={},
         )
 
         # Overwrite the name of the tokenizer to avoid it using the local path.
         retrieved_model.tokenizer.name_or_path = "Xenova/gpt-4"
         self.assertEqual(str(model), str(retrieved_model))
+
+    def test_load_local_model_with_missing_tokenizer(self):
+        """Tests that loading a local model for a competition expecting a tokenizer fails if no tokenizer is found."""
+        # Use the default model id for local models.
+        model_id = ModelId(
+            namespace="local_namespace",
+            name="local_model",
+            competition_id=CompetitionId.INSTRUCT_8B,
+        )
+        model = Model(id=model_id, pt_model=self.tiny_model, tokenizer=None)
+
+        ft.mining.save(model=model, model_dir=self.model_dir)
+
+        with self.assertRaises(Exception):
+            _ = ft.mining.load_local_model(
+                model_dir=self.model_dir,
+                competition_id=CompetitionId.INSTRUCT_8B,
+                kwargs={},
+            )
 
     def _test_push(
         self,

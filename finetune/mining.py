@@ -191,12 +191,14 @@ async def get_repo(
     return model_utils.get_hf_url(model_metadata)
 
 
-def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> Model:
+def load_local_model(
+    model_dir: str, competition_id: CompetitionId, kwargs: Dict[str, Any]
+) -> Model:
     """Loads a model from a directory."""
     model_id = ModelId(
         namespace="local_namespace",
         name="local_model",
-        competition_id=CompetitionId.NONE,
+        competition_id=competition_id,
     )
 
     pt_model = AutoModelForCausalLM.from_pretrained(
@@ -206,17 +208,15 @@ def load_local_model(model_dir: str, kwargs: Dict[str, Any]) -> Model:
         **kwargs,
     )
 
-    # Always try to retrieve a tokenizer from the model directory. If we do not find one leave it None on the Model.
     tokenizer = None
-    try:
+    if competition_id == CompetitionId.INSTRUCT_8B:
         # Do not use the kwargs for the model load here. If needed in the future a separate kwargs can be plumbed.
+        # This may throw an exception if no model is found.
         tokenizer = AutoTokenizer.from_pretrained(
             pretrained_model_name_or_path=model_dir,
             local_files_only=True,
             use_safetensors=True,
         )
-    except Exception:
-        pass
 
     return Model(id=model_id, pt_model=pt_model, tokenizer=tokenizer)
 
