@@ -141,7 +141,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
 }
 
 INSTRUCT_8B_BLOCK = 4_451_695
-IF_EVAL_V2_BLOCK = 4_503_159
+IF_EVAL_V2_BLOCK = 4_523_592
 
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
