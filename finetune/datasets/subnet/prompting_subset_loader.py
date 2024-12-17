@@ -22,6 +22,7 @@ import traceback
 import typing
 
 import bittensor as bt
+import taoverse.utilities.logging as logging
 import torch
 import wandb
 from transformers import PreTrainedTokenizerBase
@@ -114,11 +115,11 @@ class PromptingSubsetLoader(DatasetLoader):
             validator_hotkeys, oldest_sample_timestamp, newest_sample_timestamp
         )
 
-        bt.logging.trace(f"Fetching runs using filters {filters}")
+        logging.trace(f"Fetching runs using filters {filters}")
 
         # Get the runs, oldest first.
         runs = list(api.runs(prompting_project, filters, order="+created_at"))
-        bt.logging.trace(f"Found {len(runs)} runs")
+        logging.trace(f"Found {len(runs)} runs")
 
         all_samples: typing.Set[str] = set()
         self.buffer: typing.List[typing.Tuple[str, str]] = []
@@ -138,7 +139,7 @@ class PromptingSubsetLoader(DatasetLoader):
                 hotkey = run.config.get("HOTKEY_SS58", None)
                 # First check that the hotkey is in fact a desired validator hotkey.
                 if hotkey not in validator_hotkeys:
-                    bt.logging.trace(
+                    logging.trace(
                         f"Hotkey: {hotkey} does not match an expected validator for {run.id}."
                     )
                     return False
@@ -148,7 +149,7 @@ class PromptingSubsetLoader(DatasetLoader):
                 if not signature or not bt.Keypair(ss58_address=hotkey).verify(
                     run.id, bytes.fromhex(signature)
                 ):
-                    bt.logging.trace(
+                    logging.trace(
                         f"Failed Signature: {signature} is not valid for {run.id}."
                     )
                     return False
@@ -233,7 +234,7 @@ class PromptingSubsetLoader(DatasetLoader):
                     break
                 except Exception:
                     attempt += 1
-                    bt.logging.trace(
+                    logging.trace(
                         f"Failed to fetch data. {traceback.format_exc()}, retrying. Attempt {attempt}/{max_attempts}"
                     )
                     if attempt < max_attempts:
@@ -244,11 +245,9 @@ class PromptingSubsetLoader(DatasetLoader):
 
         self.buffer = list(all_samples)
         if len(self.buffer) < max_samples:
-            bt.logging.debug(
-                f"Did not collect {max_samples}, only got {len(self.buffer)}"
-            )
+            logging.debug(f"Did not collect {max_samples}, only got {len(self.buffer)}")
         else:
-            bt.logging.trace(f"Collected {max_samples} samples")
+            logging.trace(f"Collected {max_samples} samples")
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int

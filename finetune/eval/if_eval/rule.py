@@ -44,6 +44,9 @@ class RuleId(IntEnum):
     # The output must end with the specified content.
     ENDS_WITH = 13
 
+    # The output must start and end with double quotation marks.
+    QUOTATION = 14
+
 
 class IFEvalRule(ABC):
     """Base class for all IFEval rules."""

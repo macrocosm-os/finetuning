@@ -1,15 +1,25 @@
 import random
 from typing import List, Tuple
 
+from finetune.eval.if_eval.keywords import (
+    KeywordForbiddenRule,
+    KeywordFrequencyRule,
+    KeywordInclusionRule,
+    KeywordRuleBase,
+    interesting_keyword,
+)
+from finetune.eval.if_eval.bullet_count import BulletFrequencyRule
+from finetune.eval.if_eval.casing import LowercaseRule, UppercaseRule
+from finetune.eval.if_eval.comma import NoCommaRule
 from finetune.eval.if_eval.rule import DummyRule, IFEvalRule, RuleId
 from finetune.eval.if_eval.sample import IFEvalSample
-from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 from finetune.eval.if_eval.sentence_count import (
     SentenceCountAtLeastRule,
     SentenceCountAtMostRule,
 )
-from finetune.eval.if_eval.casing import UppercaseRule, LowercaseRule
-from finetune.eval.if_eval.comma import NoCommaRule
+from finetune.eval.if_eval.start_end import EndsWithRule, QuotationRule
+from finetune.eval.if_eval.version import IfEvalVersion
+from finetune.eval.if_eval.word_count import WordCountAtLeastRule, WordCountAtMostRule
 
 PROMPT_FORMAT = """Please answer the question below, denoted between quotes. Your response must follow these rules:
 {rules}
@@ -17,9 +27,31 @@ PROMPT_FORMAT = """Please answer the question below, denoted between quotes. You
 \"{question}\"
 """
 
+V1_RULES = {
+    RuleId.WORD_COUNT_AT_MOST,
+    RuleId.WORD_COUNT_AT_LEAST,
+    RuleId.SENTENCE_COUNT_AT_MOST,
+    RuleId.SENTENCE_COUNT_AT_LEAST,
+    RuleId.ALL_UPPER_CASE,
+    RuleId.ALL_LOWER_CASE,
+    RuleId.NO_COMMAS,
+}
+V2_RULES = {
+    RuleId.BULLET_COUNT_FREQUENCY,
+    RuleId.ENDS_WITH,
+    RuleId.KEYWORD_INCLUSION,
+    RuleId.KEYWORD_FREQUENCY,
+    RuleId.KEYWORD_FORBIDDEN,
+    RuleId.QUOTATION,
+}
+
 
 def generate_if_eval_sample(
-    qa1: Tuple[str, str], qa2: Tuple[str, str], min_rules: int, max_rules: int
+    qa1: Tuple[str, str],
+    qa2: Tuple[str, str],
+    min_rules: int,
+    max_rules: int,
+    if_eval_version: IfEvalVersion,
 ) -> IFEvalSample:
     """Returns an IFEvalSample using the provided pair of Q&A.
 
@@ -28,30 +60,27 @@ def generate_if_eval_sample(
         qa2: The second question and answer pair.
         min_rules: The minimum number of rules to generate.
         max_rules: The maximum number of rules to generate.
+        if_eval_version: The version of generation (may include new rules or logic changes).
     """
-    # Only select from implemented rules.
-    # rule_ids = list(RuleId)
-    rule_ids = [
-        RuleId.WORD_COUNT_AT_MOST,
-        RuleId.WORD_COUNT_AT_LEAST,
-        RuleId.SENTENCE_COUNT_AT_MOST,
-        RuleId.SENTENCE_COUNT_AT_LEAST,
-        RuleId.ALL_UPPER_CASE,
-        RuleId.ALL_LOWER_CASE,
-        RuleId.NO_COMMAS,
-    ]
+    # Only select from implemented rules per version.
+    rule_ids = set()
+    if if_eval_version >= if_eval_version.V1:
+        rule_ids |= V1_RULES
+    if if_eval_version >= if_eval_version.V2:
+        rule_ids |= V2_RULES
 
-    random.shuffle(rule_ids)
+    rule_ids_list = list(rule_ids)
+    random.shuffle(rule_ids_list)
 
     rules = []
     n_rules = random.randint(min_rules, max_rules)
-    for rule_id in rule_ids:
+    for rule_id in rule_ids_list:
         if len(rules) == n_rules:
             break
         if is_rule_incompatible(rule_id, rules):
             continue
 
-        rules.append(generate_rule(rule_id, rules, qa1, qa2))
+        rules.append(generate_rule(rule_id, rules, qa1, qa2, if_eval_version))
 
     # Now generate the sample.
     return IFEvalSample(
@@ -71,13 +100,25 @@ def generate_prompt(
     return PROMPT_FORMAT.format(rules=rule_prompts, question=question_text)
 
 
+def _extract_existing_keywords_from_rules(rules: List[IFEvalRule]) -> List[str]:
+    """Extracts the keywords used by any existing KEYWORD_X rules."""
+    keywords = []
+    for rule in rules:
+        if isinstance(rule, KeywordRuleBase):
+            keywords.extend(rule.get_keywords())
+    return keywords
+
+
 def generate_rule(
     rule_id: RuleId,
     current_rules: List[IFEvalRule],
     qa1: Tuple[str, str],
     qa2: Tuple[str, str],
+    if_eval_version: IfEvalVersion,
 ) -> IFEvalRule:
     """Generates a rule based on the provided rule_id and existing rules."""
+    forbidden_words = _extract_existing_keywords_from_rules(current_rules)
+
     match rule_id:
         case RuleId.WORD_COUNT_AT_MOST:
             return WordCountAtMostRule(random.choice([x for x in range(25, 50, 5)]))
@@ -94,17 +135,29 @@ def generate_rule(
         case RuleId.NO_COMMAS:
             return NoCommaRule()
         case RuleId.KEYWORD_INCLUSION:
-            return DummyRule(rule_id)
+            keywords = [
+                interesting_keyword(qa[1], forbidden_words) for qa in [qa1, qa2]
+            ]
+            return KeywordInclusionRule(keywords)
         case RuleId.KEYWORD_FREQUENCY:
-            return DummyRule(rule_id)
+            keywords_and_count = [
+                (interesting_keyword(qa[1], forbidden_words), random.randint(1, 4))
+                for qa in [qa1, qa2]
+            ]
+            return KeywordFrequencyRule(keywords_and_count)
         case RuleId.KEYWORD_FORBIDDEN:
-            return DummyRule(rule_id)
+            keywords = [
+                interesting_keyword(qa[1], forbidden_words) for qa in [qa1, qa2]
+            ]
+            return KeywordForbiddenRule(keywords)
         case RuleId.BULLET_COUNT_FREQUENCY:
-            return DummyRule(rule_id)
+            return BulletFrequencyRule(random.choice([x for x in range(1, 4)]))
         case RuleId.STARTS_WITH:
             return DummyRule(rule_id)
         case RuleId.ENDS_WITH:
-            return DummyRule(rule_id)
+            return EndsWithRule()
+        case RuleId.QUOTATION:
+            return QuotationRule()
         case _:
             raise ValueError(f"RuleId {rule_id} not handled.")
 
@@ -121,6 +174,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                     RuleId.SENTENCE_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_LEAST,
                     RuleId.BULLET_COUNT_FREQUENCY,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -131,7 +185,6 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
-                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -144,6 +197,7 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_LEAST,
                     RuleId.BULLET_COUNT_FREQUENCY,
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -154,7 +208,6 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
                 in {
                     RuleId.WORD_COUNT_AT_MOST,
                     RuleId.SENTENCE_COUNT_AT_MOST,
-                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )
@@ -180,23 +233,14 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.KEYWORD_INCLUSION:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_FREQUENCY, RuleId.KEYWORD_FORBIDDEN}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.KEYWORD_FREQUENCY:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_INCLUSION, RuleId.KEYWORD_FORBIDDEN}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.KEYWORD_FORBIDDEN:
-            # Not compatible with other keyword constraints.
-            return any(
-                rule.rule_id in {RuleId.KEYWORD_INCLUSION, RuleId.KEYWORD_FREQUENCY}
-                for rule in current_rules
-            )
+            # Compatible with everything
+            return False
         case RuleId.BULLET_COUNT_FREQUENCY:
             # Not compatible with rules that limit the length.
             return any(
@@ -211,12 +255,22 @@ def is_rule_incompatible(rule_id: RuleId, current_rules: List[IFEvalRule]) -> bo
             # Compatible with everything
             return False
         case RuleId.ENDS_WITH:
-            # Not compatible with rules that require a long length.
+            # Not compatible with rules that require a short length or specify the end.
             return any(
                 rule.rule_id
                 in {
-                    RuleId.WORD_COUNT_AT_LEAST,
-                    RuleId.SENTENCE_COUNT_AT_LEAST,
+                    RuleId.WORD_COUNT_AT_MOST,
+                    RuleId.SENTENCE_COUNT_AT_MOST,
+                    RuleId.QUOTATION,
+                }
+                for rule in current_rules
+            )
+        case RuleId.QUOTATION:
+            # Not compatible with rules that specify the start or end.
+            return any(
+                rule.rule_id
+                in {
+                    RuleId.ENDS_WITH,
                 }
                 for rule in current_rules
             )

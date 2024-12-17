@@ -15,6 +15,7 @@ from taoverse.model.competition import utils as competition_utils
 from taoverse.model.eval.task import EvalTask
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
+import taoverse.utilities.logging as logging
 
 import constants
 import finetune as ft
@@ -60,7 +61,7 @@ def main():
     )
     args = parser.parse_args()
     if args.list_competitions:
-        print(
+        logging.info(
             competition_utils.get_competition_schedule_for_block(
                 args.comp_block, constants.COMPETITION_SCHEDULE_BY_BLOCK
             )
@@ -74,14 +75,14 @@ def main():
     )
 
     if not competition:
-        print(f"Competition {args.competition_id} not found.")
+        logging.info(f"Competition {args.competition_id} not found.")
         return
 
     kwargs = competition.constraints.kwargs.copy()
     kwargs["use_cache"] = True
 
-    print(f"Loading tokenizer and model from {args.model_path}")
-    model = ft.mining.load_local_model(args.model_path, kwargs)
+    logging.info(f"Loading tokenizer and model from {args.model_path}")
+    model = ft.mining.load_local_model(args.model_path, args.competition_id, kwargs)
 
     if competition.constraints.tokenizer:
         model.tokenizer = ft.model.load_tokenizer(competition.constraints)
@@ -89,12 +90,12 @@ def main():
     if not ModelUpdater.verify_model_satisfies_parameters(
         model, competition.constraints
     ):
-        print("Model does not satisfy competition parameters!!!")
+        logging.info("Model does not satisfy competition parameters!!!")
         return
 
     seed = args.random_seed if args.random_seed else random.randint(0, sys.maxsize)
 
-    print("Loading evaluation tasks")
+    logging.info("Loading evaluation tasks")
     eval_tasks: List[EvalTask] = []
     samples: List[List[EvalSample]] = []
 
@@ -123,14 +124,14 @@ def main():
 
         if data_loader:
             eval_tasks.append(eval_task)
-            print(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
+            logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
             samples.append(
                 data_loader.tokenize(
                     model.tokenizer, competition.constraints.sequence_length
                 )
             )
 
-    print(f"Scoring model on tasks {eval_tasks}")
+    logging.info(f"Scoring model on tasks {eval_tasks}")
     # Run each computation in a subprocess so that the GPU is reset between each model.
     score, score_details = ft.validation.score_model(
         model,
@@ -140,14 +141,21 @@ def main():
         args.device,
     )
 
-    print(f"Computed score: {score}. Details: {score_details}")
+    logging.info(f"Computed score: {score}. Details: {score_details}")
 
 
 if __name__ == "__main__":
     # Make sure we can download the needed ntlk modules
-    # Used for generating words in word sorting evals
-    nltk.download("words", raise_on_error=True)
-    # Used for counting sentences in sentence count evals
-    nltk.download("punkt", raise_on_error=True)
+    nltk_modules = {
+        "words",
+        "punkt",
+        "punkt_tab",
+        "averaged_perceptron_tagger_eng",
+    }
+    for module in nltk_modules:
+        nltk.download(module, raise_on_error=True)
+
+    logging.reinitialize()
+    logging.set_verbosity_trace()
 
     main()

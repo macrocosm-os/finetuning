@@ -17,13 +17,11 @@ import typing
 import random
 import time
 import requests
+import taoverse.utilities.logging as logging
 import torch
-
-import bittensor as bt
 from transformers import PreTrainedTokenizerBase
 
 from finetune.datasets.loader import DatasetLoader
-
 
 FINEWEB_EDU_SCORE_2_NAME = "HuggingFaceFW/fineweb-edu-score-2"
 FALCON_NAME = "tiiuae/falcon-refinedweb"
@@ -97,7 +95,7 @@ class HuggingFaceLoader(DatasetLoader):
             if page in self.pages:
                 duplicates += 1
                 if duplicates >= self.duplicate_page_threshold:
-                    bt.logging.debug(
+                    logging.debug(
                         f"Hit duplicate page threshold of {self.duplicate_page_threshold}. Stopping early at: {len(self.pages)} pages."
                     )
                     break
@@ -143,16 +141,14 @@ class HuggingFaceLoader(DatasetLoader):
             except requests.exceptions.RequestException:
                 response.close()
                 attempts += 1
-                bt.logging.warning(
+                logging.warning(
                     f"Failed to fetch data, retrying with a newly sampled page. Attempt {attempts}/{self.retry_limit * num_pages}"
                 )
                 if attempts < num_pages * self.retry_limit:
                     pass
 
                 else:
-                    bt.logging.error(
-                        "Maximum retry limit reached. Unable to fetch data."
-                    )
+                    logging.error("Maximum retry limit reached. Unable to fetch data.")
                     raise
 
     def get_random_pages(self, num_pages, initial_offset):
@@ -243,15 +239,13 @@ class HuggingFaceLoader(DatasetLoader):
 
             except requests.exceptions.RequestException:
                 attempt += 1
-                bt.logging.warning(
+                logging.warning(
                     f"Failed to fetch dataset configs, retrying. Attempt {attempt}/{self.retry_limit}"
                 )
                 if attempt < self.retry_limit:
                     time.sleep(self.retry_delay)  # Wait before the next retry
                 else:
-                    bt.logging.error(
-                        "Maximum retry limit reached. Unable to fetch data."
-                    )
+                    logging.error("Maximum retry limit reached. Unable to fetch data.")
                     raise
 
     def tokenize(
