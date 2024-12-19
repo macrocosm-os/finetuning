@@ -32,14 +32,14 @@ class TestBulletCount(unittest.TestCase):
         rule = BulletFrequencyRule(count=1)
         self.assertEqual(
             rule.get_prompt(),
-            "The response must contain exactly 1 bullet point in markdown format.",
+            "The response must contain exactly 1 '*' bullet point in markdown format.",
         )
 
     def test_get_prompt_frequency_two(self):
         rule = BulletFrequencyRule(count=2)
         self.assertEqual(
             rule.get_prompt(),
-            "The response must contain exactly 2 bullet points in markdown format.",
+            "The response must contain exactly 2 '*' bullet points in markdown format.",
         )
 
 
