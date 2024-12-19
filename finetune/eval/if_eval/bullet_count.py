@@ -9,13 +9,13 @@ class BulletFrequencyRule(IFEvalRule):
 
         if count < 1:
             raise ValueError(
-                f"BulletFrequencyRule must expect at least 1 bullet point."
+                f"BulletFrequencyRule must expect at least 1 '*' bullet point."
             )
         self.count = count
 
     def get_prompt(self, index: int = -1) -> str:
         bullet = "bullet point" if self.count == 1 else "bullet points"
-        return f"The response must contain exactly {self.count} {bullet} in markdown format."
+        return f"The response must contain exactly {self.count} '*' {bullet} in markdown format."
 
     def matches(self, text: str, index: int = -1) -> bool:
         return (
