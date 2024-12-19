@@ -1294,6 +1294,9 @@ class Validator:
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
                 "weight": self.weights[uid].item(),
+                "norm_weight": competition_weights[
+                    uid
+                ].item(),  # Named norm_weight for leaderboard pipeline compatibilty.
             }
             for task in eval_tasks:
                 step_log["uid_data"][str(uid)][f"{task.name}.raw_score"] = (
