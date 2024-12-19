@@ -142,7 +142,9 @@ class KeywordForbiddenRule(KeywordRuleBase):
     def get_prompt(self, index: int) -> str:
         if index >= len(self.keywords):
             raise ValueError("Index is out of range for keywords.")
-        return f'The word "{self.keywords[index]}" must not be the response.'
+        return (
+            f'The word "{self.keywords[index]}" must not be included in the response.'
+        )
 
     def get_keywords(self) -> List[str]:
         return self.keywords

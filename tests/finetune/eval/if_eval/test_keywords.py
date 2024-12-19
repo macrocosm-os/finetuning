@@ -74,10 +74,11 @@ class TestForbiddenKeyword(unittest.TestCase):
     def test_get_prompt(self):
         rule = KeywordForbiddenRule(["test", "example"])
         self.assertEqual(
-            rule.get_prompt(0), 'The word "test" must not be the response.'
+            rule.get_prompt(0), 'The word "test" must not be included in the response.'
         )
         self.assertEqual(
-            rule.get_prompt(1), 'The word "example" must not be the response.'
+            rule.get_prompt(1),
+            'The word "example" must not be included in the response.',
         )
 
     def test_matches(self):
