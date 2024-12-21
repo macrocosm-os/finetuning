@@ -929,7 +929,8 @@ class Validator:
         logging.info("Starting evaluation for competition: " + str(competition.id))
 
         # If the competition's eval tasks have changed, make sure all models are re-evaluated.
-        self._maybe_reset_eval_history(competition)
+        # Commenting out for now. Churn from IfEval changes should not actual require a reset.
+        # self._maybe_reset_eval_history(competition)
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
