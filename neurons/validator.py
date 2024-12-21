@@ -388,6 +388,11 @@ class Validator:
         )
         self.clean_thread.start()
 
+        # == Initialize the weight setting thread ==
+        if not self.config.offline:
+            self.weight_thread = threading.Thread(target=self.set_weights, daemon=True)
+            self.weight_thread.start()
+
     def __del__(self):
         if hasattr(self, "stop_event"):
             self.stop_event.set()
