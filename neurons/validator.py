@@ -159,8 +159,9 @@ class Validator:
         torch.backends.cudnn.benchmark = True
 
         # Setup metagraph syncer for the subnet based on config. This is non-lite for getting weights by vali.
+        syncer_subtensor = bt.subtensor(config=self.config)
         self.subnet_metagraph_syncer = MetagraphSyncer(
-            self.subtensor,
+            syncer_subtensor,
             config={
                 self.config.netuid: dt.timedelta(minutes=20).total_seconds(),
             },
@@ -353,8 +354,9 @@ class Validator:
         self.miner_iterator = MinerIterator(self.metagraph.uids.tolist())
 
         # Setup a ModelMetadataStore
+        chain_store_subtensor = bt.subtensor(config=self.config)
         self.metadata_store = ChainModelMetadataStore(
-            subtensor=self.subtensor,
+            subtensor=chain_store_subtensor,
             subnet_uid=self.config.netuid,
             wallet=self.wallet,
         )
