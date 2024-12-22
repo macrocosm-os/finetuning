@@ -752,7 +752,7 @@ class Validator:
             # Technically returns a tensor but it evaluates to true.
             with self.weight_lock:
                 all_zero_weights = torch.all(self.weights == 0)
-            bt.logging.trace(
+            logging.trace(
                 "Waiting 60 seconds for internal weights before continuing to try set weights."
             )
             time.sleep(60)
@@ -764,16 +764,16 @@ class Validator:
                     set_weights_success, _ = asyncio.run(self.try_set_weights(ttl=60))
                     # Wait for 60 seconds before we try to set weights again.
                     if set_weights_success:
-                        bt.logging.info("Successfully set weights.")
+                        logging.info("Successfully set weights.")
                     else:
                         time.sleep(60)
             except Exception as e:
-                bt.logging.error(f"Error in set weights: {e}")
+                logging.error(f"Error in set weights: {e}")
 
             # Only try at most once every 20 minutes
             time.sleep(60 * 20)
 
-        bt.logging.info("Exiting set weights loop.")
+        logging.info("Exiting set weights loop.")
 
     async def try_set_weights(self, ttl: int) -> typing.Tuple[bool, str]:
         """Sets the weights on the chain with ttl, without raising exceptions if it times out."""
@@ -796,7 +796,7 @@ class Validator:
                     max_retries=1,
                 )
             except Exception as e:
-                bt.logging.warning(
+                logging.warning(
                     f"Failed to set weights due to {e}. Trying again later."
                 )
                 return (False, str(e))
@@ -804,10 +804,10 @@ class Validator:
         try:
             logging.debug(f"Setting weights.")
             status = await asyncio.wait_for(_try_set_weights(), ttl)
-            bt.logging.debug(f"Finished setting weights with status: {status}.")
+            logging.debug(f"Finished setting weights with status: {status}.")
             return status
         except asyncio.TimeoutError:
-            bt.logging.error(f"Failed to set weights after {ttl} seconds")
+            logging.error(f"Failed to set weights after {ttl} seconds")
             return (False, f"Timeout after {ttl} seconds")
 
     def _get_current_block(self) -> int:
