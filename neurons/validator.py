@@ -771,8 +771,8 @@ class Validator:
             except Exception as e:
                 logging.error(f"Error in set weights: {e}")
 
-            # Only try at most once every 20 minutes
-            time.sleep(60 * 20)
+            # Only set weights once every hour
+            time.sleep(60 * 60)
 
         logging.info("Exiting set weights loop.")
 
