@@ -792,7 +792,7 @@ class Validator:
                     wallet=self.wallet,
                     uids=uids,
                     weights=weights_to_set.numpy(),
-                    wait_for_inclusion=False,
+                    wait_for_inclusion=True,
                     version_key=constants.weights_version_key,
                     max_retries=1,
                 )
