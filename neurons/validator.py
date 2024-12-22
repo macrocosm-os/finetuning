@@ -150,6 +150,7 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
+        self.weights_subtensor = bt.subtensor(config=self.config)
         # If running on testnet, default to using finney for the dataset subtensor.
         if self.config.using_test_subtensor:
             self.dataset_subtensor = bt.subtensor()
@@ -786,7 +787,7 @@ class Validator:
                     self.weights.nan_to_num(0.0)
                     weights_to_set = self.weights
 
-                return self.subtensor.set_weights(
+                return self.weights_subtensor.set_weights(
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=uids,
