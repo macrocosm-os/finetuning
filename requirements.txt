@@ -1,4 +1,4 @@
-bittensor==8.4.3
+bittensor==8.5.1
 huggingface_hub
 nltk
 numpy==2.0.2

@@ -33,7 +33,7 @@ from finetune.eval.if_eval.version import IfEvalVersion
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.7.1"
+__version__ = "2.7.2"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -140,137 +140,12 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
 }
 
-INSTRUCT_8B_BLOCK = 4_451_695
-IF_EVAL_V2_BLOCK = 4_523_592
+INSTRUCT_8B_TO_25_WEIGHT_BLOCK = 4_552_883
 
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
         0,
-        [
-            Competition(
-                CompetitionId.B7_MULTI_CHOICE,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                1.0,
-                eval_tasks=[
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        dataset_id=DatasetId.SYNTHETIC_MMLU,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.85,
-                    ),
-                    EvalTask(
-                        name="WORD_SORTING",
-                        method_id=EvalMethodId.REFERENCE_LOSS,
-                        dataset_id=DatasetId.WORD_SORTING,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
-                        weight=0.05,
-                    ),
-                    EvalTask(
-                        name="FINEWEB",
-                        method_id=EvalMethodId.TEXT_LOSS,
-                        dataset_id=DatasetId.FINEWEB,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 20.0},
-                        weight=0.05,
-                    ),
-                    EvalTask(
-                        name="IF_EVAL_V1",
-                        method_id=EvalMethodId.IF_EVAL,
-                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
-                        normalization_id=NormalizationId.NONE,
-                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
-                        weight=0.05,
-                    ),
-                ],
-            ),
-        ],
-    ),
-    (
-        INSTRUCT_8B_BLOCK,
-        [
-            Competition(
-                CompetitionId.B7_MULTI_CHOICE,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
-                0.9,
-                eval_tasks=[
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        dataset_id=DatasetId.SYNTHETIC_MMLU,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.8,
-                    ),
-                    EvalTask(
-                        name="WORD_SORTING",
-                        method_id=EvalMethodId.REFERENCE_LOSS,
-                        dataset_id=DatasetId.WORD_SORTING,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
-                        weight=0.05,
-                    ),
-                    EvalTask(
-                        name="FINEWEB",
-                        method_id=EvalMethodId.TEXT_LOSS,
-                        dataset_id=DatasetId.FINEWEB,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 20.0},
-                        weight=0.1,
-                    ),
-                    EvalTask(
-                        name="IF_EVAL_V1",
-                        method_id=EvalMethodId.IF_EVAL,
-                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
-                        normalization_id=NormalizationId.NONE,
-                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
-                        weight=0.05,
-                    ),
-                ],
-            ),
-            Competition(
-                CompetitionId.INSTRUCT_8B,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.INSTRUCT_8B],
-                0.1,
-                eval_tasks=[
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        dataset_id=DatasetId.SYNTHETIC_MMLU,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.8,
-                    ),
-                    EvalTask(
-                        name="WORD_SORTING",
-                        method_id=EvalMethodId.REFERENCE_LOSS,
-                        dataset_id=DatasetId.WORD_SORTING,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
-                        weight=0.05,
-                    ),
-                    EvalTask(
-                        name="FINEWEB",
-                        method_id=EvalMethodId.TEXT_LOSS,
-                        dataset_id=DatasetId.FINEWEB,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 20.0},
-                        weight=0.1,
-                    ),
-                    EvalTask(
-                        name="IF_EVAL_V1",
-                        method_id=EvalMethodId.IF_EVAL,
-                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
-                        normalization_id=NormalizationId.NONE,
-                        dataset_kwargs={"if_eval_version": IfEvalVersion.V1},
-                        weight=0.05,
-                    ),
-                ],
-            ),
-        ],
-    ),
-    (
-        IF_EVAL_V2_BLOCK,
         [
             Competition(
                 CompetitionId.B7_MULTI_CHOICE,
@@ -314,6 +189,87 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                 CompetitionId.INSTRUCT_8B,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.INSTRUCT_8B],
                 0.1,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        dataset_id=DatasetId.SYNTHETIC_MMLU,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.75,
+                    ),
+                    EvalTask(
+                        name="WORD_SORTING",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.WORD_SORTING,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.05,
+                    ),
+                    EvalTask(
+                        name="FINEWEB",
+                        method_id=EvalMethodId.TEXT_LOSS,
+                        dataset_id=DatasetId.FINEWEB,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 20.0},
+                        weight=0.1,
+                    ),
+                    EvalTask(
+                        name="IF_EVAL_V2",
+                        method_id=EvalMethodId.IF_EVAL,
+                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
+                        normalization_id=NormalizationId.NONE,
+                        dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
+                        weight=0.1,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    (
+        INSTRUCT_8B_TO_25_WEIGHT_BLOCK,
+        [
+            Competition(
+                CompetitionId.B7_MULTI_CHOICE,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.B7_MULTI_CHOICE],
+                0.75,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_MMLU",
+                        method_id=EvalMethodId.MULTIPLE_CHOICE,
+                        dataset_id=DatasetId.SYNTHETIC_MMLU,
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.75,
+                    ),
+                    EvalTask(
+                        name="WORD_SORTING",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.WORD_SORTING,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 40.0},
+                        weight=0.05,
+                    ),
+                    EvalTask(
+                        name="FINEWEB",
+                        method_id=EvalMethodId.TEXT_LOSS,
+                        dataset_id=DatasetId.FINEWEB,
+                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
+                        normalization_kwargs={"ceiling": 20.0},
+                        weight=0.1,
+                    ),
+                    EvalTask(
+                        name="IF_EVAL_V2",
+                        method_id=EvalMethodId.IF_EVAL,
+                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
+                        normalization_id=NormalizationId.NONE,
+                        dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
+                        weight=0.1,
+                    ),
+                ],
+            ),
+            Competition(
+                CompetitionId.INSTRUCT_8B,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.INSTRUCT_8B],
+                0.25,
                 eval_tasks=[
                     EvalTask(
                         name="SYNTHETIC_MMLU",
