@@ -1,4 +1,5 @@
 import datetime as dt
+import hashlib
 import math
 
 import bittensor as bt
@@ -14,7 +15,11 @@ def get_block_timestamp(subtensor: bt.subtensor, block_number: int) -> dt.dateti
 
 def get_hash_of_block(subtensor: bt.subtensor, block_number: int) -> int:
     """Returns the hash of the block at the given block number."""
-    return hash(subtensor.get_block_hash(block_number))
+    block_hash = subtensor.get_block_hash(block_number)
+    # Convert to an int.
+    # Use hashlib instead of hash() since the latter is not deterministic across sessions.
+    hasher = hashlib.sha256(block_hash.encode("utf-8"))
+    return int(hasher.hexdigest(), 16)
 
 
 def get_sync_block(block: int, sync_cadence: int, genesis: int = 0) -> int:
