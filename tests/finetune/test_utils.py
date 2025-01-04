@@ -18,12 +18,17 @@ class TestUtils(unittest.TestCase):
         self.subtensor.substrate = MagicMock(spec=si.SubstrateInterface)
 
     def test_get_hash_of_block(self):
-        block_number = 12345
-        self.subtensor.get_block_hash.return_value = "some_hash"
+        block_number = 4_632_000
+        self.subtensor.get_block_hash.return_value = (
+            "0xf0c1d88fffb58f2de2798abb2236460f426b02a9c84cad7463188eff75140bd2"
+        )
 
         result = get_hash_of_block(self.subtensor, block_number)
 
-        self.assertEqual(result, hash("some_hash"))
+        self.assertEqual(
+            result,
+            592572197532882810092427479703237300164718763613437077128565525142151814165,
+        )
         self.subtensor.get_block_hash.assert_called_once_with(block_number)
 
     def test_get_sync_block(self):

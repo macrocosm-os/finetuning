@@ -984,7 +984,9 @@ class Validator:
             await self.run_step()
             return
 
-        logging.info("Starting evaluation for competition: " + str(competition.id))
+        logging.info(
+            f"Starting evaluation for competition {str(competition.id)} using sync block {sync_block}."
+        )
 
         # If the competition's eval tasks have changed, make sure all models are re-evaluated.
         # Commenting out for now. Churn from IfEval changes should not actual require a reset.
@@ -1247,6 +1249,7 @@ class Validator:
             uid_to_state,
             self._get_uids_to_competition_ids(),
             seed,
+            sync_block,
             wins,
             win_rate,
             tracker_competition_weights,
@@ -1322,6 +1325,7 @@ class Validator:
         uid_to_state: typing.Dict[int, PerUIDEvalState],
         uid_to_competition_id: typing.Dict[int, typing.Optional[int]],
         seed: int,
+        sync_block: int,
         wins: typing.Dict[int, int],
         win_rate: typing.Dict[int, float],
         competition_weights: torch.Tensor,
@@ -1336,6 +1340,7 @@ class Validator:
             "timestamp": time.time(),
             "competition_id": competition.id,
             "seed": seed,
+            "sync_block": sync_block or "None",
             "uids": uids,
             "uid_data": {},
         }
