@@ -48,7 +48,7 @@ def interesting_keyword(text: str, forbidden_words: List[str]) -> str:
     forbidden_lower = [word.lower() for word in forbidden_words]
 
     # pos_tag uses the Penn Treebank tagset: https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html
-    tags = nltk.pos_tag(nltk.word_tokenize(text.lower()))
+    tags = nltk.pos_tag(get_words(text))
 
     # Filter out words that are not interesting, including words that are 2 or fewer characters.
     def _should_use_word(word: str, tag: str) -> bool:
