@@ -33,7 +33,13 @@ class TestInterestingKeyword(unittest.TestCase):
         text = "Hello, world! This is a test."
         for _ in range(100):
             keyword = interesting_keyword(text, forbidden_words=[])
-            self.assertIn(keyword, ["hello", "world", "this", "test"])
+            self.assertIn(keyword, ["Hello", "world", "this", "test"])
+
+    def test_interesting_keyword_with_contractions(self):
+        text = "This doesn't avoid contractions."
+        for _ in range(100):
+            keyword = interesting_keyword(text, forbidden_words=[])
+            self.assertIn(keyword, ["This", "doesnt", "avoid", "contractions"])
 
     def test_interesting_keyword_no_options(self):
         text = "Test"
@@ -68,6 +74,11 @@ class TestIncludeKeyword(unittest.TestCase):
     def test_punctuation(self):
         rule = KeywordInclusionRule(["test"])
         self.assertTrue(rule.matches("This is a test!", 0))
+
+    def test_contractions(self):
+        rule = KeywordInclusionRule(["its"])
+        self.assertTrue(rule.matches("it's a match!", 0))
+        self.assertTrue(rule.matches("its a match!", 0))
 
 
 class TestForbiddenKeyword(unittest.TestCase):
@@ -133,6 +144,11 @@ class TestKeywordFrequencyRule(unittest.TestCase):
         rule = KeywordFrequencyRule([("test", 2)])
         self.assertTrue(rule.matches("This is a test! Test it again.", 0))
         self.assertFalse(rule.matches("This is a test!", 0))
+
+    def test_contractions(self):
+        rule = KeywordFrequencyRule([("its", 2)])
+        self.assertTrue(rule.matches("it's a match! It's still a match", 0))
+        self.assertTrue(rule.matches("its a match! Its still a match.", 0))
 
 
 if __name__ == "__main__":
