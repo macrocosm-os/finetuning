@@ -8,8 +8,10 @@ import torch
 from transformers import PreTrainedTokenizerBase
 
 from finetune.datasets.generated.mmlu_parser import extract_q_and_a_text
+from finetune.datasets.hugging_face.macrocosmos_dataset_loader import (
+    MacrocosmosDatasetLoader,
+)
 from finetune.datasets.loader import DatasetLoader
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.eval.if_eval import rule_factory
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 from finetune.eval.if_eval.version import IfEvalVersion
@@ -37,7 +39,7 @@ class IFEvalLoader(DatasetLoader):
             hours=math.ceil((max_samples * 2) / expected_samples_per_hour)
         )
         questions = list(
-            PromptingSubsetLoader(
+            MacrocosmosDatasetLoader(
                 random_seed=random_seed,
                 max_samples=max_samples * 2,
                 oldest_sample_timestamp=oldest_timestamp,
