@@ -16,7 +16,6 @@ from finetune.datasets.loader import DatasetLoader
 PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
 CHALLENGE_PREFIX = "[Example 1]\nWhat is the capital of Texas?\nA. Paris\nB. London\nC. Austin\nD. Houston\nAnswer: C\n\n[Input Question]\n"
 
-
 class MacrocosmosDatasetLoader(DatasetLoader):
     """Loads MMLU data from Macrocosmos' hugging face dataset, produced by subnet 1."""
 
