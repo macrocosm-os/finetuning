@@ -11,6 +11,7 @@ from finetune.datasets.loader import DatasetLoader
 
 # Multiple choice answers for the prompting subnet.
 PROMPTING_SUBNET_CHOICES = ["A", "B", "C", "D"]
+CHALLENGE_PREFIX = "[Example 1]\nWhat is the capital of Texas?\nA. Paris\nB. London\nC. Austin\nD. Houston\nAnswer: C\n\n[Input Question]\n"
 
 
 class MacrocosmosDatasetLoader(DatasetLoader):
@@ -35,7 +36,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
                     return False
             if validator_hotkeys:
                 return row["hotkey"] in validator_hotkeys
-            if row["reference"].strip('"') not in PROMPTING_SUBNET_CHOICES:
+            if row["reference"] not in PROMPTING_SUBNET_CHOICES:
                 logging.warning(f"Found invalid reference answer in dataset: {row}")
                 return False
 
@@ -92,8 +93,8 @@ class MacrocosmosDatasetLoader(DatasetLoader):
         self.selected_samples: typing.Set[str] = set()
 
         for row in dataset:
-            challenge = row["challenge"].strip('"')
-            reference = row["reference"].strip('"')
+            challenge = f"{CHALLENGE_PREFIX}{row['challenge']}"
+            reference = row["reference"]
             id = row["id"]
 
             all_samples.add((challenge, reference))
