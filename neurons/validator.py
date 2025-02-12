@@ -26,6 +26,9 @@ from retry import retry
 from taoverse.model.eval.task import EvalTask
 
 from finetune.datasets.factory import DatasetLoaderFactory
+from finetune.datasets.hugging_face.macrocosmos_dataset_loader import (
+    MacrocosmosDatasetLoader,
+)
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.loader import DatasetLoader
 from finetune.eval.sample import EvalSample
@@ -47,7 +50,6 @@ import time
 import traceback
 import typing
 from collections import defaultdict
-from websockets.exceptions import InvalidStatus
 
 import bittensor as bt
 import nltk
@@ -78,11 +80,11 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
+from websockets.exceptions import InvalidStatus
 
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -862,7 +864,7 @@ class Validator:
         current_block: int,
         eval_delay_blocks: int,
         vali_hotkeys: typing.Set[str],
-    ) -> PromptingSubsetLoader:
+    ) -> MacrocosmosDatasetLoader:
 
         # We want to ensure we only include data that is strictly newer than eval_delay_blocks ago and older than the current
         # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
@@ -901,7 +903,7 @@ class Validator:
             )
             pass
 
-        sample_data = PromptingSubsetLoader(
+        sample_data = MacrocosmosDatasetLoader(
             random_seed=seed,
             max_samples=self.config.latest_prompting_samples,
             oldest_sample_timestamp=oldest_sample_timestamp,
