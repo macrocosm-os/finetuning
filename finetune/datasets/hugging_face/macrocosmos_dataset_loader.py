@@ -2,6 +2,7 @@ import datetime as dt
 import random
 import typing
 
+from pytz import timezone
 import taoverse.utilities.logging as logging
 import torch
 from datasets import load_dataset
@@ -27,7 +28,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
         newest_sample_timestamp: typing.Optional[dt.datetime] = None,
     ) -> typing.Callable[typing.Dict[str, typing.Any], bool]:
         def _func(row: typing.Dict[str, typing.Any]) -> bool:
-            timestamp = row["timestamp"].astimezone(dt.timezone.utc)
+            timestamp = row["timestamp"].astimezone(timezone("US/Pacific"))
             if oldest_sample_timestamp:
                 if timestamp < oldest_sample_timestamp:
                     return False
@@ -63,11 +64,11 @@ class MacrocosmosDatasetLoader(DatasetLoader):
         """
         if oldest_sample_timestamp:
             oldest_sample_timestamp = oldest_sample_timestamp.astimezone(
-                dt.timezone.utc
+                timezone("US/Pacific")
             )
         if newest_sample_timestamp:
             newest_sample_timestamp = newest_sample_timestamp.astimezone(
-                dt.timezone.utc
+                timezone("US/Pacific")
             )
 
         logging.trace(
