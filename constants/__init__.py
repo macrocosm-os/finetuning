@@ -33,7 +33,7 @@ from finetune.eval.if_eval.version import IfEvalVersion
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.8.1"
+__version__ = "2.8.2"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -61,8 +61,8 @@ ALPHA = 0.85
 MIN_WEIGHT_THRESHOLD = 0.18
 
 # The validator WANDB project.
-WANDB_PROJECT = "finetuning"
-WANDB_ENTITY = "rusticluftig"
+WANDB_PROJECT = "finetuning-validators"
+WANDB_ENTITY = "macrocosmos"
 # The uid for this subnet.
 SUBNET_UID = 37
 # Minimum stake to get sample data from a validator.
