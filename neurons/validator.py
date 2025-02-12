@@ -1557,6 +1557,9 @@ class Validator:
 
         while True:
             try:
+                # Reset the logging levels, since bittensor occassionally messes with
+                # the logging levels we set.
+                self._configure_logging(self.config)
                 await self.try_run_step(ttl=75 * 60)
                 self.global_step += 1
 
