@@ -33,7 +33,7 @@ from finetune.eval.if_eval.version import IfEvalVersion
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.8.2"
+__version__ = "2.9.0"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
