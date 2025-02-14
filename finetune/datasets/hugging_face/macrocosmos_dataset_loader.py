@@ -2,9 +2,12 @@ import datetime as dt
 import random
 import typing
 
+import requests
 import taoverse.utilities.logging as logging
 import torch
 from datasets import load_dataset
+from pytz import timezone
+from retry import retry
 from transformers import PreTrainedTokenizerBase
 
 from finetune.datasets.loader import DatasetLoader
@@ -17,8 +20,8 @@ CHALLENGE_PREFIX = "[Example 1]\nWhat is the capital of Texas?\nA. Paris\nB. Lon
 class MacrocosmosDatasetLoader(DatasetLoader):
     """Loads MMLU data from Macrocosmos' hugging face dataset, produced by subnet 1."""
 
-    dataset_name = "macrocosm-os/macrobench-bittensor-01"
-    split = "train"
+    DATASET_NAME = "macrocosm-os/macrobench-bittensor-01"
+    INFO_URL = f"https://datasets-server.huggingface.co/info?dataset={DATASET_NAME}&config=default"
 
     @staticmethod
     def _create_row_filter(
@@ -27,13 +30,11 @@ class MacrocosmosDatasetLoader(DatasetLoader):
         newest_sample_timestamp: typing.Optional[dt.datetime] = None,
     ) -> typing.Callable[typing.Dict[str, typing.Any], bool]:
         def _func(row: typing.Dict[str, typing.Any]) -> bool:
-            timestamp = row["timestamp"].astimezone(dt.timezone.utc)
-            if oldest_sample_timestamp:
-                if timestamp < oldest_sample_timestamp:
-                    return False
-            if newest_sample_timestamp:
-                if timestamp > newest_sample_timestamp:
-                    return False
+            timestamp = timezone("US/Pacific").localize(row["timestamp"])
+            if oldest_sample_timestamp and timestamp < oldest_sample_timestamp:
+                return False
+            if newest_sample_timestamp and timestamp > newest_sample_timestamp:
+                return False
             if validator_hotkeys:
                 return row["hotkey"] in validator_hotkeys
             if row["reference"] not in PROMPTING_SUBNET_CHOICES:
@@ -63,50 +64,81 @@ class MacrocosmosDatasetLoader(DatasetLoader):
         """
         if oldest_sample_timestamp:
             oldest_sample_timestamp = oldest_sample_timestamp.astimezone(
-                dt.timezone.utc
+                timezone("US/Pacific")
             )
         if newest_sample_timestamp:
             newest_sample_timestamp = newest_sample_timestamp.astimezone(
-                dt.timezone.utc
+                timezone("US/Pacific")
             )
 
         logging.trace(
             f"Fetching samples after {oldest_sample_timestamp} and before {newest_sample_timestamp}"
         )
 
-        # Get the runs, oldest first.
-        dataset = load_dataset(
-            MacrocosmosDatasetLoader.dataset_name,
-            split=MacrocosmosDatasetLoader.split,
-            streaming=True,
+        oldest_date = (
+            oldest_sample_timestamp.date() if oldest_sample_timestamp else dt.date.min
         )
-        if random_seed is not None:
-            dataset = dataset.shuffle(seed=random_seed)
+        newest_date = (
+            newest_sample_timestamp.date() if newest_sample_timestamp else dt.date.max
+        )
 
-        dataset = dataset.filter(
-            MacrocosmosDatasetLoader._create_row_filter(
-                validator_hotkeys, oldest_sample_timestamp, newest_sample_timestamp
+        def _need_split(split_name: str) -> bool:
+            """Returns True if the split falls between the oldest and newest sample timestamps."""
+            d = dt.datetime.strptime(split_name, "%Y%m%d").date()
+            return oldest_date <= d <= newest_date
+
+        all_splits = self._get_splits()
+        needed_splits = sorted([s for s in all_splits if _need_split(s)])
+
+        if not needed_splits:
+            raise ValueError(
+                f"No splits found for samples between {oldest_sample_timestamp} and {newest_sample_timestamp}."
             )
-        )
 
         all_samples: typing.Set[str] = set()
-        self.selected_samples: typing.Set[str] = set()
 
-        for row in dataset:
-            challenge = f"{CHALLENGE_PREFIX}{row['challenge']}"
-            reference = row["reference"]
-            id = row["id"]
+        # Fetch all relevant samples from the needed splits.
+        for split in needed_splits:
+            dataset = load_dataset(
+                MacrocosmosDatasetLoader.DATASET_NAME,
+                split=split,
+                # Make sure the latest data is fetched.
+                download_mode="force_redownload",
+            )
 
-            all_samples.add((challenge, reference))
-            self.selected_samples.add(id)
-            if len(all_samples) >= max_samples:
-                break
+            dataset = dataset.filter(
+                MacrocosmosDatasetLoader._create_row_filter(
+                    validator_hotkeys, oldest_sample_timestamp, newest_sample_timestamp
+                )
+            )
 
-        self.buffer = list(all_samples)
+            for row in dataset:
+                challenge = f"{CHALLENGE_PREFIX}{row['challenge']}"
+                reference = row["reference"]
+                id = row["id"]
+
+                all_samples.add((id, (challenge, reference)))
+
+        # All samples collected. Now shuffle and filter to the number we want.
+        if random_seed:
+            random.seed(random_seed)
+
+        all_samples = sorted(list(all_samples))
+        random.shuffle(all_samples)
+
+        self.buffer = [c_and_r for _, c_and_r in all_samples[:max_samples]]
+        self.selected_samples = {id for id, _ in all_samples[:max_samples]}
         if len(self.buffer) < max_samples:
             logging.debug(f"Did not collect {max_samples}, only got {len(self.buffer)}")
         else:
             logging.trace(f"Collected {max_samples} samples")
+
+    @retry(tries=5, delay=1, backoff=2)
+    def _get_splits(self) -> typing.Set[str]:
+        """Returns the splits available in the dataset."""
+        response = requests.get(MacrocosmosDatasetLoader.INFO_URL, timeout=10)
+        response.raise_for_status()
+        return set(response.json()["dataset_info"]["splits"].keys())
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
