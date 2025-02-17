@@ -79,7 +79,7 @@ def _get_top_model_metadata(
     for uid, incentive in enumerate(metagraph.I):
         if incentive > 0:
             metadata = asyncio.run(
-                chain_store.retrieve_model_metadata(metagraph.hotkeys[uid])
+                chain_store.retrieve_model_metadata(uid, metagraph.hotkeys[uid])
             )
             if (
                 metadata
