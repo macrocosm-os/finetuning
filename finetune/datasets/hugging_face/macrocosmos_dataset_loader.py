@@ -88,7 +88,10 @@ class MacrocosmosDatasetLoader(DatasetLoader):
             return oldest_date <= d <= newest_date
 
         all_splits = self._get_splits()
+        print(all_splits)
         needed_splits = sorted([s for s in all_splits if _need_split(s)])
+
+        print(f"Need splits: {needed_splits}")
 
         if not needed_splits:
             raise ValueError(
@@ -99,12 +102,15 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
         # Fetch all relevant samples from the needed splits.
         for split in needed_splits:
+            print(f"Loading split {split}")
             dataset = load_dataset(
                 MacrocosmosDatasetLoader.DATASET_NAME,
                 split=split,
+                streaming=True,
                 # Make sure the latest data is fetched.
-                download_mode="force_redownload",
+                # download_mode="force_redownload",
             )
+            print(f"Loaded split {split}")
 
             dataset = dataset.filter(
                 MacrocosmosDatasetLoader._create_row_filter(
@@ -112,12 +118,16 @@ class MacrocosmosDatasetLoader(DatasetLoader):
                 )
             )
 
+            print(f"Filtered split {split}")
+
             for row in dataset:
                 challenge = f"{CHALLENGE_PREFIX}{row['challenge']}"
                 reference = row["reference"]
                 id = row["id"]
 
                 all_samples.add((id, (challenge, reference)))
+
+            print(f"Added {len(dataset)} samples from split {split}")
 
         # All samples collected. Now shuffle and filter to the number we want.
         if random_seed:
