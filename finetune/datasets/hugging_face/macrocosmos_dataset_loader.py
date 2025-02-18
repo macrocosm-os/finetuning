@@ -2,10 +2,9 @@ import datetime as dt
 import random
 import typing
 
-import requests
 import taoverse.utilities.logging as logging
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, get_dataset_config_names
 from pytz import timezone
 from retry import retry
 from transformers import PreTrainedTokenizerBase
@@ -21,7 +20,6 @@ class MacrocosmosDatasetLoader(DatasetLoader):
     """Loads MMLU data from Macrocosmos' hugging face dataset, produced by subnet 1."""
 
     DATASET_NAME = "macrocosm-os/macrobench-bittensor-01"
-    INFO_URL = f"https://datasets-server.huggingface.co/info?dataset={DATASET_NAME}&config=default"
 
     @staticmethod
     def _create_row_filter(
@@ -82,35 +80,30 @@ class MacrocosmosDatasetLoader(DatasetLoader):
             newest_sample_timestamp.date() if newest_sample_timestamp else dt.date.max
         )
 
-        def _need_split(split_name: str) -> bool:
-            """Returns True if the split falls between the oldest and newest sample timestamps."""
-            d = dt.datetime.strptime(split_name, "%Y%m%d").date()
+        def _need_config(config_name: str) -> bool:
+            """Returns True if the config falls between the oldest and newest sample timestamps."""
+            d = dt.datetime.strptime(config_name, "%Y%m%d").date()
             return oldest_date <= d <= newest_date
 
-        all_splits = self._get_splits()
-        print(all_splits)
-        needed_splits = sorted([s for s in all_splits if _need_split(s)])
+        all_configs = self._get_configs()
+        needed_configs = sorted([s for s in all_configs if _need_config(s)])
 
-        print(f"Need splits: {needed_splits}")
-
-        if not needed_splits:
+        if not needed_configs:
             raise ValueError(
-                f"No splits found for samples between {oldest_sample_timestamp} and {newest_sample_timestamp}."
+                f"No configs found for samples between {oldest_sample_timestamp} and {newest_sample_timestamp}."
             )
 
         all_samples: typing.Set[str] = set()
 
-        # Fetch all relevant samples from the needed splits.
-        for split in needed_splits:
-            print(f"Loading split {split}")
+        # Fetch all relevant samples from the needed configs.
+        for config in needed_configs:
             dataset = load_dataset(
                 MacrocosmosDatasetLoader.DATASET_NAME,
-                split=split,
+                config,
                 streaming=True,
-                # Make sure the latest data is fetched.
-                # download_mode="force_redownload",
             )
-            print(f"Loaded split {split}")
+            # The above returns a dictionary of IterableDataset objects, keyed by the config name.
+            dataset = dataset[config]
 
             dataset = dataset.filter(
                 MacrocosmosDatasetLoader._create_row_filter(
@@ -118,16 +111,12 @@ class MacrocosmosDatasetLoader(DatasetLoader):
                 )
             )
 
-            print(f"Filtered split {split}")
-
             for row in dataset:
                 challenge = f"{CHALLENGE_PREFIX}{row['challenge']}"
                 reference = row["reference"]
                 id = row["id"]
 
                 all_samples.add((id, (challenge, reference)))
-
-            print(f"Added {len(dataset)} samples from split {split}")
 
         # All samples collected. Now shuffle and filter to the number we want.
         if random_seed:
@@ -144,11 +133,9 @@ class MacrocosmosDatasetLoader(DatasetLoader):
             logging.trace(f"Collected {max_samples} samples")
 
     @retry(tries=5, delay=1, backoff=2)
-    def _get_splits(self) -> typing.Set[str]:
-        """Returns the splits available in the dataset."""
-        response = requests.get(MacrocosmosDatasetLoader.INFO_URL, timeout=10)
-        response.raise_for_status()
-        return set(response.json()["dataset_info"]["splits"].keys())
+    def _get_configs(self) -> typing.Set[str]:
+        """Returns the configs available in the dataset."""
+        return get_dataset_config_names(MacrocosmosDatasetLoader.DATASET_NAME)
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
