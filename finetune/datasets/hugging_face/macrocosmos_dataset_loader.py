@@ -21,7 +21,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
     """Loads MMLU data from Macrocosmos' hugging face dataset, produced by subnet 1."""
 
     DATASET_NAME = "macrocosm-os/macrobench-bittensor-01"
-    INFO_URL = f"https://datasets-server.huggingface.co/info?dataset={DATASET_NAME}&config=default"
+    INFO_URL = "https://datasets-server.huggingface.co/info?dataset={dataset}&config={date}"
 
     @staticmethod
     def _create_row_filter(
@@ -87,7 +87,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
             d = dt.datetime.strptime(split_name, "%Y%m%d").date()
             return oldest_date <= d <= newest_date
 
-        all_splits = self._get_splits()
+        all_splits = self._get_splits(newest_date.strftime("%Y%m%d"))
         print(all_splits)
         needed_splits = sorted([s for s in all_splits if _need_split(s)])
 
@@ -144,9 +144,9 @@ class MacrocosmosDatasetLoader(DatasetLoader):
             logging.trace(f"Collected {max_samples} samples")
 
     @retry(tries=5, delay=1, backoff=2)
-    def _get_splits(self) -> typing.Set[str]:
+    def _get_splits(self, date: str) -> typing.Set[str]:
         """Returns the splits available in the dataset."""
-        response = requests.get(MacrocosmosDatasetLoader.INFO_URL, timeout=10)
+        response = requests.get(MacrocosmosDatasetLoader.INFO_URL.format(date=date, dataset=MacrocosmosDatasetLoader.DATASET_NAME), timeout=10)
         response.raise_for_status()
         return set(response.json()["dataset_info"]["splits"].keys())
 
