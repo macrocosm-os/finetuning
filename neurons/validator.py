@@ -3,14 +3,14 @@
 # Copyright © 2023 const
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
 # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
@@ -904,7 +904,13 @@ class Validator:
                 f"Failed to get block timestamps for the sync blocks. Error={e}. Using fallback timestamps."
             )
             pass
-
+        # For testing: Use a fixed time window 2 weeks ago
+        now = dt.datetime.now(dt.timezone.utc)
+        two_weeks_ago = now - dt.timedelta(weeks=2)
+        
+        # Create a 24-hour window starting from two weeks ago
+        oldest_sample_timestamp = two_weeks_ago
+        newest_sample_timestamp = two_weeks_ago + dt.timedelta(days=10)
         sample_data = MacrocosmosDatasetLoader(
             random_seed=seed,
             max_samples=self.config.latest_prompting_samples,
@@ -1022,7 +1028,7 @@ class Validator:
                 logging.debug(
                     "No uids to eval for any competition. Waiting 5 minutes to download models."
                 )
-                time.sleep(300)
+                time.sleep(3)
             return
 
         # Pull the latest sample data based on the competition.
