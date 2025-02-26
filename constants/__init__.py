@@ -33,7 +33,8 @@ from finetune.eval.if_eval.version import IfEvalVersion
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.9.1"
+__version__ = "2.9.2"
+
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
@@ -66,7 +67,7 @@ WANDB_ENTITY = "macrocosmos"
 # The uid for this subnet.
 SUBNET_UID = 37
 # Minimum stake to get sample data from a validator.
-SAMPLE_VALI_MIN_STAKE = 100_000
+SAMPLE_VALI_MIN_STAKE = 10_000
 # The uid for the Prompting subnet.
 PROMPTING_SUBNET_UID = 1
 # The Prompting validator WANDB project and filters
