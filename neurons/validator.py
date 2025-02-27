@@ -904,13 +904,7 @@ class Validator:
                 f"Failed to get block timestamps for the sync blocks. Error={e}. Using fallback timestamps."
             )
             pass
-        # For testing: Use a fixed time window 2 weeks ago
-        now = dt.datetime.now(dt.timezone.utc)
-        two_weeks_ago = now - dt.timedelta(weeks=2)
-        
-        # Create a 24-hour window starting from two weeks ago
-        oldest_sample_timestamp = two_weeks_ago
-        newest_sample_timestamp = two_weeks_ago + dt.timedelta(days=10)
+
         sample_data = MacrocosmosDatasetLoader(
             random_seed=seed,
             max_samples=self.config.latest_prompting_samples,
@@ -1028,7 +1022,7 @@ class Validator:
                 logging.debug(
                     "No uids to eval for any competition. Waiting 5 minutes to download models."
                 )
-                time.sleep(3)
+                time.sleep(300)
             return
 
         # Pull the latest sample data based on the competition.
