@@ -26,14 +26,14 @@ from transformers import (
 
 from competitions.data import CompetitionId
 from finetune.datasets.ids import DatasetId
-from finetune.eval.method import EvalMethodId
 from finetune.eval.if_eval.version import IfEvalVersion
+from finetune.eval.method import EvalMethodId
 
 # ---------------------------------
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.9.2"
+__version__ = "2.10.0"
 
 version_split = __version__.split(".")
 __spec_version__ = (
