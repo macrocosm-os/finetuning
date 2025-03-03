@@ -1,6 +1,7 @@
 import datetime as dt
 import random
 import typing
+import numpy as np
 
 import taoverse.utilities.logging as logging
 import torch
@@ -169,7 +170,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]]:
+    ) -> typing.List[typing.Tuple[np.ndarray, typing.List[str], str]]:
         # Each batch is a tokenized question + the choices + the correct choice.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
@@ -188,7 +189,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
             batches.append(
                 (
-                    torch.stack([torch.tensor(ids)]),
+                    np.array([ids]),
                     PROMPTING_SUBNET_CHOICES,
                     reference,
                 )

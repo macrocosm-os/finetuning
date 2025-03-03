@@ -6,6 +6,7 @@ from typing import List, Set
 import taoverse.utilities.logging as logging
 import torch
 from transformers import PreTrainedTokenizerBase
+import numpy as np
 
 from finetune.datasets.generated.mmlu_parser import extract_q_and_a_text
 from finetune.datasets.hugging_face.macrocosmos_dataset_loader import (
@@ -90,7 +91,7 @@ class IFEvalLoader(DatasetLoader):
 
         for sample in self:
 
-            def _tokenize_prompt(prompt: str) -> torch.Tensor:
+            def _tokenize_prompt(prompt: str) -> np.ndarray:
                 ids = tokenizer.apply_chat_template(
                     conversation=[
                         {"role": "user", "content": prompt},
@@ -98,7 +99,8 @@ class IFEvalLoader(DatasetLoader):
                     max_length=sequence_length,
                     add_generation_prompt=True,
                 )
-                return torch.stack([torch.tensor(ids)])
+                # Return numpy array instead of torch tensor
+                return np.array([ids])
 
             batches.append(
                 IFEvalTokenizedSample(
