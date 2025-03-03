@@ -16,7 +16,7 @@ def extract_q_and_a_text(full_prompt: str, answer_char: str) -> Tuple[str, str] 
     if answer_char not in ("A", "B", "C", "D"):
         return None
 
-    regex = "\[Input Question\]\s+(.*)\s+A\. (.*)\s+B\. (.*)\s+C\. (.*)\s+D\. (.*)"
+    regex = "\s+(.*)\s+A\. (.*)\s+B\. (.*)\s+C\. (.*)\s+D\. (.*)"
     match = re.search(regex, full_prompt)
     if not match:
         return None

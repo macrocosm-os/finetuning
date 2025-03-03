@@ -73,6 +73,7 @@ PROMPTING_SUBNET_UID = 1
 # The Prompting validator WANDB project and filters
 PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
+NUM_CONFIGS_TO_SAMPLE = 10
 # Minimum number of samples allowed to consider MMLU as an eval task.
 MIN_ALLOWED_SAMPLES = 50
 # Minimum stake to consider a validator when checking for miners with weights.
@@ -103,7 +104,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1600,  # ~5 hours.
+        eval_block_delay=SYNC_BLOCK_CADENCE + 100,
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
@@ -136,7 +137,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_soft_percent_threshold=0.15,
             norm_eps_hard=1000,
         ),
-        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 5),  # Decay over ~5 days.
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 days.
         max_bytes=20 * (1024**3),
     ),
 }
@@ -239,7 +240,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.MULTIPLE_CHOICE,
                         dataset_id=DatasetId.SYNTHETIC_MMLU,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.65,
+                        weight=0.30,
                     ),
                     EvalTask(
                         name="WORD_SORTING",
@@ -255,7 +256,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_id=DatasetId.FINEWEB,
                         normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
                         normalization_kwargs={"ceiling": 20.0},
-                        weight=0.1,
+                        weight=0.35,
                     ),
                     EvalTask(
                         name="IF_EVAL_V2",
@@ -263,7 +264,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
                         dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
-                        weight=0.2,
+                        weight=0.30,
                     ),
                 ],
             ),

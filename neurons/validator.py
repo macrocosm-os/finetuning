@@ -868,50 +868,19 @@ class Validator:
         vali_hotkeys: typing.Set[str],
     ) -> MacrocosmosDatasetLoader:
 
-        # We want to ensure we only include data that is strictly newer than eval_delay_blocks ago and older than the current
-        # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
-        oldest_sync_block = ft.utils.get_next_sync_block(
-            current_block - eval_delay_blocks,
-            constants.SYNC_BLOCK_CADENCE,
-            constants.GENESIS_BLOCK,
-        )
-        current_sync_block = ft.utils.get_sync_block(
-            current_block, constants.SYNC_BLOCK_CADENCE, constants.GENESIS_BLOCK
-        )
-
-        # Find the timestamps of the sync blocks, but fall back to a rough estimate if the subtensor call fails.
-        now = dt.datetime.now(dt.timezone.utc)
-        oldest_sample_timestamp = now - dt.timedelta(
-            seconds=constants.SECONDS_PER_BLOCK * eval_delay_blocks
-        )
-        newest_sample_timestamp = now - dt.timedelta(
-            seconds=constants.SECONDS_PER_BLOCK * (current_block - current_sync_block)
-        )
-
-        @retry(tries=5, delay=1, backoff=2)
-        def _get_block_timestamp_with_retry(block):
-            archive = bt.subtensor("archive")
-            return ft.utils.get_block_timestamp(archive, block)
-
+        # We're now sampling from the entire dataset instead of using timestamp filtering
+        # We only need to pass the seed, max_samples, and validator_hotkeys
+        logging.debug(f"Creating dataset loader with seed {seed}")
+        
         try:
-            oldest_sample_timestamp = _get_block_timestamp_with_retry(oldest_sync_block)
-            newest_sample_timestamp = _get_block_timestamp_with_retry(
-                current_sync_block
+            sample_data = MacrocosmosDatasetLoader(
+                random_seed=seed,
+                max_samples=self.config.latest_prompting_samples,
+                validator_hotkeys=vali_hotkeys,
             )
         except Exception as e:
-            # Well, we tried our best. Let us pray this does not stir the wrath of the v-trust Gods.
-            logging.trace(
-                f"Failed to get block timestamps for the sync blocks. Error={e}. Using fallback timestamps."
-            )
-            pass
-
-        sample_data = MacrocosmosDatasetLoader(
-            random_seed=seed,
-            max_samples=self.config.latest_prompting_samples,
-            oldest_sample_timestamp=oldest_sample_timestamp,
-            newest_sample_timestamp=newest_sample_timestamp,
-            validator_hotkeys=vali_hotkeys,
-        )
+            logging.error(f"Failed to create MacrocosmosDatasetLoader: {e}")
+            return None
 
         if len(sample_data) < constants.MIN_ALLOWED_SAMPLES:
             logging.warning(
