@@ -239,7 +239,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.MULTIPLE_CHOICE,
                         dataset_id=DatasetId.SYNTHETIC_MMLU,
                         normalization_id=NormalizationId.NONE,
-                        weight=0.65,
+                        weight=0.30,
                     ),
                     EvalTask(
                         name="WORD_SORTING",
@@ -255,7 +255,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_id=DatasetId.FINEWEB,
                         normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
                         normalization_kwargs={"ceiling": 20.0},
-                        weight=0.1,
+                        weight=0.35,
                     ),
                     EvalTask(
                         name="IF_EVAL_V2",
@@ -263,7 +263,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
                         normalization_id=NormalizationId.NONE,
                         dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
-                        weight=0.2,
+                        weight=0.30,
                     ),
                 ],
             ),
