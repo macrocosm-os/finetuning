@@ -49,6 +49,11 @@ def check_for_reasonable_output(
     Returns:
         bool: If the model generates reasonable outputs.
     """
+    # Make sure inputs are on the correct device
+    device = next(model.parameters()).device
+    input1 = input1.to(device)
+    input2 = input2.to(device)
+    
     # Generate 20 tokens of output from the model for each prompt.
     output_length = 20
     # Only take the last 20 tokens since otherwise we also get the prompt ids.
@@ -127,6 +132,11 @@ def compute_text_loss(
             
         input1 = batch_0[0:1, : min(batch_0.shape[1], 100)]
         input2 = batch_1[0:1, : min(batch_1.shape[1], 100)]
+        
+        device = next(model.parameters()).device
+        input1 = input1.to(device)
+        input2 = input2.to(device)
+        
         if not check_for_reasonable_output(model, input1, input2, pad_token_id):
             logging.warning(
                 "Model does not generate reasonable looking outputs. Score will be 0."
