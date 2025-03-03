@@ -9,6 +9,7 @@ import taoverse.utilities.logging as logging
 import torch
 import transformers
 from transformers import DynamicCache, PreTrainedModel
+import numpy as np
 
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 
@@ -48,6 +49,11 @@ def check_for_reasonable_output(
     Returns:
         bool: If the model generates reasonable outputs.
     """
+    # Make sure inputs are on the correct device
+    device = next(model.parameters()).device
+    input1 = input1.to(device)
+    input2 = input2.to(device)
+    
     # Generate 20 tokens of output from the model for each prompt.
     output_length = 20
     # Only take the last 20 tokens since otherwise we also get the prompt ids.
@@ -91,118 +97,163 @@ def check_for_reasonable_output(
 
 def compute_text_loss(
     model: PreTrainedModel,
-    batches: typing.List[torch.Tensor],
+    batches: typing.List[np.ndarray],
     device: str,
     pad_token_id: int,
 ) -> float:
-    """Computes the losses for a given model on provided text batches.
+    """
+    Computes the loss for text generation for a given model on provided batches.
 
-    Args:
-        model (PreTrainedModel): The model to eval
-        batches (typing.List[torch.Tensor]): List of tokenized texts.
-        device (str): The device to run the evaluation on.
-        pad_token_id int: Pad token id for the tokenizer used to tokenize the batches.
+    Parameters:
+        model (torch.nn.Module): The model for which text loss is to be computed.
+        batches (dict): A dictionary of batches with page indices as keys.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+        pad_token_id (int): The id of the pad token.
 
     Returns:
         float: The average loss across all batches.
     """
+
     # First check that model generates reasonable looking outputs.
     # Grab 100 tokens from the first two batches as 'prompts'. (1 x Seq Length tensors.)
-    try:
-        prompt_length = 100
-        token_inputs_1 = batches[0][:prompt_length].to(device)
-        token_inputs_2 = batches[1][:prompt_length].to(device)
+    if len(batches) >= 2:
+        batch_0 = batches[0]
+        batch_1 = batches[1]
+        # Convert numpy arrays to PyTorch tensors if needed
+        if isinstance(batch_0, np.ndarray):
+            batch_0 = torch.tensor(batch_0)
+        if isinstance(batch_1, np.ndarray):
+            batch_1 = torch.tensor(batch_1)
+            
+        if len(batch_0.shape) == 1:
+            batch_0 = batch_0.unsqueeze(0)
+        if len(batch_1.shape) == 1:
+            batch_1 = batch_1.unsqueeze(0)
+            
+        input1 = batch_0[0:1, : min(batch_0.shape[1], 100)]
+        input2 = batch_1[0:1, : min(batch_1.shape[1], 100)]
+        
+        device = next(model.parameters()).device
+        input1 = input1.to(device)
+        input2 = input2.to(device)
+        
+        if not check_for_reasonable_output(model, input1, input2, pad_token_id):
+            logging.warning(
+                "Model does not generate reasonable looking outputs. Score will be 0."
+            )
+            return 0.0
 
-        if not check_for_reasonable_output(
-            model, token_inputs_1, token_inputs_2, pad_token_id
-        ):
-            return math.inf
-    except Exception as e:
-        logging.error(
-            f"Exception occurred in checking for reasonable output: {traceback.format_exc()}"
-        )
-        return math.inf
+    total_loss = 0.0
+    total_tokens = 0
 
-    # Everything looks good! Continue to computing actual losses.
+    for batch in batches:
+        # Convert numpy array to PyTorch tensor if needed
+        if isinstance(batch, np.ndarray):
+            batch = torch.tensor(batch)
+            
+        if len(batch.shape) == 1:
+            batch = batch.unsqueeze(0)
+            
+        batch = batch.to(device)
+        tokens_to_keep = (batch != pad_token_id).int().sum().item()
+        total_tokens += tokens_to_keep
 
-    losses = []
-    with torch.no_grad():
-        for batch in batches:
-            try:
-                # Context and ref are 1 dimensional tensors.
-                inputs = batch.to(device)
-                # Prepare a cache class and pass it to the model's forward.
-                past_key_values = DynamicCache()
-                logits = model(inputs, past_key_values=past_key_values).logits
+        try:
+            outputs = model(batch, labels=batch)
+        except Exception as e:
+            logging.warning(f"Error computing loss: {e}")
+            # Treat this as a max loss entry.
+            return 0.0
 
-                # Shift the logits and labels to compute the loss.
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = inputs[..., 1:].contiguous()
+        if not isinstance(outputs, typing.Mapping):
+            logging.warning(
+                f"Model returned non-mapping output type {type(outputs)}. Treating as max loss (0%)."
+            )
+            return 0.0
 
-                # Compute loss.
-                loss_fct = torch.nn.CrossEntropyLoss()
-                shift_logits = shift_logits.view(-1, model.config.vocab_size)
-                shift_labels = shift_labels.view(-1)
-                losses.append(loss_fct(shift_logits, shift_labels).item())
-            except Exception as e:
-                logging.error(
-                    f"Exception occurred in reference loss computation: {traceback.format_exc()}"
-                )
-                return math.inf
-    return sum(losses) / len(losses) if losses else math.inf
+        try:
+            loss = outputs["loss"]
+        except KeyError:
+            logging.warning("Model did not return loss. Treating as max loss (0%).")
+            return 0.0
+
+        total_loss += loss.item() * tokens_to_keep
+
+    if total_tokens == 0:
+        logging.warning("No tokens to compute loss on. Treating as max loss (0%).")
+        return 0.0
+
+    return total_loss / total_tokens
 
 
 def compute_reference_loss(
     model: PreTrainedModel,
-    batches: typing.List[typing.Tuple[torch.Tensor, torch.Tensor]],
+    batches: typing.List[typing.Tuple[np.ndarray, np.ndarray]],
     device: str,
 ) -> float:
-    """Given batches of [context, ref] pairs, computes the average loss on the reference portion.
+    """
+    Computes the loss for reference answers for a given model on provided batches.
 
-    Args:
-        model (PreTrainedModel): The model to eval
-        batches (typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]): List of [context, ref] pairs
-        device (str): The device to run the evaluation on.
+    Parameters:
+        model (torch.nn.Module): The model for which reference loss is to be computed.
+        batches (dict): A list of tuples (context, reference) 
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
 
     Returns:
         float: The average loss across all batches.
     """
     losses = []
-    with torch.no_grad():
-        for context, ref in batches:
-            try:
-                # Context and ref are 1 dimensional tensors.
-                inputs = torch.stack([torch.cat([context, ref])]).to(device)
-                # Prepare a cache class and pass it to the model's forward.
-                past_key_values = DynamicCache()
-                logits = model(inputs, past_key_values=past_key_values).logits
+    try:
+        with torch.no_grad():
+            for (context, ref) in batches:
+                try:
+                    # Convert numpy arrays to PyTorch tensors if needed
+                    if isinstance(context, np.ndarray):
+                        context = torch.tensor(context)
+                    if isinstance(ref, np.ndarray):
+                        ref = torch.tensor(ref)
+                        
+                    # Context and ref are 1 dimensional tensors.
+                    context = context.to(device)
+                    ref = ref.to(device)
+                    
+                    # Create the full input by concatenating context and reference
+                    inputs = torch.stack([torch.cat([context, ref])])
 
-                # Shift the logits and labels to compute the loss.
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = inputs[..., 1:].contiguous()
+                    # Prepare a cache class and pass it to the model's forward.
+                    past_key_values = DynamicCache()
+                    logits = model(inputs, past_key_values=past_key_values).logits
 
-                # Only take the reference portion.
-                ref_logits = shift_logits[..., -ref.size(0) :, :]
-                ref_labels = shift_labels[..., -ref.size(0) :]
+                    # Shift the logits and labels to compute the loss.
+                    shift_logits = logits[..., :-1, :].contiguous()
+                    shift_labels = inputs[..., 1:].contiguous()
 
-                # Compute loss.
-                loss_fct = torch.nn.CrossEntropyLoss()
-                ref_logits = ref_logits.view(-1, model.config.vocab_size)
-                ref_labels = ref_labels.view(-1)
-                losses.append(loss_fct(ref_logits, ref_labels).item())
-            except Exception as e:
-                logging.error(
-                    f"Exception occurred in reference loss computation: {traceback.format_exc(e)}"
-                )
-                return math.inf
-    return sum(losses) / len(losses) if losses else math.inf
+                    # Only take the reference portion.
+                    ref_start = context.shape[-1] - 1  # -1 because the shifting
+
+                    ref_shift_logits = shift_logits[:, ref_start:, :]
+                    ref_shift_labels = shift_labels[:, ref_start:]
+
+                    # Compute loss.
+                    loss_fct = torch.nn.CrossEntropyLoss()
+                    ref_shift_logits = ref_shift_logits.view(-1, model.config.vocab_size)
+                    ref_shift_labels = ref_shift_labels.view(-1)
+                    losses.append(loss_fct(ref_shift_logits, ref_shift_labels).item())
+                except Exception as e:
+                    logging.warning(f"Error computing reference loss: {e}")
+                    return 0.0
+    except Exception as e:
+        logging.warning(f"Error in reference loss computation: {e}")
+        return 0.0
+        
+    return sum(losses) / len(losses) if losses else 0.0
 
 
 def compute_multiple_choice_deviation(
     model,
     tokenizer: transformers.PreTrainedTokenizer,
     generation_config: transformers.GenerationConfig,
-    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]],
+    batches: typing.List[typing.Tuple[np.ndarray, typing.List[str], str]],
     device: str,
 ) -> float:
     """
@@ -227,6 +278,10 @@ def compute_multiple_choice_deviation(
         answer,
     ) in batches:
         try:
+            # Convert numpy array to PyTorch tensor if needed
+            if isinstance(inputs, np.ndarray):
+                inputs = torch.tensor(inputs)
+
             response = generate_output(
                 model=model,
                 input_ids=inputs,
@@ -267,29 +322,39 @@ def compute_if_eval(
     batches: typing.List[IFEvalTokenizedSample],
     device: str,
 ) -> float:
-    """Computes the IFEval score for a given model on provided batches.
+    """
+    Computes the score for the IfEval task for a given model on provided batches.
 
-    Args:
-        model (PreTrainedModel): The model for which losses are to be computed.
+    Parameters:
+        model (torch.nn.Module): The model for which IfEval score is to be computed.
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
-        batches (list): A list of batches containing prompts and rules.
-        device (str): The device to use for computation (e.g., 'cpu', 'gpu')."""
+        batches (typing.List[IFEvalTokenizedSample]): A list of batches.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+
+    Returns:
+        float: The average score across all batches.
+    """
     scores = []
     duplicate_count = 0
 
     for sample in batches:
+        # Convert numpy arrays to PyTorch tensors if needed
+        prompt_1 = sample.prompt_1
+        prompt_2 = sample.prompt_2
+        
         try:
+            # Generate outputs for prompt 1 and prompt 2
             response_1 = generate_output(
                 model=model,
-                input_ids=sample.prompt_1,
+                input_ids=prompt_1,
                 generation_config=generation_config,
                 device=device,
                 tokenizer=tokenizer,
             )
             response_2 = generate_output(
                 model=model,
-                input_ids=sample.prompt_2,
+                input_ids=prompt_2,
                 generation_config=generation_config,
                 device=device,
                 tokenizer=tokenizer,
@@ -312,17 +377,14 @@ def compute_if_eval(
                 scores.extend([response_score] * len(sample.rules))
 
         except Exception as e:
-            logging.error(
-                f"Exception occurred in multiple choice deviation computation: {e}"
-            )
-            traceback.print_exc()
+            logging.warning(f"Error in IF eval computation: {e}")
             for _ in range(len(sample.rules) * 2):
                 # Fail all rules in this sample.
                 scores.append(1)
 
     # Penalize models that are generating too many duplicated responses for different prompts.
     if duplicate_count > len(batches) * 0.1:
-        logging.trace(
+        logging.info(
             f"Model had too many duplicated responses ({duplicate_count}/{len(batches)}). Setting score to 1."
         )
         return 1
@@ -333,7 +395,7 @@ def compute_if_eval(
 
 def generate_output(
     model,
-    input_ids: torch.Tensor,
+    input_ids: typing.Union[torch.Tensor, np.ndarray],
     generation_config: transformers.GenerationConfig,
     device: str,
     tokenizer: transformers.PreTrainedTokenizer,
@@ -343,7 +405,7 @@ def generate_output(
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
-        input_ids (torch.Tensor): Input tokens to generate a response to.
+        input_ids (torch.Tensor or np.ndarray): Input tokens to generate a response to.
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
@@ -351,6 +413,10 @@ def generate_output(
     Returns:
         str: Generated tokenized output from the model.
     """
+    # Convert numpy array to PyTorch tensor if needed
+    if isinstance(input_ids, np.ndarray):
+        input_ids = torch.tensor(input_ids)
+        
     input_ids = input_ids.to(device)
     output = model.generate(
         input_ids=input_ids,

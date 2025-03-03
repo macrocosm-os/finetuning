@@ -1152,7 +1152,7 @@ class Validator:
                                 competition,
                                 self.config.device,
                             ),
-                            ttl=720,
+                            ttl=900,
                             mode="spawn",
                         )
 

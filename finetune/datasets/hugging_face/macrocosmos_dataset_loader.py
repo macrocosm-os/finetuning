@@ -1,6 +1,7 @@
 import datetime as dt
 import random
 import typing
+import numpy as np
 
 import taoverse.utilities.logging as logging
 import torch
@@ -224,7 +225,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]]:
+    ) -> typing.List[typing.Tuple[np.ndarray, typing.List[str], str]]:
         # Each batch is a tokenized question + the choices + the correct choice.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
@@ -243,7 +244,7 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
             batches.append(
                 (
-                    torch.stack([torch.tensor(ids)]),
+                    np.array([ids]),
                     PROMPTING_SUBNET_CHOICES,
                     reference,
                 )
@@ -266,114 +267,3 @@ class MacrocosmosDatasetLoader(DatasetLoader):
 
     def __len__(self):
         return len(self.buffer)
-
-
-def main():
-    """
-    Test function to demonstrate the usage of MacrocosmosDatasetLoader.
-    Run this script directly to execute this test function.
-    """
-    import argparse
-    import datetime as dt
-
-    from transformers import AutoTokenizer
-
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Test MacrocosmosDatasetLoader functionality"
-    )
-    parser.add_argument(
-        "--max_samples", type=int, default=5, help="Number of samples to retrieve"
-    )
-    parser.add_argument(
-        "--days_ago",
-        type=int,
-        default=30,
-        help="How many days back to look for samples",
-    )
-    parser.add_argument(
-        "--tokenize", action="store_true", help="Test tokenization functionality"
-    )
-    parser.add_argument(
-        "--model_name",
-        type=str,
-        default="gpt2",
-        help="Model name for tokenizer (if --tokenize is set)",
-    )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument(
-        "--show_split_stats",
-        default=True,
-        action="store_true",
-        help="Show detailed split statistics",
-    )
-    args = parser.parse_args()
-
-    # Set up logging (without using set_trace which doesn't exist)
-    if args.verbose:
-        logging.info("Verbose logging enabled")
-
-    # Calculate date range
-    now = dt.datetime.now(timezone("US/Pacific"))
-    oldest_date = now - dt.timedelta(days=args.days_ago)
-
-    print(f"Initializing MacrocosmosDatasetLoader with max_samples={args.max_samples}")
-    print(f"Looking for samples from {oldest_date} to {now}")
-
-    try:
-        # Initialize the dataset loader
-        loader = MacrocosmosDatasetLoader(
-            max_samples=args.max_samples,
-            oldest_sample_timestamp=oldest_date,
-            newest_sample_timestamp=now,
-        )
-
-        print(f"Successfully loaded {len(loader)} samples")
-
-        # Show split statistics if requested
-        if args.show_split_stats:
-            print("\nSplit statistics:")
-            for split, stats in loader.get_split_statistics().items():
-                print(
-                    f"  - {split}: {stats['total_samples']} total samples, {stats['unique_samples_added']} unique"
-                )
-
-        # Print a few samples
-        print("\nSample data:")
-        for i, (challenge, reference) in enumerate(loader):
-            if i >= 3:  # Limit to 3 samples for display
-                break
-            print(f"\nSample {i+1}:")
-            print(
-                f"Challenge: {challenge[:200]}..."
-                if len(challenge) > 200
-                else f"Challenge: {challenge}"
-            )
-            print(f"Reference answer: {reference}")
-
-        # Test tokenization if requested
-        if args.tokenize:
-            print("\nTesting tokenization:")
-            tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-            tokenized_samples = loader.tokenize(tokenizer, sequence_length=512)
-            print(f"Tokenized {len(tokenized_samples)} samples")
-
-            # Show info about the first tokenized sample
-            if tokenized_samples:
-                first_sample = tokenized_samples[0]
-                print(f"First tokenized sample:")
-                print(f"  Input shape: {first_sample[0].shape}")
-                print(f"  Choices: {first_sample[1]}")
-                print(f"  Correct answer: {first_sample[2]}")
-
-        print("\nTest completed successfully!")
-
-    except Exception as e:
-        print(f"Error during test: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-
-
-if __name__ == "__main__":
-    main()
