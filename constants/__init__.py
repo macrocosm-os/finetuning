@@ -73,6 +73,7 @@ PROMPTING_SUBNET_UID = 1
 # The Prompting validator WANDB project and filters
 PROMPTING_WANDB_PROJECT = "macrocosmos/prompting-validators"
 PROMPTING_MAX_AGE = dt.timedelta(hours=4)
+NUM_CONFIGS_TO_SAMPLE = 10
 # Minimum number of samples allowed to consider MMLU as an eval task.
 MIN_ALLOWED_SAMPLES = 50
 # Minimum stake to consider a validator when checking for miners with weights.
@@ -103,7 +104,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1,  # Irrelevant when using entire dataset.
+        eval_block_delay=SYNC_BLOCK_CADENCE + 100,
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
