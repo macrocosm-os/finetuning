@@ -19,6 +19,7 @@ import typing
 import nltk
 import torch
 from transformers import PreTrainedTokenizerBase
+import numpy as np
 
 from finetune.datasets.loader import DatasetLoader
 
@@ -85,7 +86,7 @@ class WordSortingLoader(DatasetLoader):
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> typing.List[typing.Tuple[np.ndarray, np.ndarray]]:
         # Each batch is a tokenized question + reference answer.
         batches = []
         # If truncation is necessary, truncate from the left to avoid cutting off the answer part.
@@ -105,8 +106,8 @@ class WordSortingLoader(DatasetLoader):
 
             batches.append(
                 (
-                    torch.tensor(ids),
-                    torch.tensor(ref_ids),
+                    np.array(ids),
+                    np.array(ref_ids),
                 )
             )
         return batches
