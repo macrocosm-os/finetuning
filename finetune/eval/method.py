@@ -363,7 +363,7 @@ def generate_output(
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
-        input_ids: Input tokens to generate a response to (can be np.array or torch.Tensor).
+        input_ids: Input tokens to generate a response to (torch.Tensor).
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
@@ -371,16 +371,10 @@ def generate_output(
     Returns:
         str: Generated tokenized output from the model.
     """
-    # Convert to tensor if it's a numpy array
-    if isinstance(input_ids, np.ndarray):
-        input_ids = torch.tensor(input_ids).to(device)
     # Make sure tensor is on the correct device
-    elif isinstance(input_ids, torch.Tensor):
-        # Get the target device object
-        target_device = torch.device(device)
-        # Move tensor to the target device if needed
-        if input_ids.device != target_device:
-            input_ids = input_ids.to(target_device)
+    target_device = torch.device(device)
+    if input_ids.device != target_device:
+        input_ids = input_ids.to(target_device)
         
     output = model.generate(
         input_ids=input_ids,
