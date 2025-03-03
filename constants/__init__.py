@@ -103,7 +103,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1600,  # ~5 hours.
+        eval_block_delay=1,  # Irrelevant when using entire dataset.
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
