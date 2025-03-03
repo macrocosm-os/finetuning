@@ -33,16 +33,10 @@ class IFEvalLoader(DatasetLoader):
         if random_seed:
             random.seed(random_seed)
 
-        # Provide a conservative estimates of samples / hr that are available
-        expected_samples_per_hour = 100
-        oldest_timestamp = dt.datetime.now() - dt.timedelta(
-            hours=math.ceil((max_samples * 2) / expected_samples_per_hour)
-        )
         questions = list(
             MacrocosmosDatasetLoader(
                 random_seed=random_seed,
                 max_samples=max_samples * 2,
-                oldest_sample_timestamp=oldest_timestamp,
                 validator_hotkeys=validator_hotkeys,
             )
         )
