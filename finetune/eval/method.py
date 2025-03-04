@@ -36,7 +36,7 @@ class EvalMethodId(IntEnum):
 
 
 def check_for_reasonable_output(
-    model, input1: np.array, input2: np.array, pad_token_id: int, device: str
+    model, input1: torch.Tensor, input2: torch.Tensor, pad_token_id: int
 ) -> bool:
     """Checks that a model generates reasonable outputs for two given inputs.
 
@@ -49,8 +49,6 @@ def check_for_reasonable_output(
     Returns:
         bool: If the model generates reasonable outputs.
     """
-    input1 = torch.tensor(input1).to(device)
-    input2 = torch.tensor(input2).to(device)
     # Generate 20 tokens of output from the model for each prompt.
     output_length = 20
     # Only take the last 20 tokens since otherwise we also get the prompt ids.
@@ -134,7 +132,7 @@ def compute_text_loss(
             try:
                 # Convert numpy array to torch tensor first, then move to device
                 inputs = torch.tensor(batch).to(device)
-                
+
                 # Prepare a cache class and pass it to the model's forward.
                 past_key_values = DynamicCache()
                 logits = model(inputs, past_key_values=past_key_values).logits
@@ -178,15 +176,19 @@ def compute_reference_loss(
                 # Convert numpy arrays to tensors
                 context_tensor = torch.tensor(context)
                 ref_tensor = torch.tensor(ref)
-                
+
                 # Check if context already has a batch dimension
                 if len(context_tensor.shape) == 1:
                     # Add batch dimension if it doesn't exist
-                    inputs = torch.tensor(np.concatenate([context, ref])).unsqueeze(0).to(device)
+                    inputs = (
+                        torch.tensor(np.concatenate([context, ref]))
+                        .unsqueeze(0)
+                        .to(device)
+                    )
                 else:
                     # If it already has a batch dimension, just concatenate along sequence dimension
                     inputs = torch.cat([context_tensor, ref_tensor], dim=1).to(device)
-                
+
                 # Prepare a cache class and pass it to the model's forward
                 past_key_values = DynamicCache()
                 logits = model(inputs, past_key_values=past_key_values).logits
@@ -299,7 +301,7 @@ def compute_if_eval(
             # Convert NumPy arrays to PyTorch tensors and send to device
             prompt_1_tensor = torch.tensor(sample.prompt_1).to(device)
             prompt_2_tensor = torch.tensor(sample.prompt_2).to(device)
-            
+
             response_1 = generate_output(
                 model=model,
                 input_ids=prompt_1_tensor,
@@ -375,7 +377,7 @@ def generate_output(
     target_device = torch.device(device)
     if input_ids.device != target_device:
         input_ids = input_ids.to(target_device)
-        
+
     output = model.generate(
         input_ids=input_ids,
         generation_config=generation_config,
