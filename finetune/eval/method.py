@@ -5,6 +5,7 @@ import traceback
 import typing
 from enum import IntEnum
 
+import numpy as np
 import taoverse.utilities.logging as logging
 import torch
 import transformers
@@ -41,8 +42,8 @@ def check_for_reasonable_output(
 
     Args:
         model (torch.nn.Module): The model for which outputs are to be checked. Already loaded to device.
-        input1 (torch.Tensor]): Tokenized input1 to check. Already loaded to device.
-        input2 (torch.Tensor]): Tokenized input2 to check. Already loaded to device.
+        input1 (np.array): Tokenized input1 to check. Already loaded to device.
+        input2 (np.array): Tokenized input2 to check. Already loaded to device.
         pad_token_id (int): Pad token id for the tokenizer used to generate inputs 1 and 2.
 
     Returns:
@@ -91,7 +92,7 @@ def check_for_reasonable_output(
 
 def compute_text_loss(
     model: PreTrainedModel,
-    batches: typing.List[torch.Tensor],
+    batches: typing.List[np.array],
     device: str,
     pad_token_id: int,
 ) -> float:
@@ -99,7 +100,7 @@ def compute_text_loss(
 
     Args:
         model (PreTrainedModel): The model to eval
-        batches (typing.List[torch.Tensor]): List of tokenized texts.
+        batches (typing.List[np.array]): List of tokenized texts.
         device (str): The device to run the evaluation on.
         pad_token_id int: Pad token id for the tokenizer used to tokenize the batches.
 
@@ -110,11 +111,11 @@ def compute_text_loss(
     # Grab 100 tokens from the first two batches as 'prompts'. (1 x Seq Length tensors.)
     try:
         prompt_length = 100
-        token_inputs_1 = batches[0][:prompt_length].to(device)
-        token_inputs_2 = batches[1][:prompt_length].to(device)
+        token_inputs_1 = torch.tensor(batches[0][:prompt_length]).to(device)
+        token_inputs_2 = torch.tensor(batches[1][:prompt_length]).to(device)
 
         if not check_for_reasonable_output(
-            model, token_inputs_1, token_inputs_2, pad_token_id
+            model, token_inputs_1, token_inputs_2, pad_token_id, device
         ):
             return math.inf
     except Exception as e:
@@ -129,8 +130,9 @@ def compute_text_loss(
     with torch.no_grad():
         for batch in batches:
             try:
-                # Context and ref are 1 dimensional tensors.
-                inputs = batch.to(device)
+                # Convert numpy array to torch tensor first, then move to device
+                inputs = torch.tensor(batch).to(device)
+
                 # Prepare a cache class and pass it to the model's forward.
                 past_key_values = DynamicCache()
                 logits = model(inputs, past_key_values=past_key_values).logits
@@ -154,14 +156,14 @@ def compute_text_loss(
 
 def compute_reference_loss(
     model: PreTrainedModel,
-    batches: typing.List[typing.Tuple[torch.Tensor, torch.Tensor]],
+    batches: typing.List[typing.Tuple[np.array, np.array]],
     device: str,
 ) -> float:
     """Given batches of [context, ref] pairs, computes the average loss on the reference portion.
 
     Args:
         model (PreTrainedModel): The model to eval
-        batches (typing.List[typing.Tuple[torch.Tensor, torch.Tensor]]): List of [context, ref] pairs
+        batches (typing.List[typing.Tuple[np.array, np.array]]): List of [context, ref] pairs
         device (str): The device to run the evaluation on.
 
     Returns:
@@ -171,21 +173,36 @@ def compute_reference_loss(
     with torch.no_grad():
         for context, ref in batches:
             try:
-                # Context and ref are 1 dimensional tensors.
-                inputs = torch.stack([torch.cat([context, ref])]).to(device)
-                # Prepare a cache class and pass it to the model's forward.
+                # Convert numpy arrays to tensors
+                context_tensor = torch.tensor(context)
+                ref_tensor = torch.tensor(ref)
+
+                # Check if context already has a batch dimension
+                if len(context_tensor.shape) == 1:
+                    # Add batch dimension if it doesn't exist
+                    inputs = (
+                        torch.tensor(np.concatenate([context, ref]))
+                        .unsqueeze(0)
+                        .to(device)
+                    )
+                else:
+                    # If it already has a batch dimension, just concatenate along sequence dimension
+                    inputs = torch.cat([context_tensor, ref_tensor], dim=1).to(device)
+
+                # Prepare a cache class and pass it to the model's forward
                 past_key_values = DynamicCache()
                 logits = model(inputs, past_key_values=past_key_values).logits
 
-                # Shift the logits and labels to compute the loss.
+                # Shift the logits and labels to compute the loss
                 shift_logits = logits[..., :-1, :].contiguous()
                 shift_labels = inputs[..., 1:].contiguous()
 
-                # Only take the reference portion.
-                ref_logits = shift_logits[..., -ref.size(0) :, :]
-                ref_labels = shift_labels[..., -ref.size(0) :]
+                # Only take the reference portion
+                ref_length = ref_tensor.size(-1)  # Use the last dimension size
+                ref_logits = shift_logits[..., -ref_length:, :]
+                ref_labels = shift_labels[..., -ref_length:]
 
-                # Compute loss.
+                # Compute loss
                 loss_fct = torch.nn.CrossEntropyLoss()
                 ref_logits = ref_logits.view(-1, model.config.vocab_size)
                 ref_labels = ref_labels.view(-1)
@@ -202,7 +219,7 @@ def compute_multiple_choice_deviation(
     model,
     tokenizer: transformers.PreTrainedTokenizer,
     generation_config: transformers.GenerationConfig,
-    batches: typing.List[typing.Tuple[torch.Tensor, typing.List[str], str]],
+    batches: typing.List[typing.Tuple[np.array, typing.List[str], str]],
     device: str,
 ) -> float:
     """
@@ -227,6 +244,7 @@ def compute_multiple_choice_deviation(
         answer,
     ) in batches:
         try:
+            inputs = torch.tensor(inputs).to(device)
             response = generate_output(
                 model=model,
                 input_ids=inputs,
@@ -280,16 +298,20 @@ def compute_if_eval(
 
     for sample in batches:
         try:
+            # Convert NumPy arrays to PyTorch tensors and send to device
+            prompt_1_tensor = torch.tensor(sample.prompt_1).to(device)
+            prompt_2_tensor = torch.tensor(sample.prompt_2).to(device)
+
             response_1 = generate_output(
                 model=model,
-                input_ids=sample.prompt_1,
+                input_ids=prompt_1_tensor,
                 generation_config=generation_config,
                 device=device,
                 tokenizer=tokenizer,
             )
             response_2 = generate_output(
                 model=model,
-                input_ids=sample.prompt_2,
+                input_ids=prompt_2_tensor,
                 generation_config=generation_config,
                 device=device,
                 tokenizer=tokenizer,
@@ -333,7 +355,7 @@ def compute_if_eval(
 
 def generate_output(
     model,
-    input_ids: torch.Tensor,
+    input_ids,
     generation_config: transformers.GenerationConfig,
     device: str,
     tokenizer: transformers.PreTrainedTokenizer,
@@ -343,7 +365,7 @@ def generate_output(
 
     Args:
         model (torch.nn.Module): The model for which losses are to be computed.
-        input_ids (torch.Tensor): Input tokens to generate a response to.
+        input_ids: Input tokens to generate a response to (torch.Tensor).
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
         device (str): The device to use for computation (e.g., 'cpu', 'gpu').
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
@@ -351,7 +373,11 @@ def generate_output(
     Returns:
         str: Generated tokenized output from the model.
     """
-    input_ids = input_ids.to(device)
+    # Make sure tensor is on the correct device
+    target_device = torch.device(device)
+    if input_ids.device != target_device:
+        input_ids = input_ids.to(target_device)
+
     output = model.generate(
         input_ids=input_ids,
         generation_config=generation_config,
