@@ -3,14 +3,14 @@
 # Copyright © 2023 const
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
 # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
@@ -26,6 +26,9 @@ from retry import retry
 from taoverse.model.eval.task import EvalTask
 
 from finetune.datasets.factory import DatasetLoaderFactory
+from finetune.datasets.hugging_face.macrocosmos_dataset_loader import (
+    MacrocosmosDatasetLoader,
+)
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.loader import DatasetLoader
 from finetune.eval.sample import EvalSample
@@ -47,7 +50,6 @@ import time
 import traceback
 import typing
 from collections import defaultdict
-from websockets.exceptions import InvalidStatus
 
 import bittensor as bt
 import nltk
@@ -78,11 +80,11 @@ from taoverse.model.storage.hugging_face.hugging_face_model_store import (
 from taoverse.utilities import utils
 from taoverse.utilities import wandb as wandb_utils
 from taoverse.utilities.perf_monitor import PerfMonitor
+from websockets.exceptions import InvalidStatus
 
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -864,52 +866,21 @@ class Validator:
         current_block: int,
         eval_delay_blocks: int,
         vali_hotkeys: typing.Set[str],
-    ) -> PromptingSubsetLoader:
+    ) -> MacrocosmosDatasetLoader:
 
-        # We want to ensure we only include data that is strictly newer than eval_delay_blocks ago and older than the current
-        # sync block. This ensures that all validators running an eval in this current sync_block will load ~ the same data.
-        oldest_sync_block = ft.utils.get_next_sync_block(
-            current_block - eval_delay_blocks,
-            constants.SYNC_BLOCK_CADENCE,
-            constants.GENESIS_BLOCK,
-        )
-        current_sync_block = ft.utils.get_sync_block(
-            current_block, constants.SYNC_BLOCK_CADENCE, constants.GENESIS_BLOCK
-        )
-
-        # Find the timestamps of the sync blocks, but fall back to a rough estimate if the subtensor call fails.
-        now = dt.datetime.now(dt.timezone.utc)
-        oldest_sample_timestamp = now - dt.timedelta(
-            seconds=constants.SECONDS_PER_BLOCK * eval_delay_blocks
-        )
-        newest_sample_timestamp = now - dt.timedelta(
-            seconds=constants.SECONDS_PER_BLOCK * (current_block - current_sync_block)
-        )
-
-        @retry(tries=5, delay=1, backoff=2)
-        def _get_block_timestamp_with_retry(block):
-            archive = bt.subtensor("archive")
-            return ft.utils.get_block_timestamp(archive, block)
-
+        # We're now sampling from the entire dataset instead of using timestamp filtering
+        # We only need to pass the seed, max_samples, and validator_hotkeys
+        logging.debug(f"Creating dataset loader with seed {seed}")
+        
         try:
-            oldest_sample_timestamp = _get_block_timestamp_with_retry(oldest_sync_block)
-            newest_sample_timestamp = _get_block_timestamp_with_retry(
-                current_sync_block
+            sample_data = MacrocosmosDatasetLoader(
+                random_seed=seed,
+                max_samples=self.config.latest_prompting_samples,
+                validator_hotkeys=vali_hotkeys,
             )
         except Exception as e:
-            # Well, we tried our best. Let us pray this does not stir the wrath of the v-trust Gods.
-            logging.trace(
-                f"Failed to get block timestamps for the sync blocks. Error={e}. Using fallback timestamps."
-            )
-            pass
-
-        sample_data = PromptingSubsetLoader(
-            random_seed=seed,
-            max_samples=self.config.latest_prompting_samples,
-            oldest_sample_timestamp=oldest_sample_timestamp,
-            newest_sample_timestamp=newest_sample_timestamp,
-            validator_hotkeys=vali_hotkeys,
-        )
+            logging.error(f"Failed to create MacrocosmosDatasetLoader: {e}")
+            return None
 
         if len(sample_data) < constants.MIN_ALLOWED_SAMPLES:
             logging.warning(
@@ -1557,6 +1528,9 @@ class Validator:
 
         while True:
             try:
+                # Reset the logging levels, since bittensor occassionally messes with
+                # the logging levels we set.
+                self._configure_logging(self.config)
                 await self.try_run_step(ttl=75 * 60)
                 self.global_step += 1
 

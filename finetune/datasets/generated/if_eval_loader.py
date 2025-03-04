@@ -6,10 +6,13 @@ from typing import List, Set
 import taoverse.utilities.logging as logging
 import torch
 from transformers import PreTrainedTokenizerBase
+import numpy as np
 
 from finetune.datasets.generated.mmlu_parser import extract_q_and_a_text
+from finetune.datasets.hugging_face.macrocosmos_dataset_loader import (
+    MacrocosmosDatasetLoader,
+)
 from finetune.datasets.loader import DatasetLoader
-from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.eval.if_eval import rule_factory
 from finetune.eval.if_eval.sample import IFEvalTokenizedSample
 from finetune.eval.if_eval.version import IfEvalVersion
@@ -31,16 +34,10 @@ class IFEvalLoader(DatasetLoader):
         if random_seed:
             random.seed(random_seed)
 
-        # Provide a conservative estimates of samples / hr that are available
-        expected_samples_per_hour = 100
-        oldest_timestamp = dt.datetime.now() - dt.timedelta(
-            hours=math.ceil((max_samples * 2) / expected_samples_per_hour)
-        )
         questions = list(
-            PromptingSubsetLoader(
+            MacrocosmosDatasetLoader(
                 random_seed=random_seed,
                 max_samples=max_samples * 2,
-                oldest_sample_timestamp=oldest_timestamp,
                 validator_hotkeys=validator_hotkeys,
             )
         )
@@ -94,7 +91,7 @@ class IFEvalLoader(DatasetLoader):
 
         for sample in self:
 
-            def _tokenize_prompt(prompt: str) -> torch.Tensor:
+            def _tokenize_prompt(prompt: str) -> np.ndarray:
                 ids = tokenizer.apply_chat_template(
                     conversation=[
                         {"role": "user", "content": prompt},
@@ -102,7 +99,8 @@ class IFEvalLoader(DatasetLoader):
                     max_length=sequence_length,
                     add_generation_prompt=True,
                 )
-                return torch.stack([torch.tensor(ids)])
+                # Return numpy array instead of torch tensor
+                return np.array([ids])
 
             batches.append(
                 IFEvalTokenizedSample(
