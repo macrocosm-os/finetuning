@@ -115,7 +115,7 @@ def compute_text_loss(
         token_inputs_2 = torch.tensor(batches[1][:prompt_length]).to(device)
 
         if not check_for_reasonable_output(
-            model, token_inputs_1, token_inputs_2, pad_token_id, device
+            model, token_inputs_1, token_inputs_2, pad_token_id
         ):
             return math.inf
     except Exception as e:

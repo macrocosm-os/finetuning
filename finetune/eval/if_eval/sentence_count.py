@@ -1,9 +1,13 @@
+import logging
+
 import nltk
+
 from finetune.eval.if_eval.rule import IFEvalRule, RuleId
 
 try:
     from nltk.tokenize.punkt import PunktSentenceTokenizer
 except:
+    logging.debug("NLTK punkt not found, downloading...")
     nltk.download("punkt", raise_on_error=True)
 
 

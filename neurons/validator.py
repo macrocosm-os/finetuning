@@ -871,7 +871,7 @@ class Validator:
         # We're now sampling from the entire dataset instead of using timestamp filtering
         # We only need to pass the seed, max_samples, and validator_hotkeys
         logging.debug(f"Creating dataset loader with seed {seed}")
-        
+
         try:
             sample_data = MacrocosmosDatasetLoader(
                 random_seed=seed,
@@ -1383,7 +1383,7 @@ class Validator:
                     str(step_log["uid_data"][str(uid)]["competition_id"]),
                 )
             except:
-                pass
+                logging.trace(f"Failed to add row to table for uid {uid}")
         console = Console()
         console.print(table)
 
@@ -1582,6 +1582,9 @@ if __name__ == "__main__":
     try:
         width = os.get_terminal_size().columns
     except:
+        logging.trace(
+            "Could not determine terminal size, defaulting to 0", exc_info=True
+        )
         width = 0
     os.environ["COLUMNS"] = str(max(200, width))
 
