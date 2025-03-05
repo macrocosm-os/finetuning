@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import dataclasses
 import json
+import logging
 import os
 import pickle
 import shutil
@@ -175,7 +176,8 @@ def delete_dir_contents(dir: str):
     try:
         shutil.rmtree(dir)
     except:
-        print(f"Failed to delete {dir}. {traceback.format_exc()}")
+        print(f"Failed to delete {dir}.")
+        logging.debug(f"Failed to delete directory {dir}", exc_info=True)
 
     if not os.path.exists(dir):
         os.makedirs(dir)
