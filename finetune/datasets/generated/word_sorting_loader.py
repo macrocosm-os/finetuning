@@ -13,21 +13,22 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+import logging
 import random
 import typing
 
 import nltk
+import numpy as np
 import torch
 from transformers import PreTrainedTokenizerBase
-import numpy as np
 
 from finetune.datasets.loader import DatasetLoader
 
 try:
     from nltk.corpus import words
 except:
+    logging.debug("NLTK words corpus not found, downloading...")
     nltk.download("words", raise_on_error=True)
-
 WORD_SORTING_CHALLENGE_PROMPT = "Sort the following words alphabetically: "
 
 
