@@ -235,8 +235,7 @@ class PromptingSubsetLoader(DatasetLoader):
                 except Exception:
                     attempt += 1
                     logging.trace(
-                        f"Failed to fetch data, retrying. Attempt {attempt}/{max_attempts}",
-                        exc_info=True,
+                        f"Failed to fetch data, retrying. Attempt {attempt}/{max_attempts}"
                     )
                     if attempt < max_attempts:
                         time.sleep(5)

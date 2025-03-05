@@ -7,7 +7,7 @@ from finetune.eval.if_eval.rule import IFEvalRule, RuleId
 try:
     from nltk.tokenize.punkt import PunktSentenceTokenizer
 except:
-    logging.info("NLTK punkt tokenizer not found, downloading...")
+    logging.debug("NLTK punkt tokenizer not found, downloading...")
     nltk.download("punkt", raise_on_error=True)
 
 

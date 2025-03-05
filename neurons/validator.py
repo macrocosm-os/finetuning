@@ -832,8 +832,7 @@ class Validator:
             return _get_block_with_retry()
         except:
             logging.debug(
-                "Failed to get the latest block from the chain. Using the block from the cached metagraph.",
-                exc_info=True,
+                "Failed to get the latest block from the chain. Using the block from the cached metagraph."
             )
             # Network call failed. Fallback to using the block from the metagraph,
             # even though it'll be a little stale.
@@ -901,8 +900,7 @@ class Validator:
             return _get_seed_with_retry()
         except:
             logging.trace(
-                f"Failed to get hash of block {sync_block}. Using fallback seed.",
-                exc_info=True,
+                f"Failed to get hash of block {sync_block}. Using fallback seed."
             )
             return None
 
@@ -1385,9 +1383,7 @@ class Validator:
                     str(step_log["uid_data"][str(uid)]["competition_id"]),
                 )
             except:
-                logging.trace(
-                    f"Failed to add row to table for uid {uid}", exc_info=True
-                )
+                logging.trace(f"Failed to add row to table for uid {uid}")
         console = Console()
         console.print(table)
 
@@ -1586,9 +1582,7 @@ if __name__ == "__main__":
     try:
         width = os.get_terminal_size().columns
     except:
-        logging.trace(
-            "Could not determine terminal size, defaulting to 0", exc_info=True
-        )
+        logging.trace("Could not determine terminal size, defaulting to 0")
         width = 0
     os.environ["COLUMNS"] = str(max(200, width))
 
