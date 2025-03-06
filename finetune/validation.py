@@ -219,8 +219,8 @@ def score_model(
                     )
                 case EvalMethodId.VERIFIABLE_REASONING:
                     # Extract method kwargs or use default values
-                    trace_weight = task.method_kwargs.get("trace_weight", 0.4)
-                    answer_weight = task.method_kwargs.get("answer_weight", 0.6)
+                    trace_weight = 0.4
+                    answer_weight = 0.6
                     
                     generation_config = GenerationConfig(
                         max_new_tokens=256,
