@@ -4,6 +4,7 @@ import re
 import time
 import typing
 from typing import List
+import inspect
 
 import numpy as np
 import requests
@@ -258,18 +259,39 @@ class HuggingFaceLoader(DatasetLoader):
 
     def tokenize(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.List[np.ndarray]:
-        # Each batch is a tokenized row of content up to sequence length.
-        batches = []
-
-        for content in self:
-            input_ids = tokenizer(content, max_length=sequence_length, truncation=True)[
-                "input_ids"
-            ]
-
-            batches.append(np.array([input_ids + [tokenizer.eos_token_id]]))
-
-        return batches
+    ) -> typing.Union[typing.List[np.ndarray], typing.Dict[str, typing.List]]:
+        """Tokenize the dataset based on what's needed.
+        
+        For text_loss evaluation, returns list of tokenized samples.
+        For reasoning_with_answer evaluation, returns dictionary with structured data.
+        """
+        # Get the caller's stack frame to determine which evaluation method is calling
+        caller_frame = inspect.currentframe().f_back
+        caller_code = inspect.getframeinfo(caller_frame).code_context[0]
+        
+        # Check if we're being called for the reasoning evaluation
+        if "VERIFIABLE_REASONING" in caller_code or "verifiable_reasoning" in caller_code:
+            return self.tokenize_for_verifiable_reasoning(tokenizer, sequence_length)
+        
+        # Default to standard tokenization for TEXT_LOSS
+        result = []
+        for sample in self.samples:
+            prompt = sample["question"]
+            trace = sample["trace"]
+            answer = sample["answer"]
+            
+            # For text loss, we tokenize the full sequence: question + trace + answer
+            full_text = f"{prompt}\n{trace}\n{answer}"
+            tokens = tokenizer.encode(
+                full_text,
+                max_length=sequence_length,
+                padding="max_length",
+                truncation=True,
+                return_tensors="np",
+            )
+            result.append(tokens)
+        
+        return result
 
     def get_sample(self) -> typing.Union[str, dict]:
         return random.choice(self.buffer)
@@ -620,4 +642,61 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             "y": tokenized_answers,
             "traces": tokenized_traces,
             "task_types": self.task_types,
+        }
+
+    def tokenize_for_verifiable_reasoning(
+        self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
+    ) -> typing.Dict[str, typing.List]:
+        """Tokenize the dataset specifically for verifiable reasoning evaluation.
+        
+        Returns:
+            Dict with keys:
+                - questions: List of tokenized questions
+                - traces: List of tokenized traces
+                - answers: List of expected answers (strings)
+                - task_types: List of task types
+        """
+        questions = []
+        traces = []
+        answers = []
+        task_types = []
+        
+        for sample in self.buffer:
+            task_type = sample["task_type"]
+            
+            if task_type not in self.supported_task_types:
+                continue
+            
+            question = sample["question"]
+            trace = sample["trace"]
+            answer = sample["answer"]
+            
+            # Tokenize question (input)
+            question_tokens = tokenizer.encode(
+                question,
+                max_length=sequence_length,
+                padding="max_length",
+                truncation=True,
+                return_tensors="np",
+            )
+            
+            # Tokenize trace (for perplexity evaluation)
+            trace_tokens = tokenizer.encode(
+                trace,
+                max_length=sequence_length,
+                padding="max_length",
+                truncation=True,
+                return_tensors="np",
+            )
+            
+            questions.append(question_tokens)
+            traces.append(trace_tokens)
+            answers.append(answer)
+            task_types.append(task_type)
+        
+        return {
+            "questions": questions,
+            "traces": traces,
+            "answers": answers,
+            "task_types": task_types,
         }
