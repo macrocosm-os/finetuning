@@ -124,8 +124,8 @@ class HuggingFaceLoader(DatasetLoader):
                         content = row["row"]["content"]
                         self.buffer.append(content)
                     elif self.name == SYNTHETIC_1_SFT_NAME:
-                        # The SYNTHETIC-1-SFT dataset has keys: 'response_id', 'problem_id', 'task_type', 'score', 'messages'
-                        # We have to extract metadata for task-specific parsing
+                        # Rows have keys: 'response_id', 'problem_id', 'task_type', 'score', 'messages'
+                        # We have to extract metadata because of task-specific parsing
                         messages = row["row"]["messages"]
                         task_type = row["row"].get("task_type", "unknown")
                         problem_id = row["row"].get("problem_id", "")
@@ -263,8 +263,9 @@ class HuggingFaceLoader(DatasetLoader):
         """Tokenize the dataset based on what's needed.
         
         For text_loss evaluation, returns list of tokenized samples.
-        For reasoning_with_answer evaluation, returns dictionary with structured data.
+        For verifiable_reasoning evaluation, returns dictionary with structured data.
         """
+        #Todo Not super confident about this implementation
         # Get the caller's stack frame to determine which evaluation method is calling
         caller_frame = inspect.currentframe().f_back
         caller_code = inspect.getframeinfo(caller_frame).code_context[0]
@@ -432,9 +433,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         self.traces = []
         self.answers = []
         self.task_types = []
-        self.buffer_parsed_indices = (
-            set()
-        )  # Keep track of which indices we've already parsed
+        self.buffer_parsed_indices = set()  # Keep track of which indices we've already parsed
 
         # Parse all samples in the buffer
         self._parse_additional_samples()
@@ -516,11 +515,13 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         boxed_matches = re.findall(r"\\boxed\{(.*?)\}", assistant_message)
         answer = boxed_matches[-1] if boxed_matches else ""
 
-        # The trace is everything except the answer
+        # The trace is everything before the last occurrence of \boxed{answer}
         if boxed_matches and answer:
-            # Replace the last occurrence of \boxed{answer} with an empty string to get the trace
-            last_boxed = f"\\boxed{{{answer}}}"
-            trace = assistant_message.replace(last_boxed, "", 1)
+            last_boxed_index = assistant_message.rfind(f"\\boxed{{{answer}}}")
+            if last_boxed_index > -1:
+                trace = assistant_message[:last_boxed_index].strip()
+            else:
+                trace = assistant_message
         else:
             trace = assistant_message
 
@@ -647,29 +648,22 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
     def tokenize_for_verifiable_reasoning(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
     ) -> typing.Dict[str, typing.List]:
-        """Tokenize the dataset specifically for verifiable reasoning evaluation.
-        
-        Returns:
-            Dict with keys:
-                - questions: List of tokenized questions
-                - traces: List of tokenized traces
-                - answers: List of expected answers (strings)
-                - task_types: List of task types
-        """
+        """Tokenize the dataset specifically for verifiable reasoning evaluation."""
         questions = []
         traces = []
         answers = []
         task_types = []
         
-        for sample in self.buffer:
-            task_type = sample["task_type"]
-            
-            if task_type not in self.supported_task_types:
-                continue
-            
-            question = sample["question"]
-            trace = sample["trace"]
-            answer = sample["answer"]
+        # Make sure the data has been parsed before tokenization
+        if not hasattr(self, 'questions') or not self.questions:
+            self._parse_samples()
+        
+        # Use the parsed data instead of trying to access keys in buffer items
+        for i in range(len(self.questions)):
+            question = self.questions[i]
+            trace = self.traces[i]
+            answer = self.answers[i]
+            task_type = self.task_types[i]
             
             # Tokenize question (input)
             question_tokens = tokenizer.encode(
@@ -678,7 +672,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                 padding="max_length",
                 truncation=True,
                 return_tensors="np",
-            )
+            ).squeeze(0)  # Remove batch dimension
             
             # Tokenize trace (for perplexity evaluation)
             trace_tokens = tokenizer.encode(
@@ -687,7 +681,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                 padding="max_length",
                 truncation=True,
                 return_tensors="np",
-            )
+            ).squeeze(0)  # Remove batch dimension
             
             questions.append(question_tokens)
             traces.append(trace_tokens)
