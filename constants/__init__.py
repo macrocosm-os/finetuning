@@ -142,7 +142,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     ),
     # Todo: discuss model constraints
     CompetitionId.REASONING_3B: ModelConstraints(
-        max_model_parameter_size=3_000_000_000,  # 3B parameter size limit
+        max_model_parameter_size=32_000_000_000,  # 3B parameter size limit
         sequence_length=16_000,
         allowed_architectures=[
             BartForCausalLM,
@@ -166,13 +166,13 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_hard=1000,
         ),
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 day
-        max_bytes=9 * (1024**3),  # 9GB
+        max_bytes=32 * (1024**3),  # 32GB
     ),
 }
 
 SUNSET_B7_BLOCK = 4_675_163
 #Todo: calculate block number
-SUNSET_INSTRUCT_8B_BLOCK = 5_675_163
+SUNSET_INSTRUCT_8B_BLOCK = 4_675_165
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
