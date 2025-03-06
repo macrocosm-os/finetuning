@@ -140,10 +140,39 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 days.
         max_bytes=20 * (1024**3),
     ),
+    # Todo: discuss model constraints
+    CompetitionId.REASONING_3B: ModelConstraints(
+        max_model_parameter_size=3_000_000_000,  # 3B parameter size limit
+        sequence_length=16_000,
+        allowed_architectures=[
+            BartForCausalLM,
+            FalconForCausalLM,
+            Gemma2ForCausalLM,
+            GemmaForCausalLM,
+            GPTNeoXForCausalLM,
+            LlamaForCausalLM,
+            MistralForCausalLM,
+            Phi3ForCausalLM,
+            PhiForCausalLM,
+        ],
+        tokenizer="Xenova/gpt-4",
+        kwargs={
+            "torch_dtype": torch.bfloat16,
+        },
+        eval_block_delay=1600,  # ~5 hours
+        norm_validation_constraints=NormValidationConstraints(
+            norm_eps_soft=200,
+            norm_eps_soft_percent_threshold=0.15,
+            norm_eps_hard=1000,
+        ),
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 day
+        max_bytes=9 * (1024**3),  # 9GB
+    ),
 }
 
 SUNSET_B7_BLOCK = 4_675_163
-
+#Todo: calculate block number
+SUNSET_INSTRUCT_8B_BLOCK = 5_675_163
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
@@ -265,6 +294,25 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         normalization_id=NormalizationId.NONE,
                         dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
                         weight=0.30,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    (
+        SUNSET_INSTRUCT_8B_BLOCK,
+        [
+            Competition(
+                CompetitionId.REASONING_3B,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.REASONING_3B],
+                1.0,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_1_SFT",
+                        method_id=EvalMethodId.VERIFIABLE_REASONING,
+                        dataset_id=DatasetId.SYNTHETIC_1_SFT,
+                        normalization_id=NormalizationId.NONE, #we handle it in the eval
+                        weight=1.0,
                     ),
                 ],
             ),

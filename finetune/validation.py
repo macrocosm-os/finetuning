@@ -20,6 +20,8 @@
 
 import dataclasses
 import typing
+import numpy as np
+from typing import List, Union, Dict, Tuple
 
 import taoverse.utilities.logging as logging
 import torch
@@ -36,6 +38,7 @@ from finetune.eval.method import (
     compute_multiple_choice_deviation,
     compute_reference_loss,
     compute_text_loss,
+    compute_verifiable_reasoning,
 )
 from finetune.eval.sample import EvalSample
 
@@ -135,24 +138,24 @@ class ScoreDetails:
 
 def score_model(
     model: Model,
-    evals: typing.List[EvalTask],
-    samples: typing.List[typing.List[EvalSample]],
+    eval_tasks: List[EvalTask],
+    samples: List[Union[List[np.ndarray], Dict[str, List]]],
     competition: Competition,
     device: str,
-) -> typing.Tuple[float, dict]:
-    """Scores a model based on the provided eval tasks.
+) -> Tuple[float, Dict[str, float]]:
+    """Score a model on a set of eval tasks.
 
     Args:
-        model (torch.nn.Module): The model to score.
-        evals (list): A list of EvalTasks to score the model on.
-        samples (list): A list of samples to use for scoring for the eval tasks. Must be the same length as evals.
-        competition (Competition): The competition to score the model for.
-        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+        model: Model to score.
+        eval_tasks: List of eval tasks.
+        samples: List of samples, one per eval task.
+        competition: Competition definition.
+        device: Device to run eval on.
 
     Returns:
-        tuple: A tuple containing the score and a dictionary of score details."""
-
-    if len(evals) != len(samples):
+        Tuple of (score, score_details).
+    """
+    if len(eval_tasks) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
 
     if not model.tokenizer:
@@ -163,10 +166,10 @@ def score_model(
         model.pt_model.eval()
 
         score = 0
-        score_details = {task.name: ScoreDetails() for task in evals}
+        score_details = {task.name: ScoreDetails() for task in eval_tasks}
         tokenizer = model.tokenizer
 
-        for task, samples in zip(evals, samples):
+        for task, task_samples in zip(eval_tasks, samples):
             logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
@@ -182,19 +185,19 @@ def score_model(
                         model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_mc_generation_config,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                     )
                 case EvalMethodId.REFERENCE_LOSS:
                     raw_score = compute_reference_loss(
                         model=model.pt_model,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                     )
                 case EvalMethodId.TEXT_LOSS:
                     raw_score = compute_text_loss(
                         model=model.pt_model,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                         pad_token_id=tokenizer.eos_token_id,
                     )
@@ -211,8 +214,31 @@ def score_model(
                         model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_if_generation_config,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
+                    )
+                case EvalMethodId.VERIFIABLE_REASONING:
+                    # Extract method kwargs or use default values
+                    trace_weight = task.method_kwargs.get("trace_weight", 0.4)
+                    answer_weight = task.method_kwargs.get("answer_weight", 0.6)
+                    
+                    generation_config = GenerationConfig(
+                        max_new_tokens=256,
+                        do_sample=False,
+                        num_beam_groups=1,
+                        num_beams=1,
+                        pad_token_id=model.tokenizer.pad_token_id,
+                        eos_token_id=model.tokenizer.eos_token_id,
+                    )
+                    
+                    raw_score = compute_verifiable_reasoning(
+                        model=model.pt_model,
+                        tokenizer=model.tokenizer,
+                        generation_config=generation_config,
+                        batches=task_samples,
+                        device=device,
+                        trace_weight=trace_weight,
+                        answer_weight=answer_weight,
                     )
                 case _:
                     raise ValueError(f"Unhandled evaluation method {task.method_id}.")
