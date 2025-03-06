@@ -26,13 +26,15 @@ class EvalMethodId(IntEnum):
     # on the reference portition of the text.
     REFERENCE_LOSS = 2
 
-    # Evalutes the model's performance on a text generation task by computing average cross entropy loss
+    # Evaluates the model's performance on a text generation task by computing average cross entropy loss
     # on the entirety of the provided text.
     TEXT_LOSS = 3
 
-    # Evalutes the model's performance on a prompt response task that contains a set of rules that the response
+    # Evaluates the model's performance on a prompt response task that contains a set of rules that the response
     # must satisfy.
     IF_EVAL = 4
+    
+    VERIFIABLE_REASONING = 5
 
 
 def check_for_reasonable_output(
@@ -392,3 +394,125 @@ def compute_similarity_score(a: str, b: str) -> float:
     """Returns a similarity score between [0,1] for the two provided strings."""
     # Use difflib to compute the similarity score, ignoring whitespace deltas.
     return difflib.SequenceMatcher(lambda x: x in " \t", a, b).ratio()
+
+
+def compute_verifiable_reasoning(
+    model: PreTrainedModel,
+    tokenizer: transformers.PreTrainedTokenizer,
+    generation_config: transformers.GenerationConfig,
+    batches: typing.Dict[str, typing.List],
+    device: str,
+    trace_weight: float = 0.4, #todo discuss this
+    answer_weight: float = 0.6,
+) -> float:
+    """Computes a combined score based on reasoning trace perplexity and exact answer matching.
+    
+    Args:
+        model: The model to evaluate
+        tokenizer: The tokenizer to use
+        generation_config: Generation configuration for generating responses
+        batches: Dictionary containing:
+            - questions: List of tokenized questions
+            - traces: List of tokenized expected reasoning traces
+            - answers: List of expected answers (strings)
+            - task_types: List of task types ("verifiable_math" or "code_output_prediction")
+        device: The device to run the evaluation on
+        trace_weight: Weight for the trace perplexity component
+        answer_weight: Weight for the exact answer component 
+        
+    Returns:
+        float: Combined weighted score (lower is better)
+    """
+    if not batches["questions"] or len(batches["questions"]) == 0:
+        logging.error("No data provided for evaluation")
+        return math.inf
+        
+    # Check that model generates reasonable output
+    try:
+        prompt_length = 100
+        token_inputs_1 = torch.tensor(batches["questions"][0][:prompt_length]).to(device)
+        token_inputs_2 = torch.tensor(batches["questions"][1][:prompt_length]).to(device)
+        
+        if not check_for_reasonable_output(
+            model, token_inputs_1, token_inputs_2, tokenizer.pad_token_id
+        ):
+            return math.inf
+    except Exception as e:
+        logging.error(f"Exception in reasonable output check: {traceback.format_exc()}")
+        return math.inf
+        
+    # Process each question-trace-answer triplet
+    trace_losses = []
+    answer_scores = []
+    
+    for i in range(len(batches["questions"])):
+        try:
+            # 1. Generate model response
+            question_tensor = torch.tensor(batches["questions"][i]).to(device)
+            response = generate_output(
+                model=model,
+                input_ids=question_tensor,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+            
+            # 2. Calculate trace loss
+            with torch.no_grad():
+                trace_tensor = torch.tensor(batches["traces"][i]).to(device)
+                
+                # Prepare a cache class and pass it to the model's forward
+                past_key_values = DynamicCache()
+                logits = model(trace_tensor, past_key_values=past_key_values).logits
+                
+                # Shift logits and labels to compute loss
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = trace_tensor[..., 1:].contiguous()
+                
+                # Compute loss
+                loss_fct = torch.nn.CrossEntropyLoss()
+                shift_logits = shift_logits.view(-1, model.config.vocab_size)
+                shift_labels = shift_labels.view(-1)
+                trace_loss = loss_fct(shift_logits, shift_labels).item()
+                trace_losses.append(trace_loss)
+            
+            # 3. Extract answer from response based on task type
+            task_type = batches["task_types"][i]
+            expected_answer = batches["answers"][i]
+            
+            if task_type == "verifiable_math":
+                # Extract answer from \boxed{}
+                boxed_matches = re.findall(r"\\boxed\{(.*?)\}", response)
+                model_answer = boxed_matches[-1] if boxed_matches else ""
+            elif task_type == "code_output_prediction":
+                # Extract answer from {"output": "..."}
+                output_matches = re.findall(r'{"output": "(.*?)"}', response)
+                model_answer = output_matches[-1] if output_matches else ""
+            else:
+                model_answer = ""
+                
+            # 4. Check exact match
+            is_correct = model_answer.strip() == expected_answer.strip()
+            answer_scores.append(0.0 if is_correct else 1.0)  # 0 for correct, 1 for incorrect
+            
+        except Exception as e:
+            logging.error(f"Exception in reasoning evaluation: {traceback.format_exc()}")
+            trace_losses.append(math.inf)
+            answer_scores.append(1.0)
+    
+    # Calculate weighted score
+    if not trace_losses or not answer_scores:
+        return math.inf
+        
+    avg_trace_loss = sum(trace_losses) / len(trace_losses)
+    avg_answer_score = sum(answer_scores) / len(answer_scores)
+    
+    # Normalize trace loss to [0, 1] range using exponential normalization
+    # This uses the same approach as the INVERSE_EXPONENTIAL normalization
+    ceiling = 20.0  # Same as used in the current REASONING_3B competition
+    normalized_trace_loss = 1.0 - math.exp(-avg_trace_loss / ceiling)
+    
+    # Combine scores (lower is better for both components)
+    combined_score = (trace_weight * normalized_trace_loss) + (answer_weight * avg_answer_score)
+    
+    return combined_score
