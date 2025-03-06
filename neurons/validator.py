@@ -1582,9 +1582,7 @@ if __name__ == "__main__":
     try:
         width = os.get_terminal_size().columns
     except:
-        logging.debug(
-            "Could not determine terminal size, defaulting to 0", exc_info=True
-        )
+        logging.debug("Could not determine terminal size, defaulting to 0")
         width = 0
     os.environ["COLUMNS"] = str(max(200, width))
 
