@@ -406,6 +406,18 @@ class Validator:
             self.update_thread.join()
             self.clean_thread.join()
 
+        # Close wandb run when instance is destroyed
+        if (
+            hasattr(self, "wandb_run")
+            and self.config.wandb_project
+            and not self.config.offline
+        ):
+            try:
+                logging.info("Closing wandb run in destructor...")
+                self.wandb_run.finish()
+            except Exception as e:
+                logging.error(f"Error closing wandb run in destructor: {e}")
+
     def save_state(self):
         """Saves the state of the validator to a file."""
 
