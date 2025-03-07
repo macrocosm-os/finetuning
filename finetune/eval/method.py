@@ -26,68 +26,61 @@ class EvalMethodId(IntEnum):
     # on the reference portition of the text.
     REFERENCE_LOSS = 2
 
-    # Evalutes the model's performance on a text generation task by computing average cross entropy loss
+    # Evaluates the model's performance on a text generation task by computing average cross entropy loss
     # on the entirety of the provided text.
     TEXT_LOSS = 3
 
-    # Evalutes the model's performance on a prompt response task that contains a set of rules that the response
+    # Evaluates the model's performance on a prompt response task that contains a set of rules that the response
     # must satisfy.
     IF_EVAL = 4
+
+    VERIFIABLE_REASONING = 5
 
 
 def check_for_reasonable_output(
     model, input1: torch.Tensor, input2: torch.Tensor, pad_token_id: int
 ) -> bool:
-    """Checks that a model generates reasonable outputs for two given inputs.
-
-    Args:
-        model (torch.nn.Module): The model for which outputs are to be checked. Already loaded to device.
-        input1 (np.array): Tokenized input1 to check. Already loaded to device.
-        input2 (np.array): Tokenized input2 to check. Already loaded to device.
-        pad_token_id (int): Pad token id for the tokenizer used to generate inputs 1 and 2.
-
-    Returns:
-        bool: If the model generates reasonable outputs.
     """
-    # Generate 20 tokens of output from the model for each prompt.
-    output_length = 20
-    # Only take the last 20 tokens since otherwise we also get the prompt ids.
-    generate_id1s = model.generate(
-        input1,
-        min_new_tokens=output_length,
-        max_new_tokens=output_length,
-        pad_token_id=pad_token_id,
-    )[:, -output_length:]
-    generate_id2s = model.generate(
-        input2,
-        min_new_tokens=output_length,
-        max_new_tokens=output_length,
-        pad_token_id=pad_token_id,
-    )[:, -output_length:]
+    Performs basic validation that the model can generate reasonable output.
+    """
+    try:
+        # Ensure input tensors have the correct shape [batch_size, sequence_length]
+        if input1.dim() == 1:
+            input1 = input1.unsqueeze(0)  # Add batch dimension
+        if input2.dim() == 1:
+            input2 = input2.unsqueeze(0)  # Add batch dimension
 
-    # Check if too many of the generated ids are the same between the two outputs.
-    if torch.sum(torch.eq(generate_id1s, generate_id2s)).item() >= output_length / 2:
-        logging.info(f"Model had too much overlap between generated outputs.")
-        return False
-
-    # Check if internally both responses are too repetitive.
-    most_common_counts = []
-    for tensor in [generate_id1s, generate_id2s]:
-        # Find unique elements and their counts
-        _, counts = torch.unique(tensor, return_counts=True)
-        # Find the index of the maximum count
-        max_count_index = torch.argmax(counts)
-        # Extract the count of the most common element
-        most_common_counts.append(counts[max_count_index].item())
-
-    if all(count > output_length / 2 for count in most_common_counts):
-        logging.info(
-            f"Model with config {model.config} had too much repetition in generated outputs."
+        # Check reasonable output on first input
+        generate_id1s = model.generate(
+            input1,
+            max_new_tokens=5,
+            pad_token_id=pad_token_id,
+            do_sample=False,
         )
-        return False
 
-    # Passed all the checks, return True.
-    return True
+        # Check reasonable output on second input
+        generate_id2s = model.generate(
+            input2,
+            max_new_tokens=5,
+            pad_token_id=pad_token_id,
+            do_sample=False,
+        )
+
+        # Check shapes
+        if (
+            generate_id1s.shape[0] != input1.shape[0]
+            or generate_id2s.shape[0] != input2.shape[0]
+        ):
+            logging.error(
+                f"Model generate output shape mismatch: {generate_id1s.shape} vs {input1.shape}"
+            )
+            return False
+
+        # Check that generated outputs differ between inputs
+        return not torch.equal(generate_id1s, generate_id2s)
+    except Exception as e:
+        logging.error(f"Exception in check_for_reasonable_output: {str(e)}")
+        return False
 
 
 def compute_text_loss(
@@ -360,35 +353,292 @@ def generate_output(
     device: str,
     tokenizer: transformers.PreTrainedTokenizer,
 ) -> str:
-    """
-    Generates the tokenized output for a model given a tokenized input and generation config.
+    """Generate text from the model and decode it.
 
     Args:
-        model (torch.nn.Module): The model for which losses are to be computed.
-        input_ids: Input tokens to generate a response to (torch.Tensor).
-        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
-        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
-        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
+        model: The model to generate from
+        input_ids: Input token IDs
+        generation_config: Configuration for generation
+        device: Device to run on
+        tokenizer: Tokenizer for decoding
 
     Returns:
-        str: Generated tokenized output from the model.
+        str: Generated text
     """
-    # Make sure tensor is on the correct device
-    target_device = torch.device(device)
-    if input_ids.device != target_device:
-        input_ids = input_ids.to(target_device)
+    try:
+        # Ensure input has batch dimension [batch_size, sequence_length]
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
 
-    output = model.generate(
-        input_ids=input_ids,
-        generation_config=generation_config,
-    )
-    response = tokenizer.decode(
-        output[0][len(input_ids[0]) :], skip_special_tokens=True
-    )
-    return response
+        # Generate output
+        output = model.generate(
+            input_ids,
+            **generation_config.to_dict(),
+        )
+
+        # Remove batch dimension if present
+        if output.dim() > 1:
+            # Take the first (and possibly only) sequence in the batch
+            output = output[0]
+
+        # Decode the output
+        return tokenizer.decode(output, skip_special_tokens=True)
+    except Exception as e:
+        logging.error(f"Error in generate_output: {str(e)}")
+        return ""
 
 
 def compute_similarity_score(a: str, b: str) -> float:
     """Returns a similarity score between [0,1] for the two provided strings."""
     # Use difflib to compute the similarity score, ignoring whitespace deltas.
     return difflib.SequenceMatcher(lambda x: x in " \t", a, b).ratio()
+
+
+def compute_verifiable_reasoning(
+    model: PreTrainedModel,
+    tokenizer: transformers.PreTrainedTokenizer,
+    generation_config: transformers.GenerationConfig,
+    batches: typing.Dict[str, typing.List],
+    device: str,
+    trace_weight: float = 0.5,
+    answer_weight: float = 0.5,
+    verbose: bool = False,
+) -> typing.Dict[str, float]:
+    """Computes a combined score based on reasoning trace perplexity and exact answer matching.
+
+    Args:
+        model: The model to evaluate
+        tokenizer: Tokenizer for encoding/decoding
+        generation_config: Configuration for generation
+        batches: Dictionary containing questions, traces_with_answers, answers, and task_types
+        device: Device to run on
+        trace_weight: Weight for the trace perplexity component of the score
+        answer_weight: Weight for the answer correctness component of the score
+        verbose: If True, prints detailed information about each question and answer
+
+    Returns:
+        dict: Dictionary containing the combined score, perplexity score, and correctness score
+    """
+    # Validate input batches
+    required_keys = ["questions", "traces_with_answers", "answers", "task_types"]
+    for key in required_keys:
+        if key not in batches:
+            logging.error(f"Missing required key in batches: {key}")
+            return {
+                "combined_score": math.inf,
+                "perplexity_score": math.inf,
+                "correctness_score": 1.0,
+            }
+        # Check if the list is empty using len() instead of boolean evaluation
+        if len(batches[key]) == 0:
+            logging.error(f"Empty list for key in batches: {key}")
+            return {
+                "combined_score": math.inf,
+                "perplexity_score": math.inf,
+                "correctness_score": 1.0,
+            }
+
+    if len(batches["questions"]) < 2:  # Need at least 2 for reasonable output check
+        logging.error("Need at least 2 samples for evaluation")
+        return {
+            "combined_score": math.inf,
+            "perplexity_score": math.inf,
+            "correctness_score": 1.0,
+        }
+
+    # Process each question-trace+answer-answer triplet
+    combined_losses = []
+    answer_scores = []
+    verbose_results = []
+
+    for i in range(len(batches["questions"])):
+        try:
+            # 1. Generate model response from question
+            question_tensor = torch.tensor(batches["questions"][i]).to(device)
+
+            # Ensure question tensor has right shape
+            if question_tensor.dim() == 1:
+                question_tensor = question_tensor.unsqueeze(0)
+
+            response = generate_output(
+                model=model,
+                input_ids=question_tensor,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+
+            # Get the original question text
+            question_text = tokenizer.decode(
+                batches["questions"][i], skip_special_tokens=True
+            )
+
+            # 2. Calculate perplexity on the trace+answer combined
+            with torch.no_grad():
+                combined_tensor = torch.tensor(batches["traces_with_answers"][i]).to(
+                    device
+                )
+
+                # Ensure tensor has batch dimension
+                if combined_tensor.dim() == 1:
+                    combined_tensor = combined_tensor.unsqueeze(0)
+
+                # Create attention mask (1 for tokens, 0 for padding)
+                attention_mask = (combined_tensor != tokenizer.pad_token_id).long()
+
+                # Forward pass with the combined trace and answer
+                outputs = model(combined_tensor, attention_mask=attention_mask)
+                logits = outputs.logits
+
+                # Remove batch dimension for loss calculation
+                if logits.dim() > 2:
+                    logits = logits.squeeze(0)
+                if combined_tensor.dim() > 1:
+                    combined_tensor = combined_tensor.squeeze(0)
+                    attention_mask = attention_mask.squeeze(0)
+
+                # Shift for next-token prediction loss
+                shift_logits = logits[:-1, :].contiguous()
+                shift_labels = combined_tensor[1:].contiguous()
+                shift_attention_mask = attention_mask[1:].contiguous()
+
+                # Only compute loss on non-padding tokens
+                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+                loss = loss_fct(
+                    shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+                )
+
+                # Apply mask to ignore padding tokens
+                masked_loss = loss * shift_attention_mask.view(-1)
+                # Compute mean loss only on non-padding tokens
+                denom = shift_attention_mask.sum().item()
+                if denom > 0:
+                    combined_loss = masked_loss.sum().item() / denom
+                else:
+                    combined_loss = 0.0
+                combined_losses.append(combined_loss)
+
+            # 3. Extract and check answer
+            task_type = batches["task_types"][i]
+            expected_answer = batches["answers"][i]
+
+            if task_type == "verifiable_math":
+                # Extract answer from \boxed{}
+                boxed_matches = re.findall(r"\\boxed\{(.*?)\}", response)
+                model_answer = boxed_matches[-1] if boxed_matches else ""
+                # Normalize answer for comparison
+                model_answer = model_answer.strip()
+                expected_answer = expected_answer.strip()
+            elif task_type == "code_output_prediction":
+                # Extract answer from {"output": "..."}
+                output_matches = re.findall(r'{"output": "(.*?)"}', response)
+                model_answer = output_matches[-1] if output_matches else ""
+                # Normalize answer for comparison
+                model_answer = model_answer.strip()
+                expected_answer = expected_answer.strip()
+            else:
+                model_answer = ""
+
+            # 4. Check exact match
+            is_correct = model_answer == expected_answer
+            answer_scores.append(
+                0.0 if is_correct else 1.0
+            )  # 0 for correct, 1 for incorrect
+
+            # Get the gold standard trace
+            gold_trace = tokenizer.decode(
+                batches["traces_with_answers"][i], skip_special_tokens=True
+            )
+
+            # Store verbose information
+            if verbose:
+                verbose_results.append(
+                    {
+                        "question": question_text,
+                        "task_type": task_type,
+                        "model_response": response,
+                        "gold_trace": gold_trace,
+                        "expected_answer": expected_answer,
+                        "model_answer": model_answer,
+                        "is_correct": is_correct,
+                        "perplexity": combined_loss,
+                    }
+                )
+
+        except Exception as e:
+            logging.error(
+                f"Exception in reasoning evaluation: {traceback.format_exc()}"
+            )
+            combined_losses.append(math.inf)
+            answer_scores.append(1.0)
+
+            if verbose:
+                verbose_results.append(
+                    {
+                        "question": tokenizer.decode(
+                            batches["questions"][i], skip_special_tokens=True
+                        ),
+                        "task_type": batches["task_types"][i],
+                        "error": str(e),
+                        "is_correct": False,
+                        "perplexity": math.inf,
+                    }
+                )
+
+    # Calculate weighted score
+    if not combined_losses or not answer_scores:
+        return {
+            "combined_score": math.inf,
+            "perplexity_score": math.inf,
+            "correctness_score": 1.0,
+        }
+
+    avg_combined_loss = sum(combined_losses) / len(combined_losses)
+    avg_answer_score = sum(answer_scores) / len(answer_scores)
+
+    # Normalize trace+answer loss to [0, 1] range using exponential normalization
+    # todo: check if this ceiling is still reasonable
+    ceiling = 20.0  # Same as used in the current DISTILLED_REASONING_3B competition
+    normalized_combined_loss = 1.0 - math.exp(-avg_combined_loss / ceiling)
+
+    # Combine scores (lower is better for both components)
+    combined_score = (trace_weight * normalized_combined_loss) + (
+        answer_weight * avg_answer_score
+    )
+
+    result = {
+        "combined_score": combined_score,
+        "perplexity_score": normalized_combined_loss,
+        "correctness_score": avg_answer_score,
+    }
+
+    # Print verbose results if requested
+    if verbose:
+        result["verbose_results"] = verbose_results
+        print("\n===== VERIFIABLE REASONING EVALUATION DETAILS =====")
+        for i, item in enumerate(verbose_results):
+            print(f"\n--- Sample {i+1} ---")
+            print(f"Question: {item['question']}")
+            print(f"Task Type: {item['task_type']}")
+            if "error" in item:
+                print(f"ERROR: {item['error']}")
+            else:
+                print(f"Gold Trace: {item['gold_trace']}")
+                print(f"Model Trace: {item['model_response']}")
+                print(f"Expected Answer: {item['expected_answer']}")
+                print(f"Model Answer: {item['model_answer']}")
+                print(f"Correct: {'✓' if item['is_correct'] else '✗'}")
+                print(f"Perplexity: {item['perplexity']:.4f}")
+
+        print("\n===== SUMMARY =====")
+        correct_count = sum(
+            1 for item in verbose_results if "is_correct" in item and item["is_correct"]
+        )
+        total_count = len(verbose_results)
+        print(
+            f"Accuracy: {correct_count}/{total_count} ({correct_count/total_count*100:.2f}%)"
+        )
+        print(f"Avg Perplexity: {avg_combined_loss:.4f}")
+        print(f"Final Score: {combined_score:.4f}")
+
+    return result

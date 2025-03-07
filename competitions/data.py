@@ -13,6 +13,8 @@ class CompetitionId(IntEnum):
 
     INSTRUCT_8B = 3
 
+    DISTILLED_REASONING_3B = 4
+
     # Overwrite the default __repr__, which doesn't work with
     # bt.logging for some unknown reason.
     def __repr__(self) -> str:
