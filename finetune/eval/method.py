@@ -397,39 +397,54 @@ def compute_verifiable_reasoning(
     device: str,
     trace_weight: float = 0.4,
     answer_weight: float = 0.6,
-) -> float:
-    """Computes a combined score based on reasoning trace perplexity and exact answer matching."""
+    verbose: bool = False,
+) -> typing.Dict[str, float]:
+    """Computes a combined score based on reasoning trace perplexity and exact answer matching.
+    
+    Args:
+        model: The model to evaluate
+        tokenizer: Tokenizer for encoding/decoding
+        generation_config: Configuration for generation
+        batches: Dictionary containing questions, traces_with_answers, answers, and task_types
+        device: Device to run on
+        trace_weight: Weight for the trace perplexity component of the score
+        answer_weight: Weight for the answer correctness component of the score
+        verbose: If True, prints detailed information about each question and answer
+    
+    Returns:
+        dict: Dictionary containing the combined score, perplexity score, and correctness score
+    """
     # Validate input batches
-    required_keys = ["questions", "traces", "answers", "task_types"]
+    required_keys = ["questions", "traces_with_answers", "answers", "task_types"]
     for key in required_keys:
-        if key not in batches or not batches[key]:
+        if key not in batches:
             logging.error(f"Missing required key in batches: {key}")
-            return math.inf
+            return {
+                "combined_score": math.inf,
+                "perplexity_score": math.inf,
+                "correctness_score": 1.0
+            }
+        # Check if the list is empty using len() instead of boolean evaluation
+        if len(batches[key]) == 0:
+            logging.error(f"Empty list for key in batches: {key}")
+            return {
+                "combined_score": math.inf,
+                "perplexity_score": math.inf,
+                "correctness_score": 1.0
+            }
     
     if len(batches["questions"]) < 2:  # Need at least 2 for reasonable output check
         logging.error("Need at least 2 samples for evaluation")
-        return math.inf
+        return {
+            "combined_score": math.inf,
+            "perplexity_score": math.inf,
+            "correctness_score": 1.0
+        }
         
-    # # Check that model generates reasonable output
-    # try:
-    #     prompt_length = min(100, batches["questions"][0].shape[0], batches["questions"][1].shape[0])
-        
-    #     # Extract prompt portion and ensure correct shape
-    #     token_inputs_1 = torch.tensor(batches["questions"][0][:prompt_length]).to(device)
-    #     token_inputs_2 = torch.tensor(batches["questions"][1][:prompt_length]).to(device)
-        
-    #     if not check_for_reasonable_output(
-    #         model, token_inputs_1, token_inputs_2, tokenizer.pad_token_id
-    #     ):
-    #         logging.error("Model did not generate reasonable output")
-    #         return math.inf
-    # except Exception as e:
-    #     logging.error(f"Exception in reasonable output check: {traceback.format_exc()}")
-    #     return math.inf
-    
-    # Process each question-trace-answer triplet
-    trace_losses = []
+    # Process each question-trace+answer-answer triplet
+    combined_losses = []
     answer_scores = []
+    verbose_results = []
     
     for i in range(len(batches["questions"])):
         try:
@@ -448,31 +463,34 @@ def compute_verifiable_reasoning(
                 tokenizer=tokenizer,
             )
             
-            # 2. Calculate perplexity on the trace
+            # Get the original question text
+            question_text = tokenizer.decode(batches["questions"][i], skip_special_tokens=True)
+            
+            # 2. Calculate perplexity on the trace+answer combined
             with torch.no_grad():
-                trace_tensor = torch.tensor(batches["traces"][i]).to(device)
+                combined_tensor = torch.tensor(batches["traces_with_answers"][i]).to(device)
                 
-                # Ensure trace tensor has batch dimension
-                if trace_tensor.dim() == 1:
-                    trace_tensor = trace_tensor.unsqueeze(0)
+                # Ensure tensor has batch dimension
+                if combined_tensor.dim() == 1:
+                    combined_tensor = combined_tensor.unsqueeze(0)
                 
                 # Create attention mask (1 for tokens, 0 for padding)
-                attention_mask = (trace_tensor != tokenizer.pad_token_id).long()
+                attention_mask = (combined_tensor != tokenizer.pad_token_id).long()
                 
-                # Forward pass with the trace
-                outputs = model(trace_tensor, attention_mask=attention_mask)
+                # Forward pass with the combined trace and answer
+                outputs = model(combined_tensor, attention_mask=attention_mask)
                 logits = outputs.logits
                 
                 # Remove batch dimension for loss calculation
                 if logits.dim() > 2:
                     logits = logits.squeeze(0)
-                if trace_tensor.dim() > 1:
-                    trace_tensor = trace_tensor.squeeze(0)
+                if combined_tensor.dim() > 1:
+                    combined_tensor = combined_tensor.squeeze(0)
                     attention_mask = attention_mask.squeeze(0)
                 
                 # Shift for next-token prediction loss
                 shift_logits = logits[:-1, :].contiguous()
-                shift_labels = trace_tensor[1:].contiguous()
+                shift_labels = combined_tensor[1:].contiguous()
                 shift_attention_mask = attention_mask[1:].contiguous()
                 
                 # Only compute loss on non-padding tokens
@@ -487,10 +505,10 @@ def compute_verifiable_reasoning(
                 # Compute mean loss only on non-padding tokens
                 denom = shift_attention_mask.sum().item()
                 if denom > 0:
-                    trace_loss = masked_loss.sum().item() / denom
+                    combined_loss = masked_loss.sum().item() / denom
                 else:
-                    trace_loss = 0.0
-                trace_losses.append(trace_loss)
+                    combined_loss = 0.0
+                combined_losses.append(combined_loss)
             
             # 3. Extract and check answer
             task_type = batches["task_types"][i]
@@ -517,24 +535,83 @@ def compute_verifiable_reasoning(
             is_correct = model_answer == expected_answer
             answer_scores.append(0.0 if is_correct else 1.0)  # 0 for correct, 1 for incorrect
             
+            # Get the gold standard trace
+            gold_trace = tokenizer.decode(batches["traces_with_answers"][i], skip_special_tokens=True)
+            
+            # Store verbose information
+            if verbose:
+                verbose_results.append({
+                    "question": question_text,
+                    "task_type": task_type,
+                    "model_response": response,
+                    "gold_trace": gold_trace,
+                    "expected_answer": expected_answer,
+                    "model_answer": model_answer,
+                    "is_correct": is_correct,
+                    "perplexity": combined_loss
+                })
+            
         except Exception as e:
             logging.error(f"Exception in reasoning evaluation: {traceback.format_exc()}")
-            trace_losses.append(math.inf)
+            combined_losses.append(math.inf)
             answer_scores.append(1.0)
+            
+            if verbose:
+                verbose_results.append({
+                    "question": tokenizer.decode(batches["questions"][i], skip_special_tokens=True),
+                    "task_type": batches["task_types"][i],
+                    "error": str(e),
+                    "is_correct": False,
+                    "perplexity": math.inf
+                })
     
     # Calculate weighted score
-    if not trace_losses or not answer_scores:
-        return math.inf
+    if not combined_losses or not answer_scores:
+        return {
+            "combined_score": math.inf,
+            "perplexity_score": math.inf,
+            "correctness_score": 1.0
+        }
         
-    avg_trace_loss = sum(trace_losses) / len(trace_losses)
+    avg_combined_loss = sum(combined_losses) / len(combined_losses)
     avg_answer_score = sum(answer_scores) / len(answer_scores)
     
-    # Normalize trace loss to [0, 1] range using exponential normalization
-    # This uses the same approach as the INVERSE_EXPONENTIAL normalization
-    ceiling = 20.0  # Same as used in the current REASONING_3B competition
-    normalized_trace_loss = 1.0 - math.exp(-avg_trace_loss / ceiling)
+    # Normalize trace+answer loss to [0, 1] range using exponential normalization
+    ceiling = 20.0  # Same as used in the current DISTILLED_REASONING_3B competition
+    normalized_combined_loss = 1.0 - math.exp(-avg_combined_loss / ceiling)
     
     # Combine scores (lower is better for both components)
-    combined_score = (trace_weight * normalized_trace_loss) + (answer_weight * avg_answer_score)
+    combined_score = (trace_weight * normalized_combined_loss) + (answer_weight * avg_answer_score)
     
-    return combined_score
+    result = {
+        "combined_score": combined_score,
+        "perplexity_score": normalized_combined_loss,
+        "correctness_score": avg_answer_score
+    }
+    
+    # Print verbose results if requested
+    if verbose:
+        result["verbose_results"] = verbose_results
+        print("\n===== VERIFIABLE REASONING EVALUATION DETAILS =====")
+        for i, item in enumerate(verbose_results):
+            print(f"\n--- Sample {i+1} ---")
+            print(f"Question: {item['question']}")
+            print(f"Task Type: {item['task_type']}")
+            if 'error' in item:
+                print(f"ERROR: {item['error']}")
+            else:
+                print(f"Gold Trace: {item['gold_trace']}")
+                print(f"Model Trace: {item['model_response']}")
+                print(f"Expected Answer: {item['expected_answer']}")
+                print(f"Model Answer: {item['model_answer']}")
+                print(f"Correct: {'✓' if item['is_correct'] else '✗'}")
+                print(f"Perplexity: {item['perplexity']:.4f}")
+        
+        print("\n===== SUMMARY =====")
+        correct_count = sum(1 for item in verbose_results if 'is_correct' in item and item['is_correct'])
+        total_count = len(verbose_results)
+        print(f"Accuracy: {correct_count}/{total_count} ({correct_count/total_count*100:.2f}%)")
+        print(f"Avg Perplexity: {avg_combined_loss:.4f}")
+        print(f"Final Score: {combined_score:.4f}")
+    
+    return result

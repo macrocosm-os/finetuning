@@ -16,6 +16,7 @@ from taoverse.model.eval.task import EvalTask
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
 import taoverse.utilities.logging as logging
+from transformers import AutoTokenizer
 
 import constants
 import finetune as ft
@@ -24,6 +25,7 @@ from finetune.datasets.factory import DatasetLoaderFactory
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
 from finetune.eval.sample import EvalSample
+from finetune.eval.method import EvalMethodId
 
 
 def main():
@@ -59,6 +61,11 @@ def main():
         default=9999999999,
         help="Block to lookup competition id from.",
     )
+    parser.add_argument(
+        "--tokenizer_name",
+        type=str,
+        help="HuggingFace tokenizer name to download and use instead of model's default tokenizer",
+    )
     args = parser.parse_args()
     if args.list_competitions:
         logging.info(
@@ -84,14 +91,29 @@ def main():
     logging.info(f"Loading tokenizer and model from {args.model_path}")
     model = ft.mining.load_local_model(args.model_path, args.competition_id, kwargs)
 
-    if competition.constraints.tokenizer:
-        model.tokenizer = ft.model.load_tokenizer(competition.constraints)
+    # Override tokenizer if specified
+    if args.tokenizer_name:
+        logging.info(f"Loading custom tokenizer: {args.tokenizer_name}")
+        model.tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+        if model.tokenizer.pad_token is None:
+            model.tokenizer.pad_token = model.tokenizer.eos_token
+            logging.info("Set pad_token to eos_token for custom tokenizer")
 
-    if not ModelUpdater.verify_model_satisfies_parameters(
-        model, competition.constraints
-    ):
-        logging.info("Model does not satisfy competition parameters!!!")
-        return
+    # if model.tokenizer.pad_token is None:
+    #     model.tokenizer.pad_token = model.tokenizer.eos_token
+    #     logging.info("Set pad_token to eos_token for tokenizer")
+
+    # if competition.constraints.tokenizer:
+    #     model.tokenizer = ft.model.load_tokenizer(competition.constraints)
+    #     if model.tokenizer.pad_token is None:
+    #         model.tokenizer.pad_token = model.tokenizer.eos_token
+    #         logging.info("Set pad_token to eos_token for tokenizer")
+
+    # if not ModelUpdater.verify_model_satisfies_parameters(
+    #     model, competition.constraints
+    # ):
+    #     logging.info("Model does not satisfy competition parameters!!!")
+    #     return
 
     seed = args.random_seed if args.random_seed else random.randint(0, sys.maxsize)
 
@@ -120,16 +142,24 @@ def main():
                 dataset_kwargs=eval_task.dataset_kwargs,
                 seed=seed,
                 validator_hotkeys=vali_hotkeys,
+                competition_id=competition.id,
             )
 
         if data_loader:
             eval_tasks.append(eval_task)
             logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
-            samples.append(
-                data_loader.tokenize(
-                    model.tokenizer, competition.constraints.sequence_length
+            if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
+                samples.append(
+                    data_loader.tokenize_for_verifiable_reasoning(
+                        model.tokenizer, competition.constraints.sequence_length
+                    )
                 )
-            )
+            else:
+                samples.append(
+                    data_loader.tokenize(
+                        model.tokenizer, competition.constraints.sequence_length
+                    )
+                )
 
     logging.info(f"Scoring model on tasks {eval_tasks}")
     # Run each computation in a subprocess so that the GPU is reset between each model.

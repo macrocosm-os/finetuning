@@ -265,7 +265,6 @@ class HuggingFaceLoader(DatasetLoader):
         For text_loss evaluation, returns list of tokenized samples.
         For verifiable_reasoning evaluation, returns dictionary with structured data.
         """
-        #Todo Not super confident about this implementation
         # Get the caller's stack frame to determine which evaluation method is calling
         caller_frame = inspect.currentframe().f_back
         caller_code = inspect.getframeinfo(caller_frame).code_context[0]
@@ -318,6 +317,8 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         target_size: typing.Optional[int] = None,
         filter_to_supported_task_types: bool = True,
         specific_task_type: typing.Optional[str] = None,
+        max_sequence_length: typing.Optional[int] = None,
+        chars_per_token: int = 4,  # Heuristic: 4 characters per token
     ):
         """Initialize the reasoning dataset loader.
 
@@ -329,10 +330,14 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             target_size: Target number of samples to keep (None for all valid samples)
             filter_to_supported_task_types: Whether to filter out unsupported task types
             specific_task_type: If specified, only load samples of this task type
+            max_sequence_length: Maximum sequence length to allow (None for no limit)
+            chars_per_token: Characters per token heuristic for length estimation
         """
         self.target_size = target_size
         self.filter_to_supported_task_types = filter_to_supported_task_types
         self.specific_task_type = specific_task_type
+        self.max_sequence_length = max_sequence_length
+        self.chars_per_token = chars_per_token
 
         if specific_task_type and specific_task_type not in self.supported_task_types:
             raise ValueError(
@@ -453,6 +458,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
     def _parse_additional_samples(self):
         """Parse newly added samples that haven't been parsed yet."""
+        filtered_count = 0
         for i, sample in enumerate(self.buffer):
             # Skip already parsed samples
             if i in self.buffer_parsed_indices:
@@ -485,6 +491,11 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                         f"Unexpected task type after filtering: {task_type}"
                     )
                     continue
+                
+                # Check if the sample fits within the sequence length limit
+                if not self._fits_sequence_length(question, trace, answer):
+                    filtered_count += 1
+                    continue
 
                 # Add the parsed components
                 self.questions.append(question)
@@ -505,6 +516,11 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                     f"Error parsing sample {i} with task type {task_type}: {e}"
                 )
                 continue
+        
+        if filtered_count > 0 and self.max_sequence_length is not None:
+            logging.info(
+                f"Filtered out {filtered_count} samples exceeding the max sequence length of {self.max_sequence_length} tokens"
+            )
 
     def _parse_verifiable_math(self, messages):
         """Parse verifiable math tasks with <think> tags and \boxed{} format."""
@@ -648,49 +664,102 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
     def tokenize_for_verifiable_reasoning(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
     ) -> typing.Dict[str, typing.List]:
-        """Tokenize the dataset specifically for verifiable reasoning evaluation."""
+        """Tokenize samples for verifiable reasoning evaluation.
+        
+        Returns a dict with 'questions', 'traces_with_answers', 'answers' and 'task_types' keys.
+        """
+        
         questions = []
-        traces = []
+        traces_with_answers = [] 
         answers = []
         task_types = []
         
-        # Make sure the data has been parsed before tokenization
-        if not hasattr(self, 'questions') or not self.questions:
-            self._parse_samples()
+        # Ensure tokenizer has a padding token
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
         
-        # Use the parsed data instead of trying to access keys in buffer items
-        for i in range(len(self.questions)):
-            question = self.questions[i]
-            trace = self.traces[i]
-            answer = self.answers[i]
-            task_type = self.task_types[i]
+        for q, t, a, tt in zip(self.questions, self.traces, self.answers, self.task_types):
+            # Only include samples from supported task types
+            if tt not in self.supported_task_types:
+                continue
             
-            # Tokenize question (input)
+            # Tokenize question
             question_tokens = tokenizer.encode(
-                question,
+                q,
                 max_length=sequence_length,
-                padding="max_length",
                 truncation=True,
+                padding="max_length",
                 return_tensors="np",
-            ).squeeze(0)  # Remove batch dimension
+            ).squeeze(0)
             
-            # Tokenize trace (for perplexity evaluation)
-            trace_tokens = tokenizer.encode(
-                trace,
+            # Combine trace and answer for loss calculation
+            trace_with_answer = t + a
+            trace_with_answer_tokens = tokenizer.encode(
+                trace_with_answer,
                 max_length=sequence_length,
-                padding="max_length",
                 truncation=True,
+                padding="max_length",
                 return_tensors="np",
-            ).squeeze(0)  # Remove batch dimension
+            ).squeeze(0)
             
             questions.append(question_tokens)
-            traces.append(trace_tokens)
-            answers.append(answer)
-            task_types.append(task_type)
+            traces_with_answers.append(trace_with_answer_tokens)
+            answers.append(a)
+            task_types.append(tt)
         
         return {
             "questions": questions,
-            "traces": traces,
+            "traces_with_answers": traces_with_answers,  
             "answers": answers,
-            "task_types": task_types,
+            "task_types": task_types
         }
+
+    @property
+    def samples(self):
+        """
+        Return samples in the format expected by the parent tokenize method.
+        """
+        return [
+            {"question": q, "trace": t, "answer": a, "task_type": tt}
+            for q, t, a, tt in zip(self.questions, self.traces, self.answers, self.task_types)
+        ]
+
+    def _estimate_token_length(self, text: str) -> int:
+        """Estimate the number of tokens in a text using the characters per token heuristic.
+        
+        Args:
+            text: Text to estimate token length for
+            
+        Returns:
+            Estimated number of tokens
+        """
+        if not text:
+            return 0
+        return len(text) // self.chars_per_token
+
+    def _fits_sequence_length(self, question: str, trace: str, answer: str) -> bool:
+        """Check if the combined length of question, trace, and answer fits within the sequence length.
+        
+        Args:
+            question: The question text
+            trace: The reasoning trace text
+            answer: The answer text
+            
+        Returns:
+            True if the combined estimated token length fits within max_sequence_length
+        """
+        if self.max_sequence_length is None:
+            return True
+            
+        # Estimate token lengths
+        question_length = self._estimate_token_length(question)
+        trace_length = self._estimate_token_length(trace)
+        answer_length = self._estimate_token_length(answer)
+        
+        # We need to account for the combined length
+        total_length = question_length + trace_length + answer_length
+        
+        # Add a small buffer for special tokens and tokenization differences
+        total_length += 10
+        
+        return total_length <= self.max_sequence_length

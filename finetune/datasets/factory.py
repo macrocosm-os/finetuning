@@ -19,6 +19,7 @@ class DatasetLoaderFactory:
         dataset_kwargs: Dict[str, Any],
         seed: int,
         validator_hotkeys: Set[str],
+        competition_id: int,
     ) -> DatasetLoader:
         """Loads data samples from the appropriate dataset."""
 

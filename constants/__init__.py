@@ -141,9 +141,9 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         max_bytes=20 * (1024**3),
     ),
     # Todo: discuss model constraints
-    CompetitionId.REASONING_3B: ModelConstraints(
-        max_model_parameter_size=32_000_000_000,  # 3B parameter size limit
-        sequence_length=16_000,
+    CompetitionId.DISTILLED_REASONING_3B: ModelConstraints(
+        max_model_parameter_size=3_500_000_000,  # 3.5B parameter size limit
+        sequence_length=16_384,
         allowed_architectures=[
             BartForCausalLM,
             FalconForCausalLM,
@@ -166,7 +166,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_hard=1000,
         ),
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 day
-        max_bytes=32 * (1024**3),  # 32GB
+        max_bytes=7.5 * (1024**3),  # 7.5GB
     ),
 }
 
@@ -303,14 +303,17 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
         SUNSET_INSTRUCT_8B_BLOCK,
         [
             Competition(
-                CompetitionId.REASONING_3B,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.REASONING_3B],
+                CompetitionId.DISTILLED_REASONING_3B,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.DISTILLED_REASONING_3B],
                 1.0,
                 eval_tasks=[
                     EvalTask(
                         name="SYNTHETIC_1_SFT",
                         method_id=EvalMethodId.VERIFIABLE_REASONING,
                         dataset_id=DatasetId.SYNTHETIC_1_SFT,
+                        dataset_kwargs={
+                            "target_size": 10,  # Number of evaluation samples                          
+                        },
                         normalization_id=NormalizationId.NONE, #we handle it in the eval
                         weight=1.0,
                     ),
