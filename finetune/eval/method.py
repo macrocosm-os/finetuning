@@ -432,7 +432,7 @@ def compute_verifiable_reasoning(
                 "correctness_score": 1.0,
             }
             
-        if len(batches[key]) == 0:
+        if not batches:
             logging.error(f"Empty list for key in batches: {key}")
             return {
                 "combined_score": math.inf,
