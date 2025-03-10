@@ -262,22 +262,19 @@ class HuggingFaceLoader(DatasetLoader):
         tokenizer: PreTrainedTokenizerBase, 
         sequence_length: int,
         eval_method: typing.Optional[str] = "text_loss"
-    ) -> typing.Union[typing.List[np.ndarray], typing.Dict[str, typing.List]]:
+    ) -> typing.Union[typing.List[np.ndarray], typing.Dict[str, typing.List], typing.List[typing.Tuple[np.array, np.array]]]:
         """Tokenize the dataset based on what's needed.
-        
-        For text_loss evaluation, returns list of tokenized samples.
-        For verifiable_reasoning evaluation, returns dictionary with structured data.
         
         Args:
             tokenizer: The tokenizer to use
             sequence_length: Maximum sequence length for tokenization
-            eval_method: The evaluation method to use ("text_loss" or "verifiable_reasoning")
+            eval_method: The evaluation method to use
         
         Returns:
             Tokenized data in the format appropriate for the eval_method
         """
-        if eval_method.lower() == "verifiable_reasoning":
-            return self.tokenize_for_verifiable_reasoning(tokenizer, sequence_length)
+        if eval_method.lower() == "reference_loss":
+            return self.tokenize_for_reference_loss(tokenizer, sequence_length)
         
         # Default to standard tokenization for TEXT_LOSS
         result = []
@@ -667,58 +664,48 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             "task_types": self.task_types,
         }
 
-    def tokenize_for_verifiable_reasoning(
+
+    def tokenize_for_reference_loss(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.Dict[str, typing.List]:
-        """Tokenize samples for verifiable reasoning evaluation.
+    ) -> typing.List[typing.Tuple[np.array, np.array]]:
+        """Tokenize samples for reference loss evaluation.
         
-        Returns a dict with 'questions', 'traces_with_answers', 'answers' and 'task_types' keys.
+        Returns a list of (context, reference) tuples where:
+        - context is the question formatted with chat template
+        - reference is the trace+answer
         """
+        result = []
         
-        questions = []
-        traces_with_answers = [] 
-        answers = []
-        task_types = []
-        
-        # Ensure tokenizer has a padding token
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        
+        # question, trace, answer, task_type
         for q, t, a, tt in zip(self.questions, self.traces, self.answers, self.task_types):
             # Only include samples from supported task types
             if tt not in self.supported_task_types:
                 continue
             
-            # Tokenize question
-            question_tokens = tokenizer.encode(
-                q,
-                max_length=sequence_length,
-                truncation=True,
-                padding="max_length",
-                return_tensors="np",
-            ).squeeze(0)
+            # Apply chat template to question
+            formatted_question = tokenizer.apply_chat_template(
+                [{"role": "user", "content": q}],
+                add_generation_prompt=False,
+                tokenize=False
+            )
             
-            # Combine trace and answer for loss calculation
+            # Combine trace and answer for the reference
             trace_with_answer = t + a
-            trace_with_answer_tokens = tokenizer.encode(
-                trace_with_answer,
-                max_length=sequence_length,
-                truncation=True,
-                padding="max_length",
-                return_tensors="np",
-            ).squeeze(0)
             
-            questions.append(question_tokens)
-            traces_with_answers.append(trace_with_answer_tokens)
-            answers.append(a)
-            task_types.append(tt)
+            # Tokenize question (context) and trace+answer (reference)
+            context_tokens = np.array(tokenizer.encode(
+                formatted_question,
+                truncation=True,
+            ))
+            
+            reference_tokens = np.array(tokenizer.encode(
+                trace_with_answer, 
+                truncation=True,
+            ))
+            
+            result.append((context_tokens, reference_tokens))
         
-        return {
-            "questions": questions,
-            "traces_with_answers": traces_with_answers,  
-            "answers": answers,
-            "task_types": task_types
-        }
+        return result
 
     @property
     def samples(self):
