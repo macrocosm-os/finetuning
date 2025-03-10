@@ -314,7 +314,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_kwargs={
                             "target_size": 10,  # Number of evaluation samples                          
                         },
-                        normalization_id=None,
+                        normalization_id=NormalizationId.NONE,
                         weight=1.0,
                     ),
                 ],
