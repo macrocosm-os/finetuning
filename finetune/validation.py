@@ -122,18 +122,30 @@ def score_model(
     samples: List[Union[List[np.ndarray], Dict[str, List]]],
     competition: Competition,
     device: str,
-) -> Tuple[float, Dict[str, float]]:
-    """Score a model on a set of eval tasks.
-
+) -> Tuple[float, Dict[str, ScoreDetails]]:
+    """Score a model on a set of evaluation tasks.
+    
+    This function evaluates a model on multiple evaluation tasks, computes raw scores,
+    normalizes them according to task-specific normalization methods, and returns
+    both the combined weighted score and detailed scores for each task.
+    
     Args:
-        model: Model to score.
-        eval_tasks: List of eval tasks.
-        samples: List of samples, one per eval task.
-        competition: Competition definition.
-        device: Device to run eval on.
+        model (Model): The model to evaluate, containing a PyTorch model and tokenizer.
+        eval_tasks (List[EvalTask]): List of evaluation task definitions.
+        samples (List[Union[List[np.ndarray], Dict[str, List]]]): List of tokenized samples 
+            corresponding to each eval task.
+        competition (Competition): Competition configuration containing constraints.
+        device (str): Device to run evaluation on (e.g., 'cuda', 'cpu').
 
     Returns:
-        Tuple of (score, score_details).
+        Tuple[float, Dict[str, ScoreDetails]]: A tuple containing:
+            - float: The combined weighted score across all tasks.
+            - Dict[str, ScoreDetails]: Detailed scoring information for each task.
+              
+    Raises:
+        ValueError: If the number of eval tasks doesn't match the number of samples,
+                   if the model doesn't have a tokenizer, or if an unsupported 
+                   evaluation method is specified.
     """
     if len(eval_tasks) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
