@@ -672,7 +672,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         
         Returns a list of (context, reference) tuples where:
         - context is the question formatted with chat template
-        - reference is the trace+answer
+        - reference is the trace+answer in their original format
         """
         result = []
         
@@ -689,8 +689,14 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                 tokenize=False
             )
             
-            # Combine trace and answer for the reference
-            trace_with_answer = t + a
+            # Format trace and answer according to task type
+            if tt == "verifiable_math":
+                trace_with_answer = t.strip() + " \\boxed{" + a + "}"
+            elif tt == "code_output_prediction":
+                trace_with_answer = t.strip() + ' {"output": "' + a + '"}'
+            else:
+                # Fallback for other task types - add a space between
+                trace_with_answer = t.strip() + " " + a
             
             # Tokenize question (context) and trace+answer (reference)
             context_tokens = np.array(tokenizer.encode(
