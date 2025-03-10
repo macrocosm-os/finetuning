@@ -431,7 +431,7 @@ def compute_verifiable_reasoning(
                 "perplexity_score": math.inf,
                 "correctness_score": 1.0,
             }
-        # Check if the list is empty using len() instead of boolean evaluation
+            
         if len(batches[key]) == 0:
             logging.error(f"Empty list for key in batches: {key}")
             return {
@@ -457,10 +457,7 @@ def compute_verifiable_reasoning(
         try:
             # 1. Generate model response from question
             question_tensor = torch.tensor(batches["questions"][i]).to(device)
-
-            # Ensure question tensor has right shape
-            if question_tensor.dim() == 1:
-                question_tensor = question_tensor.unsqueeze(0)
+            question_tensor = question_tensor.unsqueeze(0)
 
             response = generate_output(
                 model=model,
@@ -481,9 +478,7 @@ def compute_verifiable_reasoning(
                     device
                 )
 
-                # Ensure tensor has batch dimension
-                if combined_tensor.dim() == 1:
-                    combined_tensor = combined_tensor.unsqueeze(0)
+                combined_tensor = combined_tensor.unsqueeze(0)
 
                 # Create attention mask (1 for tokens, 0 for padding)
                 attention_mask = (combined_tensor != tokenizer.pad_token_id).long()
@@ -493,11 +488,9 @@ def compute_verifiable_reasoning(
                 logits = outputs.logits
 
                 # Remove batch dimension for loss calculation
-                if logits.dim() > 2:
-                    logits = logits.squeeze(0)
-                if combined_tensor.dim() > 1:
-                    combined_tensor = combined_tensor.squeeze(0)
-                    attention_mask = attention_mask.squeeze(0)
+                logits = logits.squeeze(0)
+                combined_tensor = combined_tensor.squeeze(0)
+                attention_mask = attention_mask.squeeze(0)
 
                 # Shift for next-token prediction loss
                 shift_logits = logits[:-1, :].contiguous()
