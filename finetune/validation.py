@@ -1,25 +1,7 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 const
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
-# Tools for performing validation over models.
-
 import dataclasses
 import typing
+import numpy as np
+from typing import List, Union, Dict, Tuple
 
 import taoverse.utilities.logging as logging
 import torch
@@ -135,24 +117,36 @@ class ScoreDetails:
 
 def score_model(
     model: Model,
-    evals: typing.List[EvalTask],
-    samples: typing.List[typing.List[EvalSample]],
+    eval_tasks: List[EvalTask],
+    samples: List[Union[List[np.ndarray], Dict[str, List]]],
     competition: Competition,
     device: str,
-) -> typing.Tuple[float, dict]:
-    """Scores a model based on the provided eval tasks.
-
+) -> Tuple[float, Dict[str, ScoreDetails]]:
+    """Score a model on a set of evaluation tasks.
+    
+    This function evaluates a model on multiple evaluation tasks, computes raw scores,
+    normalizes them according to task-specific normalization methods, and returns
+    both the combined weighted score and detailed scores for each task.
+    
     Args:
-        model (torch.nn.Module): The model to score.
-        evals (list): A list of EvalTasks to score the model on.
-        samples (list): A list of samples to use for scoring for the eval tasks. Must be the same length as evals.
-        competition (Competition): The competition to score the model for.
-        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
+        model (Model): The model to evaluate, containing a PyTorch model and tokenizer.
+        eval_tasks (List[EvalTask]): List of evaluation task definitions.
+        samples (List[Union[List[np.ndarray], Dict[str, List]]]): List of tokenized samples 
+            corresponding to each eval task.
+        competition (Competition): Competition configuration containing constraints.
+        device (str): Device to run evaluation on (e.g., 'cuda', 'cpu').
 
     Returns:
-        tuple: A tuple containing the score and a dictionary of score details."""
-
-    if len(evals) != len(samples):
+        Tuple[float, Dict[str, ScoreDetails]]: A tuple containing:
+            - float: The combined weighted score across all tasks.
+            - Dict[str, ScoreDetails]: Detailed scoring information for each task.
+              
+    Raises:
+        ValueError: If the number of eval tasks doesn't match the number of samples,
+                   if the model doesn't have a tokenizer, or if an unsupported 
+                   evaluation method is specified.
+    """
+    if len(eval_tasks) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
 
     if not model.tokenizer:
@@ -163,10 +157,10 @@ def score_model(
         model.pt_model.eval()
 
         score = 0
-        score_details = {task.name: ScoreDetails() for task in evals}
+        score_details = {task.name: ScoreDetails() for task in eval_tasks}
         tokenizer = model.tokenizer
 
-        for task, samples in zip(evals, samples):
+        for task, task_samples in zip(eval_tasks, samples):
             logging.trace(f"Scoring model on task: {task.name}")
             match task.method_id:
                 case EvalMethodId.MULTIPLE_CHOICE:
@@ -182,19 +176,19 @@ def score_model(
                         model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_mc_generation_config,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                     )
                 case EvalMethodId.REFERENCE_LOSS:
                     raw_score = compute_reference_loss(
                         model=model.pt_model,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                     )
                 case EvalMethodId.TEXT_LOSS:
                     raw_score = compute_text_loss(
                         model=model.pt_model,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                         pad_token_id=tokenizer.eos_token_id,
                     )
@@ -211,7 +205,7 @@ def score_model(
                         model=model.pt_model,
                         tokenizer=tokenizer,
                         generation_config=compute_if_generation_config,
-                        batches=samples,
+                        batches=task_samples,
                         device=device,
                     )
                 case _:

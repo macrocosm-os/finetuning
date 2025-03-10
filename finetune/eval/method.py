@@ -26,11 +26,11 @@ class EvalMethodId(IntEnum):
     # on the reference portition of the text.
     REFERENCE_LOSS = 2
 
-    # Evalutes the model's performance on a text generation task by computing average cross entropy loss
+    # Evaluates the model's performance on a text generation task by computing average cross entropy loss
     # on the entirety of the provided text.
     TEXT_LOSS = 3
 
-    # Evalutes the model's performance on a prompt response task that contains a set of rules that the response
+    # Evaluates the model's performance on a prompt response task that contains a set of rules that the response
     # must satisfy.
     IF_EVAL = 4
 
@@ -47,7 +47,7 @@ def check_for_reasonable_output(
         pad_token_id (int): Pad token id for the tokenizer used to generate inputs 1 and 2.
 
     Returns:
-        bool: If the model generates reasonable outputs.
+        bool: True if the model generates reasonable outputs, False otherwise.
     """
     # Generate 20 tokens of output from the model for each prompt.
     output_length = 20
@@ -392,3 +392,5 @@ def compute_similarity_score(a: str, b: str) -> float:
     """Returns a similarity score between [0,1] for the two provided strings."""
     # Use difflib to compute the similarity score, ignoring whitespace deltas.
     return difflib.SequenceMatcher(lambda x: x in " \t", a, b).ratio()
+
+
