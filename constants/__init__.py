@@ -165,7 +165,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_soft_percent_threshold=0.15,
             norm_eps_hard=1000,
         ),
-        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 day
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 3),  # Decay over ~3 days
         max_bytes=7.5 * (1024**3),  # 7.5GB
     ),
 }
