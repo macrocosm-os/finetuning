@@ -18,7 +18,6 @@ from finetune.eval.method import (
     compute_multiple_choice_deviation,
     compute_reference_loss,
     compute_text_loss,
-    compute_verifiable_reasoning,
 )
 from finetune.eval.sample import EvalSample
 
@@ -209,30 +208,6 @@ def score_model(
                         batches=task_samples,
                         device=device,
                     )
-                case EvalMethodId.VERIFIABLE_REASONING:
-                    # Extract method kwargs or use default values
-                    trace_weight = 0.4
-                    answer_weight = 0.6
-                    
-                    generation_config = GenerationConfig(
-                        max_new_tokens=256,
-                        do_sample=False,
-                        num_beam_groups=1,
-                        num_beams=1,
-                        pad_token_id=model.tokenizer.pad_token_id,
-                        eos_token_id=model.tokenizer.eos_token_id,
-                    )
-                    
-                    scores = compute_verifiable_reasoning(
-                        model=model.pt_model,
-                        tokenizer=model.tokenizer,
-                        generation_config=generation_config,
-                        batches=task_samples,
-                        device=device,
-                        trace_weight=trace_weight,
-                        answer_weight=answer_weight,
-                    )
-                    raw_score = scores["combined_score"]
                 case _:
                     raise ValueError(f"Unhandled evaluation method {task.method_id}.")
             # Normalize score

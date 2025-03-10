@@ -309,12 +309,12 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                 eval_tasks=[
                     EvalTask(
                         name="SYNTHETIC_1_SFT",
-                        method_id=EvalMethodId.VERIFIABLE_REASONING,
+                        method_id=EvalMethodId.REFERENCE_LOSS,
                         dataset_id=DatasetId.SYNTHETIC_1_SFT,
                         dataset_kwargs={
                             "target_size": 10,  # Number of evaluation samples                          
                         },
-                        normalization_id=NormalizationId.NONE, #we handle it in the eval
+                        normalization_id=None,
                         weight=1.0,
                     ),
                 ],

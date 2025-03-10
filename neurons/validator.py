@@ -1043,12 +1043,12 @@ class Validator:
                     data_loaders.append(data_loader)
                     if use_default_tokenizer:
                         assert tokenizer
-                        if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
+                        if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
                             samples.append(
                                 data_loader.tokenize(
                                     model_i.tokenizer,
                                     competition.constraints.sequence_length,
-                                    eval_method="verifiable_reasoning"
+                                    eval_method="reference_loss"
                                 )
                             )
                         else:    
@@ -1119,12 +1119,12 @@ class Validator:
                             samples = []
                             for i, loader in enumerate(data_loaders):
                                 eval_task = eval_tasks[i]
-                                if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
+                                if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
                                     samples.append(
                                         loader.tokenize(
                                             model_i.tokenizer,
                                             competition.constraints.sequence_length,
-                                            eval_method="verifiable_reasoning"
+                                            eval_method="reference_loss"
                                         )
                                     )
                                 else:

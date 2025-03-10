@@ -156,10 +156,12 @@ def main():
         if data_loader:
             eval_tasks.append(eval_task)
             logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
-            if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
+            if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
                 samples.append(
-                    data_loader.tokenize_for_verifiable_reasoning(
-                        model.tokenizer, competition.constraints.sequence_length
+                    data_loader.tokenize(
+                        model.tokenizer, 
+                        competition.constraints.sequence_length,
+                        eval_method="reference_loss"
                     )
                 )
             else:
