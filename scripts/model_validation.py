@@ -4,6 +4,7 @@ It can be used to estimate the performance of a model before submitting it."""
 
 import argparse
 import datetime as dt
+import gc
 import random
 import sys
 from typing import List
@@ -16,6 +17,7 @@ from taoverse.model.eval.task import EvalTask
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
 import taoverse.utilities.logging as logging
+import torch
 from transformers import AutoTokenizer
 
 import constants
@@ -66,6 +68,10 @@ def main():
         type=str,
         help="HuggingFace tokenizer name to download and use instead of model's default tokenizer",
     )
+    
+    
+    
+    
     args = parser.parse_args()
     if args.list_competitions:
         logging.info(
@@ -177,6 +183,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # Clean GPU memory and cache before continuing
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        gc.collect()
+        logging.info("Cleaned GPU memory and cache")
+    
     # Make sure we can download the needed ntlk modules
     nltk_modules = {
         "words",
