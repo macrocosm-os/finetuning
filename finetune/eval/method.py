@@ -40,47 +40,56 @@ class EvalMethodId(IntEnum):
 def check_for_reasonable_output(
     model, input1: torch.Tensor, input2: torch.Tensor, pad_token_id: int
 ) -> bool:
+    """Checks that a model generates reasonable outputs for two given inputs.
+
+    Args:
+        model: The model for which outputs are to be checked. Already loaded to device.
+        input1: Tokenized input1 to check. Already loaded to device.
+        input2: Tokenized input2 to check. Already loaded to device.
+        pad_token_id: Pad token id for the tokenizer used to generate inputs 1 and 2.
+
+    Returns:
+        bool: True if the model generates reasonable outputs, False otherwise.
     """
-    Performs basic validation that the model can generate reasonable output.
-    """
-    try:
-        # Ensure input tensors have the correct shape [batch_size, sequence_length]
-        if input1.dim() == 1:
-            input1 = input1.unsqueeze(0)  # Add batch dimension
-        if input2.dim() == 1:
-            input2 = input2.unsqueeze(0)  # Add batch dimension
+    # Generate 20 tokens of output from the model for each prompt.
+    output_length = 20
+    # Only take the last 20 tokens since otherwise we also get the prompt ids.
+    generate_id1s = model.generate(
+        input1,
+        min_new_tokens=output_length,
+        max_new_tokens=output_length,
+        pad_token_id=pad_token_id,
+    )[:, -output_length:]
+    generate_id2s = model.generate(
+        input2,
+        min_new_tokens=output_length,
+        max_new_tokens=output_length,
+        pad_token_id=pad_token_id,
+    )[:, -output_length:]
 
-        # Check reasonable output on first input
-        generate_id1s = model.generate(
-            input1,
-            max_new_tokens=5,
-            pad_token_id=pad_token_id,
-            do_sample=False,
-        )
-
-        # Check reasonable output on second input
-        generate_id2s = model.generate(
-            input2,
-            max_new_tokens=5,
-            pad_token_id=pad_token_id,
-            do_sample=False,
-        )
-
-        # Check shapes
-        if (
-            generate_id1s.shape[0] != input1.shape[0]
-            or generate_id2s.shape[0] != input2.shape[0]
-        ):
-            logging.error(
-                f"Model generate output shape mismatch: {generate_id1s.shape} vs {input1.shape}"
-            )
-            return False
-
-        # Check that generated outputs differ between inputs
-        return not torch.equal(generate_id1s, generate_id2s)
-    except Exception as e:
-        logging.error(f"Exception in check_for_reasonable_output: {str(e)}")
+    # Check if too many of the generated ids are the same between the two outputs.
+    if torch.sum(torch.eq(generate_id1s, generate_id2s)).item() >= output_length / 2:
+        logging.info(f"Model had too much overlap between generated outputs.")
         return False
+
+    # Check if internally both responses are too repetitive.
+    most_common_counts = []
+    for tensor in [generate_id1s, generate_id2s]:
+        # Find unique elements and their counts
+        _, counts = torch.unique(tensor, return_counts=True)
+        # Find the index of the maximum count
+        max_count_index = torch.argmax(counts)
+        # Extract the count of the most common element
+        most_common_counts.append(counts[max_count_index].item())
+
+    if all(count > output_length / 2 for count in most_common_counts):
+        logging.info(
+            f"Model with config {model.config} had too much repetition in generated outputs."
+        )
+        return False
+
+    # Passed all the checks, return True.
+    return True
 
 
 def compute_text_loss(
@@ -350,17 +359,16 @@ def generate_output(
     model,
     input_ids,
     generation_config: transformers.GenerationConfig,
-    device: str,
     tokenizer: transformers.PreTrainedTokenizer,
 ) -> str:
-    """Generate text from the model and decode it.
+    """
+    Generates the tokenized output for a model given a tokenized input and generation config.
 
     Args:
-        model: The model to generate from
-        input_ids: Input token IDs
-        generation_config: Configuration for generation
-        device: Device to run on
-        tokenizer: Tokenizer for decoding
+        model (torch.nn.Module): The model for which losses are to be computed.
+        input_ids: Input tokens to generate a response to (torch.Tensor).
+        generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
 
     Returns:
         str: Generated text
