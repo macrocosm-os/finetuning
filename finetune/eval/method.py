@@ -359,6 +359,7 @@ def generate_output(
     model,
     input_ids,
     generation_config: transformers.GenerationConfig,
+    device: str,
     tokenizer: transformers.PreTrainedTokenizer,
 ) -> str:
     """
@@ -368,32 +369,25 @@ def generate_output(
         model (torch.nn.Module): The model for which losses are to be computed.
         input_ids: Input tokens to generate a response to (torch.Tensor).
         generation_config (transformers.GenerationConfig): Configuration parameters for generating output.
+        device (str): The device to use for computation (e.g., 'cpu', 'gpu').
         tokenizer (transformers.PreTrainedTokenizer): Tokenizer to tokenize the output with before returning.
 
     Returns:
-        str: Generated text
+        str: Generated tokenized output from the model.
     """
-    try:
-        # Ensure input has batch dimension [batch_size, sequence_length]
-        if input_ids.dim() == 1:
-            input_ids = input_ids.unsqueeze(0)
+    # Make sure tensor is on the correct device
+    target_device = torch.device(device)
+    if input_ids.device != target_device:
+        input_ids = input_ids.to(target_device)
 
-        # Generate output
-        output = model.generate(
-            input_ids,
-            **generation_config.to_dict(),
-        )
-
-        # Remove batch dimension if present
-        if output.dim() > 1:
-            # Take the first (and possibly only) sequence in the batch
-            output = output[0]
-
-        # Decode the output
-        return tokenizer.decode(output, skip_special_tokens=True)
-    except Exception as e:
-        logging.error(f"Error in generate_output: {str(e)}")
-        return ""
+    output = model.generate(
+        input_ids=input_ids,
+        generation_config=generation_config,
+    )
+    response = tokenizer.decode(
+        output[0][len(input_ids[0]) :], skip_special_tokens=True
+    )
+    return response
 
 
 def compute_similarity_score(a: str, b: str) -> float:
