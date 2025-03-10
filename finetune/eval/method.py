@@ -41,10 +41,10 @@ def check_for_reasonable_output(
     """Checks that a model generates reasonable outputs for two given inputs.
 
     Args:
-        model: The model for which outputs are to be checked. Already loaded to device.
-        input1: Tokenized input1 to check. Already loaded to device.
-        input2: Tokenized input2 to check. Already loaded to device.
-        pad_token_id: Pad token id for the tokenizer used to generate inputs 1 and 2.
+        model (torch.nn.Module): The model for which outputs are to be checked. Already loaded to device.
+        input1 (np.array): Tokenized input1 to check. Already loaded to device.
+        input2 (np.array): Tokenized input2 to check. Already loaded to device.
+        pad_token_id (int): Pad token id for the tokenizer used to generate inputs 1 and 2.
 
     Returns:
         bool: True if the model generates reasonable outputs, False otherwise.
