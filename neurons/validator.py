@@ -1045,14 +1045,18 @@ class Validator:
                         assert tokenizer
                         if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
                             samples.append(
-                                data_loader.tokenize_for_verifiable_reasoning(
-                                    tokenizer, competition.constraints.sequence_length
+                                data_loader.tokenize(
+                                    model_i.tokenizer,
+                                    competition.constraints.sequence_length,
+                                    eval_method="verifiable_reasoning"
                                 )
                             )
                         else:    
                             samples.append(
                                 data_loader.tokenize(
-                                    tokenizer, competition.constraints.sequence_length
+                                    model_i.tokenizer,
+                                    competition.constraints.sequence_length,
+                                    eval_method="text_loss"
                                 )
                             )
 
@@ -1112,13 +1116,25 @@ class Validator:
                                     f"Model {uid_i} does not have a tokenizer."
                                 )
 
-                            samples = [
-                                loader.tokenize(
-                                    model_i.tokenizer,
-                                    competition.constraints.sequence_length,
-                                )
-                                for loader in data_loaders
-                            ]
+                            samples = []
+                            for i, loader in enumerate(data_loaders):
+                                eval_task = eval_tasks[i]
+                                if eval_task.method_id == EvalMethodId.VERIFIABLE_REASONING:
+                                    samples.append(
+                                        loader.tokenize(
+                                            model_i.tokenizer,
+                                            competition.constraints.sequence_length,
+                                            eval_method="verifiable_reasoning"
+                                        )
+                                    )
+                                else:
+                                    samples.append(
+                                        loader.tokenize(
+                                            model_i.tokenizer,
+                                            competition.constraints.sequence_length,
+                                            eval_method="text_loss"
+                                        )
+                                    )
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.

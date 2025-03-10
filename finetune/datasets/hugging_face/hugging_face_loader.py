@@ -258,19 +258,25 @@ class HuggingFaceLoader(DatasetLoader):
                     raise
 
     def tokenize(
-        self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
+        self, 
+        tokenizer: PreTrainedTokenizerBase, 
+        sequence_length: int,
+        eval_method: typing.Optional[str] = "text_loss"
     ) -> typing.Union[typing.List[np.ndarray], typing.Dict[str, typing.List]]:
         """Tokenize the dataset based on what's needed.
         
         For text_loss evaluation, returns list of tokenized samples.
         For verifiable_reasoning evaluation, returns dictionary with structured data.
-        """
-        # Get the caller's stack frame to determine which evaluation method is calling
-        caller_frame = inspect.currentframe().f_back
-        caller_code = inspect.getframeinfo(caller_frame).code_context[0]
         
-        # Check if we're being called for the reasoning evaluation
-        if "VERIFIABLE_REASONING" in caller_code or "verifiable_reasoning" in caller_code:
+        Args:
+            tokenizer: The tokenizer to use
+            sequence_length: Maximum sequence length for tokenization
+            eval_method: The evaluation method to use ("text_loss" or "verifiable_reasoning")
+        
+        Returns:
+            Tokenized data in the format appropriate for the eval_method
+        """
+        if eval_method.lower() == "verifiable_reasoning":
             return self.tokenize_for_verifiable_reasoning(tokenizer, sequence_length)
         
         # Default to standard tokenization for TEXT_LOSS
