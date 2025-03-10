@@ -109,19 +109,17 @@ def main():
         model.tokenizer.pad_token = model.tokenizer.eos_token
         logging.info("Set pad_token to eos_token for tokenizer")
 
-    # TODO: Uncomment this and test
-    # Commented out to test diff models through pipeline.
-    # if competition.constraints.tokenizer:
-    #     model.tokenizer = ft.model.load_tokenizer(competition.constraints)
-    #     if model.tokenizer.pad_token is None:
-    #         model.tokenizer.pad_token = model.tokenizer.eos_token
-    #         logging.info("Set pad_token to eos_token for tokenizer")
+    if competition.constraints.tokenizer:
+        model.tokenizer = ft.model.load_tokenizer(competition.constraints)
+        if model.tokenizer.pad_token is None:
+            model.tokenizer.pad_token = model.tokenizer.eos_token
+            logging.info("Set pad_token to eos_token for tokenizer")
 
-    # if not ModelUpdater.verify_model_satisfies_parameters(
-    #     model, competition.constraints
-    # ):
-    #     logging.info("Model does not satisfy competition parameters!!!")
-    #     return
+    if not ModelUpdater.verify_model_satisfies_parameters(
+        model, competition.constraints
+    ):
+        logging.info("Model does not satisfy competition parameters!!!")
+        return
 
     seed = args.random_seed if args.random_seed else random.randint(0, sys.maxsize)
 
