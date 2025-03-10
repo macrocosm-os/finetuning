@@ -99,10 +99,12 @@ def main():
             model.tokenizer.pad_token = model.tokenizer.eos_token
             logging.info("Set pad_token to eos_token for custom tokenizer")
 
-    # if model.tokenizer.pad_token is None:
-    #     model.tokenizer.pad_token = model.tokenizer.eos_token
-    #     logging.info("Set pad_token to eos_token for tokenizer")
+    if model.tokenizer.pad_token is None:
+        model.tokenizer.pad_token = model.tokenizer.eos_token
+        logging.info("Set pad_token to eos_token for tokenizer")
 
+    # TODO: Uncomment this and test
+    # Commented out to test diff models through pipeline.
     # if competition.constraints.tokenizer:
     #     model.tokenizer = ft.model.load_tokenizer(competition.constraints)
     #     if model.tokenizer.pad_token is None:
