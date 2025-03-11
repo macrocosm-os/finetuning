@@ -301,6 +301,7 @@ class HuggingFaceLoader(DatasetLoader):
 class Synthetic1SFTLoader(HuggingFaceLoader):
     """Loader for the synthetic-1-sft dataset with structured thinking traces."""
 
+    # Default supported task types - can be overridden in subclasses or at initialization
     supported_task_types: List[str] = ["verifiable_math", "code_output_prediction"]
 
     def __init__(
@@ -310,7 +311,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         num_rows_per_page: int = 100,
         random_seed: typing.Optional[int] = None,
         target_size: typing.Optional[int] = None,
-        filter_to_supported_task_types: bool = True,
+        supported_task_types: typing.Optional[List[str]] = None,
         specific_task_type: typing.Optional[str] = None,
         max_sequence_length: typing.Optional[int] = None,
         chars_per_token: int = 4,  # Heuristic: 4 characters per token
@@ -323,18 +324,25 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             num_rows_per_page: Number of rows per page
             random_seed: Random seed for reproducibility
             target_size: Target number of samples to keep (None for all valid samples)
-            filter_to_supported_task_types: Whether to filter out unsupported task types
+            supported_task_types: List of task types to support (None to use class default,
+                                 empty list to support all task types)
             specific_task_type: If specified, only load samples of this task type
             max_sequence_length: Maximum sequence length to allow (None for no limit)
             chars_per_token: Characters per token heuristic for length estimation
         """
         self.target_size = target_size
-        self.filter_to_supported_task_types = filter_to_supported_task_types
+        # Override class attribute if provided
+        if supported_task_types is not None:
+            self.supported_task_types = supported_task_types
         self.specific_task_type = specific_task_type
         self.max_sequence_length = max_sequence_length
         self.chars_per_token = chars_per_token
 
-        if specific_task_type and specific_task_type not in self.supported_task_types:
+        if (
+            specific_task_type
+            and self.supported_task_types
+            and specific_task_type not in self.supported_task_types
+        ):
             raise ValueError(
                 f"Task type '{specific_task_type}' is not in supported task types: {self.supported_task_types}"
             )
@@ -347,7 +355,8 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             random_seed=random_seed,
         )
 
-        # First, filter the buffer for supported task types to avoid unnecessary parsing
+        # Filter the buffer for supported task types to avoid unnecessary parsing
+        # (only if we have supported types and no specific type)
         self._filter_buffer_by_task_type()
 
         # Parse the filtered buffer samples
@@ -359,8 +368,9 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
     def _filter_buffer_by_task_type(self):
         """Filter the buffer to keep only samples with supported task types before parsing."""
-        if not self.filter_to_supported_task_types and not self.specific_task_type:
-            # No filtering needed
+        # No filtering needed if supported_task_types is empty (support all types)
+        # or if we're only looking for a specific type (handled separately)
+        if not self.supported_task_types and not self.specific_task_type:
             return
 
         filtered_buffer = []
@@ -378,7 +388,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             if self.specific_task_type and task_type == self.specific_task_type:
                 filtered_buffer.append(sample)
             elif (
-                self.filter_to_supported_task_types
+                self.supported_task_types
                 and task_type in self.supported_task_types
                 and not self.specific_task_type
             ):
