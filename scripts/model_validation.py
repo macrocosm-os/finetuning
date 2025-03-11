@@ -150,22 +150,12 @@ def main():
         if data_loader:
             eval_tasks.append(eval_task)
             logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
-            if (
-                eval_task.method_id == EvalMethodId.REFERENCE_LOSS
-                and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT
-            ):
-                samples.append(
-                    data_loader.tokenize(
-                        model.tokenizer,
-                        competition.constraints.sequence_length,
-                    )
+            samples.append(
+                data_loader.tokenize(
+                    model.tokenizer,
+                    competition.constraints.sequence_length,
                 )
-            else:
-                samples.append(
-                    data_loader.tokenize(
-                        model.tokenizer, competition.constraints.sequence_length
-                    )
-                )
+            )
 
     logging.info(f"Scoring model on tasks {eval_tasks}")
     # Run each computation in a subprocess so that the GPU is reset between each model.
