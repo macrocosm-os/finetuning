@@ -314,7 +314,9 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.REFERENCE_LOSS,
                         dataset_id=DatasetId.SYNTHETIC_1_SFT,
                         dataset_kwargs={
-                            "target_size": 10,  # Number of evaluation samples
+                            "num_pages": 1,
+                            "num_rows_per_page": 150,
+                            "target_size": 25,  # Number of evaluation samples
                         },
                         normalization_id=NormalizationId.NONE,
                         weight=1.0,
