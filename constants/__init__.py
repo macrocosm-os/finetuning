@@ -172,7 +172,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
 
 SUNSET_B7_BLOCK = 4_675_163
 # Todo: calculate block number
-ADD_DISTILLED_REASONING_3B_BLOCK = 4_675_165
+SUNSET_INSTRUCT_8B_BLOCK = 4_675_165
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
@@ -300,52 +300,14 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
         ],
     ),
     (
-        ADD_DISTILLED_REASONING_3B_BLOCK,
+        SUNSET_INSTRUCT_8B_BLOCK,
         [
-            Competition(
-                CompetitionId.INSTRUCT_8B,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.INSTRUCT_8B],
-                0.7,
-                eval_tasks=[
-                    EvalTask(
-                        name="SYNTHETIC_MMLU",
-                        method_id=EvalMethodId.MULTIPLE_CHOICE,
-                        dataset_id=DatasetId.SYNTHETIC_MMLU,
-                        normalization_id=NormalizationId.NONE,
-                        weight=0.30,
-                    ),
-                    EvalTask(
-                        name="WORD_SORTING",
-                        method_id=EvalMethodId.REFERENCE_LOSS,
-                        dataset_id=DatasetId.WORD_SORTING,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 40.0},
-                        weight=0.05,
-                    ),
-                    EvalTask(
-                        name="FINEWEB",
-                        method_id=EvalMethodId.TEXT_LOSS,
-                        dataset_id=DatasetId.FINEWEB,
-                        normalization_id=NormalizationId.INVERSE_EXPONENTIAL,
-                        normalization_kwargs={"ceiling": 20.0},
-                        weight=0.35,
-                    ),
-                    EvalTask(
-                        name="IF_EVAL_V2",
-                        method_id=EvalMethodId.IF_EVAL,
-                        dataset_id=DatasetId.SYNTHETIC_IF_EVAL,
-                        normalization_id=NormalizationId.NONE,
-                        dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
-                        weight=0.30,
-                    ),
-                ],
-            ),
             Competition(
                 CompetitionId.DISTILLED_REASONING_3B,
                 MODEL_CONSTRAINTS_BY_COMPETITION_ID[
                     CompetitionId.DISTILLED_REASONING_3B
                 ],
-                0.3,
+                1.0,
                 eval_tasks=[
                     EvalTask(
                         name="SYNTHETIC_1_SFT",
