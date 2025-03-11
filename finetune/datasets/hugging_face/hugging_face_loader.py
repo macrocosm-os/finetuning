@@ -1,10 +1,10 @@
+import inspect
 import json
 import random
 import re
 import time
 import typing
 from typing import List
-import inspect
 
 import numpy as np
 import requests
@@ -258,42 +258,34 @@ class HuggingFaceLoader(DatasetLoader):
                     raise
 
     def tokenize(
-        self, 
-        tokenizer: PreTrainedTokenizerBase, 
+        self,
+        tokenizer: PreTrainedTokenizerBase,
         sequence_length: int,
-        eval_method: typing.Optional[str] = "text_loss"
-    ) -> typing.Union[typing.List[np.ndarray], typing.Dict[str, typing.List], typing.List[typing.Tuple[np.array, np.array]]]:
-        """Tokenize the dataset based on what's needed.
-        
+    ) -> typing.Union[
+        typing.List[np.ndarray],
+        typing.Dict[str, typing.List],
+        typing.List[typing.Tuple[np.array, np.array]],
+    ]:
+        """Tokenize the dataset.
+
         Args:
             tokenizer: The tokenizer to use
             sequence_length: Maximum sequence length for tokenization
-            eval_method: The evaluation method to use
-        
+
         Returns:
-            Tokenized data in the format appropriate for the eval_method
+            Tokenized data in appropriate format
         """
-        if eval_method.lower() == "reference_loss":
-            return self.tokenize_for_reference_loss(tokenizer, sequence_length)
-        
-        # Default to standard tokenization for TEXT_LOSS
         result = []
-        for sample in self.samples:
-            prompt = sample["question"]
-            trace = sample["trace"]
-            answer = sample["answer"]
-            
-            # For text loss, we tokenize the full sequence: question + trace + answer
-            full_text = f"{prompt}\n{trace}\n{answer}"
+        for text in self.buffer:
             tokens = tokenizer.encode(
-                full_text,
+                text,
                 max_length=sequence_length,
                 padding="max_length",
                 truncation=True,
                 return_tensors="np",
             )
             result.append(tokens)
-        
+
         return result
 
     def get_sample(self) -> typing.Union[str, dict]:
@@ -441,7 +433,9 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         self.traces = []
         self.answers = []
         self.task_types = []
-        self.buffer_parsed_indices = set()  # Keep track of which indices we've already parsed
+        self.buffer_parsed_indices = (
+            set()
+        )  # Keep track of which indices we've already parsed
 
         # Parse all samples in the buffer
         self._parse_additional_samples()
@@ -494,7 +488,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                         f"Unexpected task type after filtering: {task_type}"
                     )
                     continue
-                
+
                 # Check if the sample fits within the sequence length limit
                 if not self._fits_sequence_length(question, trace, answer):
                     filtered_count += 1
@@ -519,7 +513,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                     f"Error parsing sample {i} with task type {task_type}: {e}"
                 )
                 continue
-        
+
         if filtered_count > 0 and self.max_sequence_length is not None:
             logging.info(
                 f"Filtered out {filtered_count} samples exceeding the max sequence length of {self.max_sequence_length} tokens"
@@ -664,31 +658,32 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             "task_types": self.task_types,
         }
 
-
     def tokenize_for_reference_loss(
         self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
     ) -> typing.List[typing.Tuple[np.array, np.array]]:
         """Tokenize samples for reference loss evaluation.
-        
+
         Returns a list of (context, reference) tuples where:
         - context is the question formatted with chat template
         - reference is the trace+answer in their original format
         """
         result = []
-        
+
         # question, trace, answer, task_type
-        for q, t, a, tt in zip(self.questions, self.traces, self.answers, self.task_types):
+        for q, t, a, tt in zip(
+            self.questions, self.traces, self.answers, self.task_types
+        ):
             # Only include samples from supported task types
             if tt not in self.supported_task_types:
                 continue
-            
+
             # Apply chat template to question
             formatted_question = tokenizer.apply_chat_template(
                 [{"role": "user", "content": q}],
                 add_generation_prompt=False,
-                tokenize=False
+                tokenize=False,
             )
-            
+
             # Format trace and answer according to task type
             if tt == "verifiable_math":
                 trace_with_answer = t.strip() + " \\boxed{" + a + "}"
@@ -697,20 +692,24 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             else:
                 # Fallback for other task types - add a space between
                 trace_with_answer = t.strip() + " " + a
-            
+
             # Tokenize question (context) and trace+answer (reference)
-            context_tokens = np.array(tokenizer.encode(
-                formatted_question,
-                truncation=True,
-            ))
-            
-            reference_tokens = np.array(tokenizer.encode(
-                trace_with_answer, 
-                truncation=True,
-            ))
-            
+            context_tokens = np.array(
+                tokenizer.encode(
+                    formatted_question,
+                    truncation=True,
+                )
+            )
+
+            reference_tokens = np.array(
+                tokenizer.encode(
+                    trace_with_answer,
+                    truncation=True,
+                )
+            )
+
             result.append((context_tokens, reference_tokens))
-        
+
         return result
 
     @property
@@ -720,15 +719,17 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         """
         return [
             {"question": q, "trace": t, "answer": a, "task_type": tt}
-            for q, t, a, tt in zip(self.questions, self.traces, self.answers, self.task_types)
+            for q, t, a, tt in zip(
+                self.questions, self.traces, self.answers, self.task_types
+            )
         ]
 
     def _estimate_token_length(self, text: str) -> int:
         """Estimate the number of tokens in a text using the characters per token heuristic.
-        
+
         Args:
             text: Text to estimate token length for
-            
+
         Returns:
             Estimated number of tokens
         """
@@ -738,27 +739,72 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
     def _fits_sequence_length(self, question: str, trace: str, answer: str) -> bool:
         """Check if the combined length of question, trace, and answer fits within the sequence length.
-        
+
         Args:
             question: The question text
             trace: The reasoning trace text
             answer: The answer text
-            
+
         Returns:
             True if the combined estimated token length fits within max_sequence_length
         """
         if self.max_sequence_length is None:
             return True
-            
+
         # Estimate token lengths
         question_length = self._estimate_token_length(question)
         trace_length = self._estimate_token_length(trace)
         answer_length = self._estimate_token_length(answer)
-        
+
         # We need to account for the combined length
         total_length = question_length + trace_length + answer_length
-        
+
         # Add a small buffer for special tokens and tokenization differences
         total_length += 10
-        
+
         return total_length <= self.max_sequence_length
+
+    def tokenize(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        sequence_length: int,
+        eval_method: typing.Optional[str] = "text_loss",
+    ) -> typing.Union[
+        typing.List[np.ndarray],
+        typing.Dict[str, typing.List],
+        typing.List[typing.Tuple[np.array, np.array]],
+    ]:
+        """Tokenize the dataset based on what's needed.
+
+        Args:
+            tokenizer: The tokenizer to use
+            sequence_length: Maximum sequence length for tokenization
+            eval_method: The evaluation method to use
+
+        Returns:
+            Tokenized data in the format appropriate for the eval_method
+        """
+        if eval_method.lower() == "reference_loss":
+            return self.tokenize_for_reference_loss(tokenizer, sequence_length)
+        elif eval_method.lower() == "supervised":
+            return self.tokenize_supervised(tokenizer, sequence_length)
+
+        # Default tokenization for text_loss
+        result = []
+        for sample in self.samples:
+            prompt = sample["question"]
+            trace = sample["trace"]
+            answer = sample["answer"]
+
+            # For text loss, we tokenize the full sequence: question + trace + answer
+            full_text = f"{prompt}\n{trace}\n{answer}"
+            tokens = tokenizer.encode(
+                full_text,
+                max_length=sequence_length,
+                padding="max_length",
+                truncation=True,
+                return_tensors="np",
+            )
+            result.append(tokens)
+
+        return result
