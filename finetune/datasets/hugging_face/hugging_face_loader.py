@@ -457,6 +457,10 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                 range(len(self.questions)), self.target_size
             )
 
+            logging.info(
+                f"Selected indices for target_size trimming: {selected_indices}"
+            )
+
             # Keep only the selected samples
             self.questions = [self.questions[i] for i in selected_indices]
             self.traces = [self.traces[i] for i in selected_indices]
@@ -592,6 +596,8 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
         # Sample n indices without replacement
         indices = random.sample(range(len(self.questions)), min(n, len(self.questions)))
+
+        logging.info(f"Sampled batch indices (n={n}): {indices}")
 
         return {
             "x": [self.questions[i] for i in indices],
