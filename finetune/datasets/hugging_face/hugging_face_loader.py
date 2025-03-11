@@ -572,40 +572,6 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
         return question, trace, answer
 
-    def get_supervised_batch(self, n: int = None) -> dict:
-        """Get a batch of n samples in supervised learning format.
-
-        Args:
-            n: Number of samples to return (None for all)
-
-        Returns:
-            dict: {
-                'x': list of questions/prompts,
-                'y': list of answers,
-                'traces': list of reasoning traces,
-                'task_types': list of task types
-            }
-        """
-        if n is None:
-            return {
-                "x": self.questions,
-                "y": self.answers,
-                "traces": self.traces,
-                "task_types": self.task_types,
-            }
-
-        # Sample n indices without replacement
-        indices = random.sample(range(len(self.questions)), min(n, len(self.questions)))
-
-        logging.info(f"Sampled batch indices (n={n}): {indices}")
-
-        return {
-            "x": [self.questions[i] for i in indices],
-            "y": [self.answers[i] for i in indices],
-            "traces": [self.traces[i] for i in indices],
-            "task_types": [self.task_types[i] for i in indices],
-        }
-
     def get_sample_with_components(self) -> dict:
         """Get a random sample with its components separated.
 
@@ -623,55 +589,6 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             "trace": self.traces[idx],
             "answer": self.answers[idx],
             "task_type": self.task_types[idx],
-        }
-
-    def tokenize_supervised(
-        self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
-    ) -> typing.Dict[str, typing.List[np.ndarray]]:
-        """Tokenize samples for supervised learning.
-
-        Args:
-            tokenizer: The tokenizer to use
-            sequence_length: Maximum sequence length
-
-        Returns:
-            dict: {
-                'x': tokenized questions,
-                'y': tokenized answers,
-                'traces': tokenized reasoning traces,
-                'task_types': list of task types
-            }
-        """
-        tokenized_questions = []
-        tokenized_answers = []
-        tokenized_traces = []
-
-        for question, trace, answer in zip(self.questions, self.traces, self.answers):
-            # Tokenize question
-            q_input_ids = tokenizer(
-                question, max_length=sequence_length, truncation=True
-            )["input_ids"]
-            tokenized_questions.append(
-                np.array([q_input_ids + [tokenizer.eos_token_id]])
-            )
-
-            # Tokenize answer
-            a_input_ids = tokenizer(
-                answer, max_length=sequence_length, truncation=True
-            )["input_ids"]
-            tokenized_answers.append(np.array([a_input_ids + [tokenizer.eos_token_id]]))
-
-            # Tokenize trace
-            t_input_ids = tokenizer(trace, max_length=sequence_length, truncation=True)[
-                "input_ids"
-            ]
-            tokenized_traces.append(np.array([t_input_ids + [tokenizer.eos_token_id]]))
-
-        return {
-            "x": tokenized_questions,
-            "y": tokenized_answers,
-            "traces": tokenized_traces,
-            "task_types": self.task_types,
         }
 
     def tokenize_for_reference_loss(
@@ -693,7 +610,6 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             if tt not in self.supported_task_types:
                 continue
 
-            # Apply chat template to question
             formatted_question = tokenizer.apply_chat_template(
                 [{"role": "user", "content": q}],
                 add_generation_prompt=False,
