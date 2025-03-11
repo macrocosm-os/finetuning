@@ -591,14 +591,21 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             "task_type": self.task_types[idx],
         }
 
-    def tokenize_for_reference_loss(
-        self, tokenizer: PreTrainedTokenizerBase, sequence_length: int
+    def tokenize(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        sequence_length: int,
     ) -> typing.List[typing.Tuple[np.array, np.array]]:
         """Tokenize samples for reference loss evaluation.
 
-        Returns a list of (context, reference) tuples where:
-        - context is the question formatted with chat template
-        - reference is the trace+answer in their original format
+        Args:
+            tokenizer: The tokenizer to use
+            sequence_length: Maximum sequence length for tokenization
+
+        Returns:
+            List of (context, reference) tuples where:
+            - context is the question formatted with chat template
+            - reference is the trace+answer in their original format
         """
         result = []
 
@@ -695,48 +702,3 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         total_length += 10
 
         return total_length <= self.max_sequence_length
-
-    def tokenize(
-        self,
-        tokenizer: PreTrainedTokenizerBase,
-        sequence_length: int,
-        eval_method: typing.Optional[str] = "text_loss",
-    ) -> typing.Union[
-        typing.List[np.ndarray],
-        typing.Dict[str, typing.List],
-        typing.List[typing.Tuple[np.array, np.array]],
-    ]:
-        """Tokenize the dataset based on what's needed.
-
-        Args:
-            tokenizer: The tokenizer to use
-            sequence_length: Maximum sequence length for tokenization
-            eval_method: The evaluation method to use
-
-        Returns:
-            Tokenized data in the format appropriate for the eval_method
-        """
-        if eval_method.lower() == "reference_loss":
-            return self.tokenize_for_reference_loss(tokenizer, sequence_length)
-        elif eval_method.lower() == "supervised":
-            return self.tokenize_supervised(tokenizer, sequence_length)
-
-        # Default tokenization for text_loss
-        result = []
-        for sample in self.samples:
-            prompt = sample["question"]
-            trace = sample["trace"]
-            answer = sample["answer"]
-
-            # For text loss, we tokenize the full sequence: question + trace + answer
-            full_text = f"{prompt}\n{trace}\n{answer}"
-            tokens = tokenizer.encode(
-                full_text,
-                max_length=sequence_length,
-                padding="max_length",
-                truncation=True,
-                return_tensors="np",
-            )
-            result.append(tokens)
-
-        return result
