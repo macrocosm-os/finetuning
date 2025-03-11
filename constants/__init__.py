@@ -33,7 +33,7 @@ from finetune.eval.method import EvalMethodId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.10.2"
+__version__ = "3.0.0"
 
 version_split = __version__.split(".")
 __spec_version__ = (
@@ -44,7 +44,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 8
+VALIDATOR_STATE_VERSION = 9
 
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
@@ -171,7 +171,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
 }
 
 SUNSET_B7_BLOCK = 4_675_163
-#Todo: calculate block number
+# Todo: calculate block number
 SUNSET_INSTRUCT_8B_BLOCK = 4_675_165
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
@@ -304,7 +304,9 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
         [
             Competition(
                 CompetitionId.DISTILLED_REASONING_3B,
-                MODEL_CONSTRAINTS_BY_COMPETITION_ID[CompetitionId.DISTILLED_REASONING_3B],
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[
+                    CompetitionId.DISTILLED_REASONING_3B
+                ],
                 1.0,
                 eval_tasks=[
                     EvalTask(
@@ -312,7 +314,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         method_id=EvalMethodId.REFERENCE_LOSS,
                         dataset_id=DatasetId.SYNTHETIC_1_SFT,
                         dataset_kwargs={
-                            "target_size": 10,  # Number of evaluation samples                          
+                            "target_size": 10,  # Number of evaluation samples
                         },
                         normalization_id=NormalizationId.NONE,
                         weight=1.0,
