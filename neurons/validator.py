@@ -1034,7 +1034,6 @@ class Validator:
                         dataset_kwargs=eval_task.dataset_kwargs,
                         seed=seed,
                         validator_hotkeys=vali_hotkeys,
-                        competition_id=competition.id,
                     )
 
                 if data_loader:
@@ -1047,9 +1046,8 @@ class Validator:
                         assert tokenizer
                         samples.append(
                             data_loader.tokenize(
-                                model_i.tokenizer,
+                                tokenizer,
                                 competition.constraints.sequence_length,
-                                eval_method=eval_task.method_id.value.lower(),
                             )
                         )
 

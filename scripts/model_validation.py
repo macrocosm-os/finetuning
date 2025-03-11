@@ -11,13 +11,13 @@ from typing import List
 
 import bittensor as bt
 import nltk
+import taoverse.utilities.logging as logging
+import torch
 from taoverse.metagraph import utils as metagraph_utils
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.eval.task import EvalTask
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
-import taoverse.utilities.logging as logging
-import torch
 from transformers import AutoTokenizer
 
 import constants
@@ -26,8 +26,8 @@ from competitions.data import CompetitionId
 from finetune.datasets.factory import DatasetLoaderFactory
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
-from finetune.eval.sample import EvalSample
 from finetune.eval.method import EvalMethodId
+from finetune.eval.sample import EvalSample
 
 
 def main():
@@ -68,10 +68,7 @@ def main():
         type=str,
         help="HuggingFace tokenizer name to download and use instead of model's default tokenizer",
     )
-    
-    
-    
-    
+
     args = parser.parse_args()
     if args.list_competitions:
         logging.info(
@@ -148,18 +145,19 @@ def main():
                 dataset_kwargs=eval_task.dataset_kwargs,
                 seed=seed,
                 validator_hotkeys=vali_hotkeys,
-                competition_id=competition.id,
             )
 
         if data_loader:
             eval_tasks.append(eval_task)
             logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
-            if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
+            if (
+                eval_task.method_id == EvalMethodId.REFERENCE_LOSS
+                and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT
+            ):
                 samples.append(
                     data_loader.tokenize(
-                        model.tokenizer, 
+                        model.tokenizer,
                         competition.constraints.sequence_length,
-                        eval_method="reference_loss"
                     )
                 )
             else:
@@ -189,7 +187,7 @@ if __name__ == "__main__":
         torch.cuda.reset_peak_memory_stats()
         gc.collect()
         logging.info("Cleaned GPU memory and cache")
-    
+
     # Make sure we can download the needed ntlk modules
     nltk_modules = {
         "words",
