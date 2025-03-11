@@ -1039,26 +1039,19 @@ class Validator:
 
                 if data_loader:
                     eval_tasks.append(eval_task)
-                    logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
+                    logging.info(
+                        f"Loaded {len(data_loader)} samples for task {eval_task.name}"
+                    )
                     data_loaders.append(data_loader)
                     if use_default_tokenizer:
                         assert tokenizer
-                        if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
-                            samples.append(
-                                data_loader.tokenize(
-                                    model_i.tokenizer,
-                                    competition.constraints.sequence_length,
-                                    eval_method="reference_loss"
-                                )
+                        samples.append(
+                            data_loader.tokenize(
+                                model_i.tokenizer,
+                                competition.constraints.sequence_length,
+                                eval_method=eval_task.method_id.value.lower(),
                             )
-                        else:    
-                            samples.append(
-                                data_loader.tokenize(
-                                    model_i.tokenizer,
-                                    competition.constraints.sequence_length,
-                                    eval_method="text_loss"
-                                )
-                            )
+                        )
 
         # Compute model score on batches.
         logging.debug(
@@ -1115,26 +1108,6 @@ class Validator:
                                 raise ValueError(
                                     f"Model {uid_i} does not have a tokenizer."
                                 )
-
-                            samples = []
-                            for i, loader in enumerate(data_loaders):
-                                eval_task = eval_tasks[i]
-                                if eval_task.method_id == EvalMethodId.REFERENCE_LOSS and eval_task.dataset_id == DatasetId.SYNTHETIC_1_SFT:
-                                    samples.append(
-                                        loader.tokenize(
-                                            model_i.tokenizer,
-                                            competition.constraints.sequence_length,
-                                            eval_method="reference_loss"
-                                        )
-                                    )
-                                else:
-                                    samples.append(
-                                        loader.tokenize(
-                                            model_i.tokenizer,
-                                            competition.constraints.sequence_length,
-                                            eval_method="text_loss"
-                                        )
-                                    )
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
