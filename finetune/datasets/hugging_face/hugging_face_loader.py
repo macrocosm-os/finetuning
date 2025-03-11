@@ -612,7 +612,7 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
 
             formatted_question = tokenizer.apply_chat_template(
                 [{"role": "user", "content": q}],
-                add_generation_prompt=False,
+                add_generation_prompt=True,
                 tokenize=False,
             )
 
