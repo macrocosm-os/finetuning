@@ -85,6 +85,7 @@ from websockets.exceptions import InvalidStatus
 import constants
 import finetune as ft
 from competitions.data import CompetitionId
+from finetune.eval.method import EvalMethodId
 from model.retry import should_retry_model
 from neurons import config as neuron_config
 
@@ -1037,12 +1038,16 @@ class Validator:
 
                 if data_loader:
                     eval_tasks.append(eval_task)
+                    logging.info(
+                        f"Loaded {len(data_loader)} samples for task {eval_task.name}"
+                    )
                     data_loaders.append(data_loader)
                     if use_default_tokenizer:
                         assert tokenizer
                         samples.append(
                             data_loader.tokenize(
-                                tokenizer, competition.constraints.sequence_length
+                                tokenizer,
+                                competition.constraints.sequence_length,
                             )
                         )
 
@@ -1101,14 +1106,6 @@ class Validator:
                                 raise ValueError(
                                     f"Model {uid_i} does not have a tokenizer."
                                 )
-
-                            samples = [
-                                loader.tokenize(
-                                    model_i.tokenizer,
-                                    competition.constraints.sequence_length,
-                                )
-                                for loader in data_loaders
-                            ]
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.

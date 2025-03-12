@@ -9,3 +9,4 @@ class DatasetId(IntEnum):
     DYCK_LANGUAGE = 3
     FINEWEB = 4
     SYNTHETIC_IF_EVAL = 5
+    SYNTHETIC_1_SFT = 6

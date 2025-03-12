@@ -33,7 +33,7 @@ from finetune.eval.method import EvalMethodId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "2.10.2"
+__version__ = "3.0.0"
 
 version_split = __version__.split(".")
 __spec_version__ = (
@@ -85,7 +85,7 @@ WEIGHT_SYNC_MINER_MIN_PERCENT = 0.01
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
-MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
+MAX_HUGGING_FACE_BYTES: int = 15.1 * 1024 * 1024 * 1024
 # Defined model constraints by competition id to ensure they are constant across blocks.
 MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     CompetitionId.B7_MULTI_CHOICE: ModelConstraints(
@@ -140,10 +140,39 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 days.
         max_bytes=20 * (1024**3),
     ),
+    CompetitionId.DISTILLED_REASONING_3B: ModelConstraints(
+        max_model_parameter_size=3_400_000_000,  # 3.4B parameter size limit
+        min_model_parameter_size=3_200_000_000,
+        sequence_length=16_384,
+        allowed_architectures=[
+            BartForCausalLM,
+            FalconForCausalLM,
+            Gemma2ForCausalLM,
+            GemmaForCausalLM,
+            GPTNeoXForCausalLM,
+            LlamaForCausalLM,
+            MistralForCausalLM,
+            Phi3ForCausalLM,
+            PhiForCausalLM,
+        ],
+        tokenizer="Xenova/gpt-4",
+        kwargs={
+            "torch_dtype": torch.bfloat16,
+        },
+        eval_block_delay=1600,  # ~5 hours
+        norm_validation_constraints=NormValidationConstraints(
+            norm_eps_soft=200,
+            norm_eps_soft_percent_threshold=0.15,
+            norm_eps_hard=1000,
+        ),
+        epsilon_func=LinearDecay(0.05, 0.01, 7200 * 3),  # Decay over ~3 days
+        max_bytes=15 * (1024**3),  # 15GB
+    ),
 }
 
 SUNSET_B7_BLOCK = 4_675_163
 
+SUNSET_INSTRUCT_8B_BLOCK = 5_158_632  # midnight GMT+0 on Wednesday, March 19, 2025
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
@@ -265,6 +294,32 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         normalization_id=NormalizationId.NONE,
                         dataset_kwargs={"if_eval_version": IfEvalVersion.V2},
                         weight=0.30,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    (
+        SUNSET_INSTRUCT_8B_BLOCK,
+        [
+            Competition(
+                CompetitionId.DISTILLED_REASONING_3B,
+                MODEL_CONSTRAINTS_BY_COMPETITION_ID[
+                    CompetitionId.DISTILLED_REASONING_3B
+                ],
+                1.0,
+                eval_tasks=[
+                    EvalTask(
+                        name="SYNTHETIC_1_SFT",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.SYNTHETIC_1_SFT,
+                        dataset_kwargs={
+                            "num_pages": 1,
+                            "num_rows_per_page": 150,
+                            "target_size": 150,  # Number of evaluation samples
+                        },
+                        normalization_id=NormalizationId.NONE,
+                        weight=1.0,
                     ),
                 ],
             ),
