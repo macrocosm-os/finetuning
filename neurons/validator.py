@@ -1106,6 +1106,23 @@ class Validator:
                                 raise ValueError(
                                     f"Model {uid_i} does not have a tokenizer."
                                 )
+                                
+                            # Check if tokenizer has a pad token, if not set it to eos_token
+                            if model_i.tokenizer.pad_token is None:
+                                if model_i.tokenizer.eos_token is not None:
+                                    model_i.tokenizer.pad_token = model_i.tokenizer.eos_token
+                                else:
+                                    # Add a new pad token if there's no eos token
+                                    model_i.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+                                logging.debug(f"Added padding token for model {uid_i} tokenizer")
+                                
+                            samples = [
+                                loader.tokenize(
+                                    model_i.tokenizer,
+                                    competition.constraints.sequence_length,
+                                )
+                                for loader in data_loaders
+                            ]
 
                     with compute_score_perf.sample():
                         # Run each computation in a subprocess so that the GPU is reset between each model.
