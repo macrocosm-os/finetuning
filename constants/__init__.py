@@ -44,7 +44,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 9
+VALIDATOR_STATE_VERSION = 8
 
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
@@ -85,7 +85,7 @@ WEIGHT_SYNC_MINER_MIN_PERCENT = 0.01
 # The root directory of this project.
 ROOT_DIR = Path(__file__).parent.parent
 # The maximum bytes for the hugging face repo.
-MAX_HUGGING_FACE_BYTES: int = 15 * 1024 * 1024 * 1024
+MAX_HUGGING_FACE_BYTES: int = 15.1 * 1024 * 1024 * 1024
 # Defined model constraints by competition id to ensure they are constant across blocks.
 MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
     CompetitionId.B7_MULTI_CHOICE: ModelConstraints(
@@ -140,9 +140,9 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 1),  # Decay over ~1 days.
         max_bytes=20 * (1024**3),
     ),
-    # Todo: discuss model constraints
     CompetitionId.DISTILLED_REASONING_3B: ModelConstraints(
-        max_model_parameter_size=3_500_000_000,  # 3.5B parameter size limit
+        max_model_parameter_size=3_400_000_000,  # 3.4B parameter size limit
+        min_model_parameter_size=3_200_000_000,
         sequence_length=16_384,
         allowed_architectures=[
             BartForCausalLM,
@@ -166,13 +166,13 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
             norm_eps_hard=1000,
         ),
         epsilon_func=LinearDecay(0.05, 0.01, 7200 * 3),  # Decay over ~3 days
-        max_bytes=7.5 * (1024**3),  # 7.5GB
+        max_bytes=15 * (1024**3),  # 15GB
     ),
 }
 
 SUNSET_B7_BLOCK = 4_675_163
-# Todo: calculate block number
-SUNSET_INSTRUCT_8B_BLOCK = 4_675_165
+
+SUNSET_INSTRUCT_8B_BLOCK = 5_158_632  # midnight GMT+0 on Wednesday, March 19, 2025
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
@@ -316,7 +316,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_kwargs={
                             "num_pages": 1,
                             "num_rows_per_page": 150,
-                            "target_size": 25,  # Number of evaluation samples
+                            "target_size": 150,  # Number of evaluation samples
                         },
                         normalization_id=NormalizationId.NONE,
                         weight=1.0,
