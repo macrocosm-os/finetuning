@@ -4,18 +4,21 @@ It can be used to estimate the performance of a model before submitting it."""
 
 import argparse
 import datetime as dt
+import gc
 import random
 import sys
 from typing import List
 
 import bittensor as bt
 import nltk
+import taoverse.utilities.logging as logging
+import torch
 from taoverse.metagraph import utils as metagraph_utils
 from taoverse.model.competition import utils as competition_utils
 from taoverse.model.eval.task import EvalTask
 from taoverse.model.model_updater import ModelUpdater
 from taoverse.utilities.enum_action import IntEnumAction
-import taoverse.utilities.logging as logging
+from transformers import AutoTokenizer
 
 import constants
 import finetune as ft
@@ -23,6 +26,7 @@ from competitions.data import CompetitionId
 from finetune.datasets.factory import DatasetLoaderFactory
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.subnet.prompting_subset_loader import PromptingSubsetLoader
+from finetune.eval.method import EvalMethodId
 from finetune.eval.sample import EvalSample
 
 
@@ -59,6 +63,12 @@ def main():
         default=9999999999,
         help="Block to lookup competition id from.",
     )
+    parser.add_argument(
+        "--tokenizer_name",
+        type=str,
+        help="HuggingFace tokenizer name to download and use instead of model's default tokenizer",
+    )
+
     args = parser.parse_args()
     if args.list_competitions:
         logging.info(
@@ -84,8 +94,23 @@ def main():
     logging.info(f"Loading tokenizer and model from {args.model_path}")
     model = ft.mining.load_local_model(args.model_path, args.competition_id, kwargs)
 
+    # Override tokenizer if specified
+    if args.tokenizer_name:
+        logging.info(f"Loading custom tokenizer: {args.tokenizer_name}")
+        model.tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+        if model.tokenizer.pad_token is None:
+            model.tokenizer.pad_token = model.tokenizer.eos_token
+            logging.info("Set pad_token to eos_token for custom tokenizer")
+
+    if model.tokenizer.pad_token is None:
+        model.tokenizer.pad_token = model.tokenizer.eos_token
+        logging.info("Set pad_token to eos_token for tokenizer")
+
     if competition.constraints.tokenizer:
         model.tokenizer = ft.model.load_tokenizer(competition.constraints)
+        if model.tokenizer.pad_token is None:
+            model.tokenizer.pad_token = model.tokenizer.eos_token
+            logging.info("Set pad_token to eos_token for tokenizer")
 
     if not ModelUpdater.verify_model_satisfies_parameters(
         model, competition.constraints
@@ -127,7 +152,8 @@ def main():
             logging.info(f"Loaded {len(data_loader)} samples for task {eval_task.name}")
             samples.append(
                 data_loader.tokenize(
-                    model.tokenizer, competition.constraints.sequence_length
+                    model.tokenizer,
+                    competition.constraints.sequence_length,
                 )
             )
 
@@ -145,6 +171,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # Clean GPU memory and cache before continuing
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        gc.collect()
+        logging.info("Cleaned GPU memory and cache")
+
     # Make sure we can download the needed ntlk modules
     nltk_modules = {
         "words",

@@ -6,6 +6,7 @@ from finetune.datasets.generated.word_sorting_loader import WordSortingLoader
 from finetune.datasets.hugging_face.hugging_face_loader import (
     FINEWEB_EDU_SCORE_2_NAME,
     HuggingFaceLoader,
+    Synthetic1SFTLoader,
 )
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.loader import DatasetLoader
@@ -38,6 +39,11 @@ class DatasetLoaderFactory:
                 return IFEvalLoader(
                     random_seed=seed,
                     validator_hotkeys=validator_hotkeys,
+                    **dataset_kwargs,
+                )
+            case DatasetId.SYNTHETIC_1_SFT:
+                return Synthetic1SFTLoader(
+                    random_seed=seed,
                     **dataset_kwargs,
                 )
             case _:
