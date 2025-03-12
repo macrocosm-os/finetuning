@@ -33,7 +33,7 @@ from finetune.eval.method import EvalMethodId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 version_split = __version__.split(".")
 __spec_version__ = (
