@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.INSTRUCT_8B.value,
+        default=CompetitionId.DISTILLED_REASONING_3B.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
