@@ -496,91 +496,125 @@ class Validator:
                 uid_last_checked_sequential[next_uid] = dt.datetime.now()
                 curr_block = self._get_current_block()
 
+                # Get current active competitions
+                competition_schedule = competition_utils.get_competition_schedule_for_block(
+                    block=curr_block,
+                    schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                )
+                active_competition_ids = set([comp.id for comp in competition_schedule])
+
                 # Get their hotkey from the metagraph.
                 with self.metagraph_lock:
                     hotkey = self.metagraph.hotkeys[next_uid]
 
-                # Check if we should retry this model and force a sync if necessary.
-                force_sync = False
-                model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
-                    hotkey
-                )
-
-                if model_metadata:
-                    # Check if the model is already queued for eval.
-                    is_queued_for_eval = False
-                    with self.pending_uids_to_eval_lock:
-                        is_queued_for_eval = (
-                            next_uid
-                            in self.pending_uids_to_eval[
-                                model_metadata.id.competition_id
-                            ]
-                            or next_uid
-                            in self.uids_to_eval[model_metadata.id.competition_id]
-                        )
-
-                    competition = competition_utils.get_competition_for_block(
-                        model_metadata.id.competition_id,
-                        curr_block,
-                        constants.COMPETITION_SCHEDULE_BY_BLOCK,
-                    )
-                    if competition is not None and not is_queued_for_eval:
-                        eval_history = (
-                            self.model_tracker.get_eval_results_for_miner_hotkey(
-                                hotkey, competition.id
-                            )
-                        )
-                        force_sync = should_retry_model(
-                            competition.constraints.epsilon_func,
-                            curr_block,
-                            eval_history,
-                        )
-                        if force_sync:
-                            logging.debug(
-                                f"Force downloading model for UID {next_uid} because it should be retried. Eval_history={eval_history}"
-                            )
-
-                # Compare metadata and tracker, syncing new model from remote store to local if necessary.
+                # First check if the model belongs to an active competition by getting metadata without downloading
                 try:
-                    updated = asyncio.run(
-                        self.model_updater.sync_model(
-                            uid=next_uid,
-                            hotkey=hotkey,
-                            curr_block=curr_block,
-                            schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
-                            force=force_sync,
+                    # Just get the metadata without downloading the model
+                    metadata = asyncio.run(
+                        self.metadata_store.retrieve_model_metadata(next_uid, hotkey)
+                    )
+                    
+                    # Skip this model if it's for a sunset competition
+                    if metadata and metadata.id.competition_id not in active_competition_ids:
+                        logging.debug(
+                            f"Skipping model download for UID={next_uid} - belongs to sunset competition {metadata.id.competition_id}"
                         )
-                    )
-                except MinerMisconfiguredError as e:
-                    self.model_tracker.on_model_evaluated(
-                        hotkey,
-                        CompetitionId.NONE,
-                        EvalResult(
-                            block=curr_block,
-                            score=math.inf,
-                            # We don't care about the winning model for this check since we just need to log the model eval failure.
-                            winning_model_block=0,
-                            winning_model_score=0,
-                        ),
-                    )
-                    raise e
-
-                if updated:
-                    metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
+                        continue
+                        
+                    # Check if we should retry this model and force a sync if necessary.
+                    force_sync = False
+                    model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
                         hotkey
                     )
-                    if metadata is not None:
+
+                    if (
+                        model_metadata is not None
+                        and model_metadata.id.competition_id in active_competition_ids
+                    ):
+                        # Check if the model is already queued for eval.
+                        is_queued_for_eval = False
                         with self.pending_uids_to_eval_lock:
-                            self.pending_uids_to_eval[metadata.id.competition_id].add(
+                            is_queued_for_eval = (
                                 next_uid
+                                in self.pending_uids_to_eval[
+                                    model_metadata.id.competition_id
+                                ]
+                                or next_uid
+                                in self.uids_to_eval[model_metadata.id.competition_id]
                             )
-                            logging.debug(
-                                f"Found a new model for UID={next_uid} for competition {metadata.id.competition_id}. It will be evaluated on the next loop."
-                            )
-                    else:
-                        logging.warning(
-                            f"Failed to find metadata for uid {next_uid} with hotkey {hotkey}"
+
+                        competition = competition_utils.get_competition_for_block(
+                            model_metadata.id.competition_id,
+                            curr_block,
+                            constants.COMPETITION_SCHEDULE_BY_BLOCK,
                         )
+                        if competition is not None and not is_queued_for_eval:
+                            eval_history = (
+                                self.model_tracker.get_eval_results_for_miner_hotkey(
+                                    hotkey, competition.id
+                                )
+                            )
+                            force_sync = should_retry_model(
+                                competition.constraints.epsilon_func,
+                                curr_block,
+                                eval_history,
+                            )
+                            if force_sync:
+                                logging.debug(
+                                    f"Force downloading model for UID {next_uid} because it should be retried. Eval_history={eval_history}"
+                                )
+
+                    # Only now download the model if it's an active competition
+                    try:
+                        updated = asyncio.run(
+                            self.model_updater.sync_model(
+                                uid=next_uid,
+                                hotkey=hotkey,
+                                curr_block=curr_block,
+                                schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                                force=force_sync,
+                            )
+                        )
+                    except MinerMisconfiguredError as e:
+                        self.model_tracker.on_model_evaluated(
+                            hotkey,
+                            CompetitionId.NONE,
+                            EvalResult(
+                                block=curr_block,
+                                score=math.inf,
+                                # We don't care about the winning model for this check since we just need to log the model eval failure.
+                                winning_model_block=0,
+                                winning_model_score=0,
+                            ),
+                        )
+                        raise e
+
+                    if updated:
+                        metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
+                            hotkey
+                        )
+                        if metadata is not None:
+                            # No need to check again - we already verified it's an active competition
+                            with self.pending_uids_to_eval_lock:
+                                self.pending_uids_to_eval[metadata.id.competition_id].add(
+                                    next_uid
+                                )
+                                logging.debug(
+                                    f"Found a new model for UID={next_uid} for competition {metadata.id.competition_id}. It will be evaluated on the next loop."
+                                )
+                        else:
+                            logging.warning(
+                                f"Failed to find metadata for uid {next_uid} with hotkey {hotkey}"
+                            )
+                except InvalidStatus as e:
+                    logging.info(
+                        f"Websocket exception in update loop: {e}. Waiting 3 minutes."
+                    )
+                    time.sleep(180)
+                except MinerMisconfiguredError as e:
+                    logging.trace(e)
+                except Exception as e:
+                    logging.debug(f"Error in update loop: {e} \n {traceback.format_exc()}")
             except InvalidStatus as e:
                 logging.info(
                     f"Websocket exception in update loop: {e}. Waiting 3 minutes."
@@ -621,6 +655,14 @@ class Validator:
             constants.WEIGHT_SYNC_VALI_MIN_STAKE,
             constants.WEIGHT_SYNC_MINER_MIN_PERCENT,
         )
+        
+        # Get current block and active competitions
+        curr_block = self._get_current_block()
+        competition_schedule = competition_utils.get_competition_schedule_for_block(
+            block=curr_block,
+            schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+        )
+        active_competition_ids = set([comp.id for comp in competition_schedule])
 
         with self.pending_uids_to_eval_lock:
             all_uids_to_eval = set()
@@ -638,15 +680,26 @@ class Validator:
             # Check when we last evaluated this model.
             hotkey = metagraph.hotkeys[uid]
             last_eval_block = self.model_tracker.get_block_last_evaluated(hotkey)
-            curr_block = self._get_current_block()
             if (
                 not last_eval_block
                 or curr_block - last_eval_block >= constants.model_retry_cadence
             ):
                 try:
-                    # It's been long enough - redownload this model and schedule it for eval.
-                    # This still respects the eval block delay so that previously top uids can't bypass it.
+                    # First check if the model belongs to an active competition by getting metadata without downloading
                     try:
+                        # Get the metadata without downloading
+                        metadata = asyncio.run(
+                            self.metadata_store.retrieve_model_metadata(uid, hotkey)
+                        )
+                        
+                        # Skip this model if it's for a sunset competition
+                        if metadata and metadata.id.competition_id not in active_competition_ids:
+                            logging.debug(
+                                f"Skipping top model download for UID={uid} - belongs to sunset competition {metadata.id.competition_id}"
+                            )
+                            continue
+                            
+                        # Now download the model since it's from an active competition
                         should_retry = asyncio.run(
                             self.model_updater.sync_model(
                                 uid=uid,
@@ -674,23 +727,24 @@ class Validator:
                         continue
 
                     # Since this is a top model (as determined by other valis),
-                    # we don't worry if self.pending_uids is already "full". At most
-                    # there can be 10 * comps top models that we'd add here and that would be
-                    # a wildy exceptional case. It would require every vali to have a
-                    # different top model.
-                    # Validators should only have ~1 winner per competition and we only check bigger valis
-                    # so there should not be many simultaneous top models not already being evaluated.
+                    # we don't worry if self.pending_uids is already "full".
                     top_model_metadata = (
                         self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey)
                     )
                     if top_model_metadata is not None:
-                        logging.trace(
-                            f"Shortcutting to top model or retrying evaluation for previously discarded top model with incentive for UID={uid}"
-                        )
-                        with self.pending_uids_to_eval_lock:
-                            self.pending_uids_to_eval[
-                                top_model_metadata.id.competition_id
-                            ].add(uid)
+                        # Double-check it's still an active competition (although it should be)
+                        if top_model_metadata.id.competition_id in active_competition_ids:
+                            logging.trace(
+                                f"Shortcutting to top model or retrying evaluation for previously discarded top model with incentive for UID={uid}"
+                            )
+                            with self.pending_uids_to_eval_lock:
+                                self.pending_uids_to_eval[
+                                    top_model_metadata.id.competition_id
+                                ].add(uid)
+                        else:
+                            logging.debug(
+                                f"Skipping UID={uid} - top model belongs to sunset competition {top_model_metadata.id.competition_id}"
+                            )
                     else:
                         logging.warning(
                             f"Failed to find metadata for uid {uid} with hotkey {hotkey}"
@@ -714,13 +768,24 @@ class Validator:
             try:
                 logging.trace("Starting cleanup of stale models.")
 
+                # Get current active competitions
+                curr_block = self._get_current_block()
+                competition_schedule = competition_utils.get_competition_schedule_for_block(
+                    block=curr_block,
+                    schedule_by_block=constants.COMPETITION_SCHEDULE_BY_BLOCK,
+                )
+                active_competition_ids = set([comp.id for comp in competition_schedule])
+
                 # Get a mapping of all hotkeys to model ids.
                 hotkey_to_model_metadata = (
                     self.model_tracker.get_miner_hotkey_to_model_metadata_dict()
                 )
+                
+                # Filter out models from sunset competitions
                 hotkey_to_model_id = {
                     hotkey: metadata.id
                     for hotkey, metadata in hotkey_to_model_metadata.items()
+                    if metadata.id.competition_id in active_competition_ids
                 }
 
                 # Find all hotkeys that are currently being evaluated or pending eval.
