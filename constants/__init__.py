@@ -159,7 +159,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
         kwargs={
             "torch_dtype": torch.bfloat16,
         },
-        eval_block_delay=1600,  # ~5 hours
+        eval_block_delay= SYNC_BLOCK_CADENCE + 100,
         norm_validation_constraints=NormValidationConstraints(
             norm_eps_soft=200,
             norm_eps_soft_percent_threshold=0.15,
@@ -172,7 +172,7 @@ MODEL_CONSTRAINTS_BY_COMPETITION_ID: Dict[CompetitionId, ModelConstraints] = {
 
 SUNSET_B7_BLOCK = 4_675_163
 
-SUNSET_INSTRUCT_8B_BLOCK = 5_158_632  # midnight GMT+0 on Wednesday, March 19, 2025
+SUNSET_INSTRUCT_8B_BLOCK = 5_158_632  # 23:59 GMT+0 on Tuesday, March 18, 2025
 # Schedule of competitions by block.
 COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
     (
