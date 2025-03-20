@@ -618,7 +618,13 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
                 continue
 
             formatted_question = tokenizer.apply_chat_template(
-                [{"role": "user", "content": q}],
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a reflective AI capable of using extended chains of thought to consider the problem thoroughly and deliberate through systematic reasoning to arrive at a correct solution before answering. Enclose your internal monologue in <think> ... </think> tags, then provide your final answer in the format that the user requests.",
+                    },
+                    {"role": "user", "content": q},
+                ],
                 add_generation_prompt=True,
                 tokenize=False,
             )
@@ -636,14 +642,14 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
             context_tokens = np.array(
                 tokenizer.encode(
                     formatted_question,
-                    truncation=True,
+                    truncation=False,
                 )
             )
 
             reference_tokens = np.array(
                 tokenizer.encode(
                     trace_with_answer,
-                    truncation=True,
+                    truncation=False,
                 )
             )
 
