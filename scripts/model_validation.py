@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--competition_id",
         type=CompetitionId,
-        default=CompetitionId.INSTRUCT_8B.value,
+        default=CompetitionId.DISTILLED_REASONING_3B.value,
         action=IntEnumAction,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
@@ -102,9 +102,9 @@ def main():
             model.tokenizer.pad_token = model.tokenizer.eos_token
             logging.info("Set pad_token to eos_token for custom tokenizer")
 
-    if model.tokenizer.pad_token is None:
-        model.tokenizer.pad_token = model.tokenizer.eos_token
-        logging.info("Set pad_token to eos_token for tokenizer")
+    # if model.tokenizer.pad_token is None:
+    #     model.tokenizer.pad_token = model.tokenizer.eos_token
+    #     logging.info("Set pad_token to eos_token for tokenizer")
 
     if competition.constraints.tokenizer:
         model.tokenizer = ft.model.load_tokenizer(competition.constraints)
