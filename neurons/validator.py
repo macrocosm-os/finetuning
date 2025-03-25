@@ -1074,6 +1074,7 @@ class Validator:
         eval_tasks: typing.List[EvalTask] = []
         data_loaders: typing.List[DatasetLoader] = []
         samples: typing.List[typing.List[EvalSample]] = []
+        successful_eval_tasks = []  
 
         # Load data based on the competition.
         with load_data_perf.sample():
@@ -1086,35 +1087,57 @@ class Validator:
                 )
 
             for eval_task in competition.eval_tasks:
-                if eval_task.dataset_id == DatasetId.SYNTHETIC_MMLU:
-                    data_loader = self._create_prompting_subset_loader(
-                        seed,
-                        current_block,
-                        competition.constraints.eval_block_delay,
-                        vali_hotkeys,
-                    )
-                else:
-                    data_loader = DatasetLoaderFactory.get_loader(
-                        dataset_id=eval_task.dataset_id,
-                        dataset_kwargs=eval_task.dataset_kwargs,
-                        seed=seed,
-                        validator_hotkeys=vali_hotkeys,
-                    )
-
-                if data_loader:
-                    eval_tasks.append(eval_task)
-                    logging.info(
-                        f"Loaded {len(data_loader)} samples for task {eval_task.name}"
-                    )
-                    data_loaders.append(data_loader)
-                    if use_default_tokenizer:
-                        assert tokenizer
-                        samples.append(
-                            data_loader.tokenize(
-                                tokenizer,
-                                competition.constraints.sequence_length,
-                            )
+                try:
+                    if eval_task.dataset_id == DatasetId.SYNTHETIC_MMLU:
+                        data_loader = self._create_prompting_subset_loader(
+                            seed,
+                            current_block,
+                            competition.constraints.eval_block_delay,
+                            vali_hotkeys,
                         )
+                    else:
+                        data_loader = DatasetLoaderFactory.get_loader(
+                            dataset_id=eval_task.dataset_id,
+                            dataset_kwargs=eval_task.dataset_kwargs,
+                            seed=seed,
+                            validator_hotkeys=vali_hotkeys,
+                        )
+
+                    if data_loader:
+                        successful_eval_tasks.append(eval_task)
+                        logging.info(
+                            f"Loaded {len(data_loader)} samples for task {eval_task.name}"
+                        )
+                        data_loaders.append(data_loader)
+                        if use_default_tokenizer:
+                            assert tokenizer
+                            samples.append(
+                                data_loader.tokenize(
+                                    tokenizer,
+                                    competition.constraints.sequence_length,
+                                )
+                            )
+
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 429:  # Too Many Requests
+                        logging.warning(
+                            f"Rate limit exceeded for dataset {eval_task.dataset_id}. Skipping this dataset."
+                        )
+                        continue
+                    else:
+                        raise  # Re-raise other HTTP errors
+                except Exception as e:
+                    logging.warning(
+                        f"Failed to load dataset {eval_task.dataset_id}: {str(e)}. Skipping this dataset."
+                    )
+                    continue
+
+            if not successful_eval_tasks:
+                logging.error("All datasets failed to load. Retrying evaluation later.")
+                return  # Exit the run_step method early
+
+            # Update eval_tasks to only include the successful ones
+            eval_tasks = successful_eval_tasks
 
         # Compute model score on batches.
         logging.debug(

@@ -316,10 +316,21 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_kwargs={
                             "num_pages": 1,
                             "num_rows_per_page": 150,
-                            "target_size": 150,  # Number of evaluation samples
+                            "target_size": 100,  # Number of evaluation samples
                         },
                         normalization_id=NormalizationId.NONE,
-                        weight=1.0,
+                        weight=0.5,
+                    ),
+                    EvalTask(
+                        name="CODEFORCES_COTS",
+                        method_id=EvalMethodId.REFERENCE_LOSS,
+                        dataset_id=DatasetId.CODEFORCES_COTS,  
+                        dataset_kwargs={
+                            "num_pages": 1,
+                            "num_rows_per_page": 100,
+                        },
+                        normalization_id=NormalizationId.NONE,
+                        weight=0.5,
                     ),
                 ],
             ),
