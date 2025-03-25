@@ -2,6 +2,7 @@ import dataclasses
 import typing
 import numpy as np
 from typing import List, Union, Dict, Tuple
+import math
 
 import taoverse.utilities.logging as logging
 import torch
@@ -145,12 +146,23 @@ def score_model(
         ValueError: If the number of eval tasks doesn't match the number of samples,
                    if the model doesn't have a tokenizer, or if an unsupported 
                    evaluation method is specified.
+        RuntimeError: If all evaluation tasks failed to load data, indicating the model
+                     should remain in the queue for retry.
     """
     if len(eval_tasks) != len(samples):
         raise ValueError("Number of eval tasks and samples must match.")
 
     if not model.tokenizer:
         raise ValueError("Model does not have a tokenizer")
+
+    # If we have no eval tasks left (all failed), raise an exception to signal retry
+    if len(eval_tasks) == 0:
+        raise RuntimeError("All evaluation tasks failed to load data. Model will be retried later.")
+
+    # Calculate the sum of weights for the remaining tasks to normalize
+    total_weight = sum(task.weight for task in eval_tasks)
+    if not math.isclose(total_weight, 1.0) and total_weight > 0:
+        logging.info(f"Renormalizing weights of {len(eval_tasks)} remaining eval tasks. Original sum: {total_weight}")
 
     with torch.inference_mode():
         model.pt_model.to(device)
@@ -214,7 +226,10 @@ def score_model(
             normalized_score = normalize_score(
                 raw_score, task.normalization_id, task.normalization_kwargs
             )
-            weighted_norm_score = normalized_score * task.weight
+            
+            # Apply renormalized weight if necessary
+            task_weight = task.weight / total_weight if not math.isclose(total_weight, 1.0) and total_weight > 0 else task.weight
+            weighted_norm_score = normalized_score * task_weight
 
             score += weighted_norm_score
             score_details[task.name] = ScoreDetails(
