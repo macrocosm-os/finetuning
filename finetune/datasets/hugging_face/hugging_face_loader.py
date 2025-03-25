@@ -162,6 +162,15 @@ class HuggingFaceLoader(DatasetLoader):
                                 "score": score,
                             }
                         )
+                    elif self.name == CODEFORCES_COTS_NAME:
+                        messages = row["row"]["messages"]
+                        problem_id = row["row"].get("id", "")
+                        contest_type = row["row"].get("contest_type", "")
+                        self.buffer.append({
+                            "messages": messages,
+                            "problem_id": problem_id,
+                            "contest_type": contest_type,
+                        })
                     else:
                         raise NotImplementedError(
                             f"Unable to parse rows from hugging face dataset: {self.name}"
@@ -776,6 +785,11 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
 
         # Parse all samples in the buffer
         self._parse_additional_samples()
+        
+        # Log how many samples were successfully parsed
+        logging.info(f"Successfully parsed {len(self.questions)} Codeforces samples")
+        if len(self.questions) == 0:
+            logging.warning("No Codeforces samples successfully parsed.")
 
     def _parse_additional_samples(self):
         """Parse newly added samples that haven't been parsed yet."""
@@ -831,6 +845,11 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
             - reference is the trace+answer
         """
         result = []
+        
+        # Handle the case where no samples were successfully parsed
+        if len(self.questions) == 0:
+            logging.warning("No samples available for tokenization in CodeforcesCOTSLoader")
+            return result
 
         for q, t in zip(self.questions, self.traces):
             formatted_question = tokenizer.apply_chat_template(
@@ -878,3 +897,13 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
         if not text:
             return 0
         return len(text) // self.chars_per_token
+
+    @property
+    def samples(self):
+        """
+        Return samples in the format expected by the parent tokenize method.
+        """
+        return [
+            {"question": q, "trace": t}
+            for q, t in zip(self.questions, self.traces)
+        ]
