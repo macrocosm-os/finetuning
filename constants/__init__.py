@@ -33,7 +33,7 @@ from finetune.eval.method import EvalMethodId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "3.0.3"
+__version__ = "3.0.4"
 
 version_split = __version__.split(".")
 __spec_version__ = (
@@ -44,7 +44,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 10
+VALIDATOR_STATE_VERSION = 11
 
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
@@ -316,7 +316,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         dataset_kwargs={
                             "num_pages": 1,
                             "num_rows_per_page": 150,
-                            "target_size": 100,  # Number of evaluation samples
+                            "target_size": 80,  # Number of evaluation samples
                         },
                         normalization_id=NormalizationId.NONE,
                         weight=0.5,
@@ -324,10 +324,10 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                     EvalTask(
                         name="CODEFORCES_COTS",
                         method_id=EvalMethodId.REFERENCE_LOSS,
-                        dataset_id=DatasetId.CODEFORCES_COTS,  
+                        dataset_id=DatasetId.CODEFORCES_COTS,
                         dataset_kwargs={
                             "num_pages": 1,
-                            "num_rows_per_page": 100,
+                            "num_rows_per_page": 80,
                         },
                         normalization_id=NormalizationId.NONE,
                         weight=0.5,
