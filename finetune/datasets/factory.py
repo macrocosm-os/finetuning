@@ -7,6 +7,7 @@ from finetune.datasets.hugging_face.hugging_face_loader import (
     FINEWEB_EDU_SCORE_2_NAME,
     HuggingFaceLoader,
     Synthetic1SFTLoader,
+    CodeforcesCOTSLoader,
 )
 from finetune.datasets.ids import DatasetId
 from finetune.datasets.loader import DatasetLoader
@@ -43,6 +44,11 @@ class DatasetLoaderFactory:
                 )
             case DatasetId.SYNTHETIC_1_SFT:
                 return Synthetic1SFTLoader(
+                    random_seed=seed,
+                    **dataset_kwargs,
+                )
+            case DatasetId.CODEFORCES_COTS:
+                return CodeforcesCOTSLoader(
                     random_seed=seed,
                     **dataset_kwargs,
                 )

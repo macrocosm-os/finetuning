@@ -17,6 +17,7 @@ from finetune.datasets.loader import DatasetLoader
 FINEWEB_EDU_SCORE_2_NAME = "HuggingFaceFW/fineweb-edu-score-2"
 FALCON_NAME = "tiiuae/falcon-refinedweb"
 SYNTHETIC_1_SFT_NAME = "PrimeIntellect/SYNTHETIC-1-SFT-Data"
+CODEFORCES_COTS_NAME = "open-r1/codeforces-cots"
 
 
 class HuggingFaceLoader(DatasetLoader):
@@ -24,7 +25,8 @@ class HuggingFaceLoader(DatasetLoader):
     size_base_url: str = "https://datasets-server.huggingface.co/size"
 
     retry_limit: int = 10  # Number of retries
-    retry_delay: int = 5  # Seconds to wait between retries
+    initial_retry_delay: int = 5  
+    max_retry_delay: int = 60  
 
     def __init__(
         self,
@@ -75,8 +77,9 @@ class HuggingFaceLoader(DatasetLoader):
         self.pages = []
         attempts = 0
         duplicates = 0
+        retry_delay = self.initial_retry_delay
 
-        # Choose a consistent initial offset for the random pages so we do not overlap on each page get.
+        # Choose a consistent initial offset for the random pages
         initial_offset = random.randint(0, self.num_rows_per_page - 1)
 
         while len(self.pages) < num_pages:
@@ -108,10 +111,29 @@ class HuggingFaceLoader(DatasetLoader):
 
             try:
                 response = requests.get(self.rows_base_url, params=params)
+                
+                # Check specifically for rate limiting
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', retry_delay))
+                    logging.warning(
+                        f"Rate limited. Waiting {retry_after} seconds before retry. Attempt {attempts + 1}/{self.retry_limit}"
+                    )
+                    time.sleep(retry_after)
+                    retry_delay = min(retry_delay * 2, self.max_retry_delay)  # Exponential backoff
+                    attempts += 1
+                    if attempts >= self.retry_limit:
+                        raise requests.exceptions.HTTPError(
+                            "Rate limit exceeded after maximum retries",
+                            response=response
+                        )
+                    continue
 
-                response.raise_for_status()  # This will raise an HTTPError if the HTTP request returned an unsuccessful status code
-
-                # Add the page since the request was successful
+                response.raise_for_status()
+                
+                # Reset retry delay on successful request
+                retry_delay = self.initial_retry_delay
+                
+                # Process the successful response
                 self.pages.append(page)
 
                 for row in response.json()["rows"]:
@@ -140,6 +162,15 @@ class HuggingFaceLoader(DatasetLoader):
                                 "score": score,
                             }
                         )
+                    elif self.name == CODEFORCES_COTS_NAME:
+                        messages = row["row"]["messages"]
+                        problem_id = row["row"].get("id", "")
+                        contest_type = row["row"].get("contest_type", "")
+                        self.buffer.append({
+                            "messages": messages,
+                            "problem_id": problem_id,
+                            "contest_type": contest_type,
+                        })
                     else:
                         raise NotImplementedError(
                             f"Unable to parse rows from hugging face dataset: {self.name}"
@@ -147,18 +178,18 @@ class HuggingFaceLoader(DatasetLoader):
 
                 response.close()
 
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
                 response.close()
                 attempts += 1
-                logging.warning(
-                    f"Failed to fetch data, retrying with a newly sampled page. Attempt {attempts}/{self.retry_limit * num_pages}"
-                )
-                if attempts < num_pages * self.retry_limit:
-                    pass
-
-                else:
+                if attempts >= self.retry_limit:
                     logging.error("Maximum retry limit reached. Unable to fetch data.")
                     raise
+                
+                logging.warning(
+                    f"Failed to fetch data, retrying with a newly sampled page. Attempt {attempts}/{self.retry_limit}"
+                )
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, self.max_retry_delay)
 
     def get_random_pages(self, num_pages, initial_offset):
         """
@@ -708,3 +739,171 @@ class Synthetic1SFTLoader(HuggingFaceLoader):
         total_length += 10
 
         return total_length <= self.max_sequence_length
+
+
+class CodeforcesCOTSLoader(HuggingFaceLoader):
+    """Loader for the codeforces-cots dataset with reasoning traces."""
+
+    def __init__(
+        self,
+        name: str = CODEFORCES_COTS_NAME,
+        num_pages: int = 1,
+        num_rows_per_page: int = 100,
+        random_seed: typing.Optional[int] = None,
+        max_sequence_length: typing.Optional[int] = None,
+        chars_per_token: int = 4,  # Heuristic: 4 characters per token
+    ):
+        """Initialize the codeforces dataset loader.
+
+        Args:
+            name: Name of the dataset from Hugging Face
+            num_pages: Number of pages to fetch
+            num_rows_per_page: Number of rows per page
+            random_seed: Random seed for reproducibility
+            max_sequence_length: Maximum sequence length to allow (None for no limit)
+            chars_per_token: Characters per token heuristic for length estimation
+        """
+        self.max_sequence_length = max_sequence_length
+        self.chars_per_token = chars_per_token
+
+        # Load initial data
+        super().__init__(
+            name=name,
+            num_pages=num_pages,
+            num_rows_per_page=num_rows_per_page,
+            random_seed=random_seed,
+        )
+
+        # Parse the samples
+        self._parse_samples()
+
+    def _parse_samples(self):
+        """Parse all samples to extract question and reasoning trace + answer."""
+        self.questions = []
+        self.traces = []
+        self.buffer_parsed_indices = set()
+
+        # Parse all samples in the buffer
+        self._parse_additional_samples()
+        
+        # Log how many samples were successfully parsed
+        logging.info(f"Successfully parsed {len(self.questions)} Codeforces samples")
+        if len(self.questions) == 0:
+            logging.warning("No Codeforces samples successfully parsed.")
+
+    def _parse_additional_samples(self):
+        """Parse newly added samples that haven't been parsed yet."""
+        filtered_count = 0
+        for i, sample in enumerate(self.buffer):
+            # Skip already parsed samples
+            if i in self.buffer_parsed_indices:
+                continue
+
+            # Mark this index as parsed
+            self.buffer_parsed_indices.add(i)
+
+            try:
+                messages = sample.get("messages", [])
+                if len(messages) != 2:
+                    continue
+
+                question = messages[0]["content"]
+                trace = messages[1]["content"]
+
+                # Check if the sample fits within the sequence length limit
+                if not self._fits_sequence_length(question, trace):
+                    filtered_count += 1
+                    continue
+
+                # Add the parsed components
+                self.questions.append(question)
+                self.traces.append(trace)
+
+            except Exception as e:
+                logging.warning(f"Error parsing sample {i}: {e}")
+                continue
+
+        if filtered_count > 0 and self.max_sequence_length is not None:
+            logging.info(
+                f"Filtered out {filtered_count} samples exceeding the max sequence length of {self.max_sequence_length} tokens"
+            )
+
+    def tokenize(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        sequence_length: int,
+    ) -> typing.List[typing.Tuple[np.array, np.array]]:
+        """Tokenize samples for reference loss evaluation.
+
+        Args:
+            tokenizer: The tokenizer to use
+            sequence_length: Maximum sequence length for tokenization
+
+        Returns:
+            List of (context, reference) tuples where:
+            - context is the question formatted with chat template
+            - reference is the trace+answer
+        """
+        result = []
+        
+        # Handle the case where no samples were successfully parsed
+        if len(self.questions) == 0:
+            logging.warning("No samples available for tokenization in CodeforcesCOTSLoader")
+            return result
+
+        for q, t in zip(self.questions, self.traces):
+            formatted_question = tokenizer.apply_chat_template(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a reflective AI capable of using extended chains of thought to consider the problem thoroughly and deliberate through systematic reasoning to arrive at a correct solution before answering. Enclose your internal monologue in <think> ... </think> tags, then provide your final answer in the format that the user requests.",
+                    },
+                    {"role": "user", "content": q},
+                ],
+                add_generation_prompt=True,
+                tokenize=False,
+            )
+
+            # Tokenize question (context) and trace (reference)
+            context_tokens = np.array(
+                tokenizer.encode(
+                    formatted_question,
+                    truncation=False,
+                )
+            )
+
+            reference_tokens = np.array(
+                tokenizer.encode(
+                    t.strip(),
+                    truncation=False,
+                )
+            )
+
+            result.append((context_tokens, reference_tokens))
+
+        return result
+
+    def _fits_sequence_length(self, question: str, trace: str) -> bool:
+        """Check if the combined length of question and trace fits within the sequence length."""
+        if self.max_sequence_length is None:
+            return True
+
+        total_length = self._estimate_token_length(question) + self._estimate_token_length(trace)
+        total_length += 10  # Buffer for special tokens
+        return total_length <= self.max_sequence_length
+
+    def _estimate_token_length(self, text: str) -> int:
+        """Estimate the number of tokens in a text using the characters per token heuristic."""
+        if not text:
+            return 0
+        return len(text) // self.chars_per_token
+
+    @property
+    def samples(self):
+        """
+        Return samples in the format expected by the parent tokenize method.
+        """
+        return [
+            {"question": q, "trace": t}
+            for q, t in zip(self.questions, self.traces)
+        ]

@@ -10,3 +10,4 @@ class DatasetId(IntEnum):
     FINEWEB = 4
     SYNTHETIC_IF_EVAL = 5
     SYNTHETIC_1_SFT = 6
+    CODEFORCES_COTS = 7
