@@ -25,8 +25,8 @@ class HuggingFaceLoader(DatasetLoader):
     size_base_url: str = "https://datasets-server.huggingface.co/size"
 
     retry_limit: int = 10  # Number of retries
-    initial_retry_delay: int = 5  
-    max_retry_delay: int = 60  
+    initial_retry_delay: int = 5
+    max_retry_delay: int = 60
 
     def __init__(
         self,
@@ -111,28 +111,30 @@ class HuggingFaceLoader(DatasetLoader):
 
             try:
                 response = requests.get(self.rows_base_url, params=params)
-                
+
                 # Check specifically for rate limiting
                 if response.status_code == 429:
-                    retry_after = int(response.headers.get('Retry-After', retry_delay))
+                    retry_after = int(response.headers.get("Retry-After", retry_delay))
                     logging.warning(
                         f"Rate limited. Waiting {retry_after} seconds before retry. Attempt {attempts + 1}/{self.retry_limit}"
                     )
                     time.sleep(retry_after)
-                    retry_delay = min(retry_delay * 2, self.max_retry_delay)  # Exponential backoff
+                    retry_delay = min(
+                        retry_delay * 2, self.max_retry_delay
+                    )  # Exponential backoff
                     attempts += 1
                     if attempts >= self.retry_limit:
                         raise requests.exceptions.HTTPError(
                             "Rate limit exceeded after maximum retries",
-                            response=response
+                            response=response,
                         )
                     continue
 
                 response.raise_for_status()
-                
+
                 # Reset retry delay on successful request
                 retry_delay = self.initial_retry_delay
-                
+
                 # Process the successful response
                 self.pages.append(page)
 
@@ -166,11 +168,13 @@ class HuggingFaceLoader(DatasetLoader):
                         messages = row["row"]["messages"]
                         problem_id = row["row"].get("id", "")
                         contest_type = row["row"].get("contest_type", "")
-                        self.buffer.append({
-                            "messages": messages,
-                            "problem_id": problem_id,
-                            "contest_type": contest_type,
-                        })
+                        self.buffer.append(
+                            {
+                                "messages": messages,
+                                "problem_id": problem_id,
+                                "contest_type": contest_type,
+                            }
+                        )
                     else:
                         raise NotImplementedError(
                             f"Unable to parse rows from hugging face dataset: {self.name}"
@@ -184,7 +188,7 @@ class HuggingFaceLoader(DatasetLoader):
                 if attempts >= self.retry_limit:
                     logging.error("Maximum retry limit reached. Unable to fetch data.")
                     raise
-                
+
                 logging.warning(
                     f"Failed to fetch data, retrying with a newly sampled page. Attempt {attempts}/{self.retry_limit}"
                 )
@@ -750,7 +754,7 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
         num_pages: int = 1,
         num_rows_per_page: int = 100,
         random_seed: typing.Optional[int] = None,
-        max_sequence_length: typing.Optional[int] = None,
+        max_sequence_length: typing.Optional[int] = 16384,
         chars_per_token: int = 4,  # Heuristic: 4 characters per token
     ):
         """Initialize the codeforces dataset loader.
@@ -785,7 +789,7 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
 
         # Parse all samples in the buffer
         self._parse_additional_samples()
-        
+
         # Log how many samples were successfully parsed
         logging.info(f"Successfully parsed {len(self.questions)} Codeforces samples")
         if len(self.questions) == 0:
@@ -845,10 +849,12 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
             - reference is the trace+answer
         """
         result = []
-        
+
         # Handle the case where no samples were successfully parsed
         if len(self.questions) == 0:
-            logging.warning("No samples available for tokenization in CodeforcesCOTSLoader")
+            logging.warning(
+                "No samples available for tokenization in CodeforcesCOTSLoader"
+            )
             return result
 
         for q, t in zip(self.questions, self.traces):
@@ -888,7 +894,9 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
         if self.max_sequence_length is None:
             return True
 
-        total_length = self._estimate_token_length(question) + self._estimate_token_length(trace)
+        total_length = self._estimate_token_length(
+            question
+        ) + self._estimate_token_length(trace)
         total_length += 10  # Buffer for special tokens
         return total_length <= self.max_sequence_length
 
@@ -904,6 +912,5 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
         Return samples in the format expected by the parent tokenize method.
         """
         return [
-            {"question": q, "trace": t}
-            for q, t in zip(self.questions, self.traces)
+            {"question": q, "trace": t} for q, t in zip(self.questions, self.traces)
         ]
