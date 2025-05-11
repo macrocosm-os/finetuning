@@ -34,6 +34,10 @@ class EvalMethodId(IntEnum):
     # must satisfy.
     IF_EVAL = 4
 
+    # Evaluates the model's performance by combining loss with correctness score
+    # Score = loss/(1+correctness) where correctness is 0 or 1
+    LOSS_WITH_CORRECTNESS = 5
+
 
 def check_for_reasonable_output(
     model, input1: torch.Tensor, input2: torch.Tensor, pad_token_id: int
@@ -394,3 +398,85 @@ def compute_similarity_score(a: str, b: str) -> float:
     return difflib.SequenceMatcher(lambda x: x in " \t", a, b).ratio()
 
 
+def compute_loss_with_correctness(
+    model: PreTrainedModel,
+    tokenizer: transformers.PreTrainedTokenizer,
+    generation_config: transformers.GenerationConfig,
+    batches: typing.List[typing.Tuple[np.array, np.array, str]],
+    device: str,
+) -> float:
+    """Computes the combined loss and correctness score for a given model on provided batches.
+
+    The score is computed as loss/(1+correctness) where correctness is 0 or 1.
+    This rewards models that both generate good reasoning traces and get the final answer correct.
+
+    Args:
+        model (PreTrainedModel): The model to evaluate
+        tokenizer (transformers.PreTrainedTokenizer): Tokenizer to use for decoding model outputs
+        generation_config (transformers.GenerationConfig): Configuration for text generation
+        batches (typing.List[typing.Tuple[np.array, np.array, str]]): List of (context, reference, answer) tuples
+        device (str): The device to run the evaluation on
+
+    Returns:
+        float: The combined score, lower is better
+    """
+    total_score = 0
+    num_batches = len(batches)
+
+    for context_tokens, reference_tokens, expected_answer in batches:
+        try:
+            # Convert numpy arrays to tensors and move to device
+            context_tensor = torch.tensor(context_tokens).to(device)
+            reference_tensor = torch.tensor(reference_tokens).to(device)
+
+            # Compute loss on reference portion
+            with torch.no_grad():
+                # Prepare a cache class and pass it to the model's forward
+                past_key_values = DynamicCache()
+                logits = model(reference_tensor, past_key_values=past_key_values).logits
+
+                # Shift the logits and labels to compute the loss
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = reference_tensor[..., 1:].contiguous()
+
+                # Compute loss
+                loss_fct = torch.nn.CrossEntropyLoss()
+                shift_logits = shift_logits.view(-1, model.config.vocab_size)
+                shift_labels = shift_labels.view(-1)
+                loss = loss_fct(shift_logits, shift_labels).item()
+
+            # Generate model's answer
+            response = generate_output(
+                model=model,
+                input_ids=context_tensor,
+                generation_config=generation_config,
+                device=device,
+                tokenizer=tokenizer,
+            )
+
+            # Check if model's answer matches expected answer
+            # For verifiable_math, we need to extract the boxed answer
+            if "\\boxed{" in response:
+                boxed_matches = re.findall(r"\\boxed\{(.*?)\}", response)
+                model_answer = boxed_matches[-1] if boxed_matches else ""
+            # For code_output_prediction, we need to extract the output
+            elif '{"output": "' in response:
+                output_matches = re.findall(r'{"output": "(.*?)"}', response)
+                model_answer = output_matches[-1] if output_matches else ""
+            else:
+                model_answer = response
+
+            # Compare answers and compute correctness (0 or 1)
+            correctness = 1 if model_answer.strip() == expected_answer.strip() else 0
+
+            # Compute combined score
+            score = loss / (1 + correctness)
+            total_score += score
+
+        except Exception as e:
+            logging.error(
+                f"Exception occurred in loss with correctness computation: {traceback.format_exc()}"
+            )
+            total_score += float("inf")  # Penalize errors heavily
+
+    return total_score / num_batches if num_batches > 0 else float("inf")
