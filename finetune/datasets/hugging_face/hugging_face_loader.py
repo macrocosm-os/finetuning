@@ -391,7 +391,9 @@ class BaseReasoningLoader(HuggingFaceLoader):
     def _fits_sequence_length(self, question: str, trace: str) -> bool:
         if self.max_sequence_length is None:
             return True
-        total_length = self._estimate_token_length(question) + self._estimate_token_length(trace)
+        total_length = self._estimate_token_length(
+            question
+        ) + self._estimate_token_length(trace)
         total_length += 10
         return total_length <= self.max_sequence_length
 
@@ -438,11 +440,14 @@ class BaseReasoningLoader(HuggingFaceLoader):
 
     @property
     def samples(self):
-        return [{"question": q, "trace": t} for q, t in zip(self.questions, self.traces)]
+        return [
+            {"question": q, "trace": t} for q, t in zip(self.questions, self.traces)
+        ]
 
 
 class CodeforcesCOTSLoader(BaseReasoningLoader):
     """Loader for the codeforces-cots dataset with reasoning traces."""
+
     def __init__(
         self,
         name: str = CODEFORCES_COTS_NAME,
@@ -460,6 +465,7 @@ class CodeforcesCOTSLoader(BaseReasoningLoader):
             max_sequence_length=max_sequence_length,
             chars_per_token=chars_per_token,
         )
+
     def _extract_messages(self, sample):
         messages = sample.get("messages", [])
         if len(messages) != 2:
@@ -469,7 +475,9 @@ class CodeforcesCOTSLoader(BaseReasoningLoader):
 
 class Synthetic1SFTLoader(BaseReasoningLoader):
     """Loader for the synthetic-1-sft dataset with structured thinking traces."""
+
     supported_task_types: List[str] = ["verifiable_math", "code_output_prediction"]
+
     def __init__(
         self,
         name: str = SYNTHETIC_1_SFT_NAME,
@@ -553,6 +561,55 @@ class Synthetic1SFTLoader(BaseReasoningLoader):
             logging.warning(
                 f"Could not reach target size {self.target_size} after {attempts} attempts. Stopping at {len(self.questions)} samples."
             )
+
+    def tokenize(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        sequence_length: int,
+    ) -> typing.List[typing.Tuple[np.array, np.array, str]]:
+        """Tokenize the dataset for LOSS_WITH_CORRECTNESS evaluation.
+
+        Args:
+            tokenizer: The tokenizer to use
+            sequence_length: Maximum sequence length for tokenization
+
+        Returns:
+            List of tuples containing (context_tokens, reference_tokens, answer)
+        """
+        result = []
+        if len(self.questions) == 0:
+            logging.warning("No samples available for tokenization")
+            return result
+
+        for q, t, a, tt in zip(
+            self.questions, self.traces, self.answers, self.task_types
+        ):
+            formatted_question = tokenizer.apply_chat_template(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a reflective AI capable of using extended chains of thought to consider the problem thoroughly and deliberate through systematic reasoning to arrive at a correct solution before answering. Enclose your internal monologue in <think> ... </think> tags, then provide your final answer in the format that the user requests.",
+                    },
+                    {"role": "user", "content": q},
+                ],
+                add_generation_prompt=True,
+                tokenize=False,
+            )
+            context_tokens = np.array(
+                tokenizer.encode(
+                    formatted_question,
+                    truncation=False,
+                )
+            )
+            reference_tokens = np.array(
+                tokenizer.encode(
+                    t.strip(),
+                    truncation=False,
+                )
+            )
+            result.append((context_tokens, reference_tokens, a))
+
+        return result
 
     def _extract_messages(self, sample):
         if isinstance(sample, dict):
