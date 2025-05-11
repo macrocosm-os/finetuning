@@ -333,530 +333,82 @@ class HuggingFaceLoader(DatasetLoader):
         return len(self.buffer)
 
 
-class Synthetic1SFTLoader(HuggingFaceLoader):
-    """Loader for the synthetic-1-sft dataset with structured thinking traces."""
-
-    # Default supported task types - can be overridden in subclasses or at initialization
-    supported_task_types: List[str] = ["verifiable_math", "code_output_prediction"]
+class BaseReasoningLoader(HuggingFaceLoader):
+    """Base class for loaders that handle reasoning traces with questions and answers."""
 
     def __init__(
         self,
-        name: str = SYNTHETIC_1_SFT_NAME,
+        name: str,
         num_pages: int = 1,
         num_rows_per_page: int = 100,
         random_seed: typing.Optional[int] = None,
-        target_size: typing.Optional[int] = None,
-        supported_task_types: typing.Optional[List[str]] = None,
-        specific_task_type: typing.Optional[str] = None,
         max_sequence_length: typing.Optional[int] = None,
         chars_per_token: int = 4,  # Heuristic: 4 characters per token
     ):
-        """Initialize the reasoning dataset loader.
-
-        Args:
-            name: Name of the dataset from Hugging Face
-            num_pages: Number of pages to fetch
-            num_rows_per_page: Number of rows per page
-            random_seed: Random seed for reproducibility
-            target_size: Target number of samples to keep (None for all valid samples)
-            supported_task_types: List of task types to support (None to use class default,
-                                 empty list to support all task types)
-            specific_task_type: If specified, only load samples of this task type
-            max_sequence_length: Maximum sequence length to allow (None for no limit)
-            chars_per_token: Characters per token heuristic for length estimation
-        """
-        self.target_size = target_size
-        # Override class attribute if provided
-        if supported_task_types is not None:
-            self.supported_task_types = supported_task_types
-        self.specific_task_type = specific_task_type
         self.max_sequence_length = max_sequence_length
         self.chars_per_token = chars_per_token
-
-        if (
-            specific_task_type
-            and self.supported_task_types
-            and specific_task_type not in self.supported_task_types
-        ):
-            raise ValueError(
-                f"Task type '{specific_task_type}' is not in supported task types: {self.supported_task_types}"
-            )
-
-        # Load initial data
+        self.questions = []
+        self.traces = []
+        self.buffer_parsed_indices = set()
         super().__init__(
             name=name,
             num_pages=num_pages,
             num_rows_per_page=num_rows_per_page,
             random_seed=random_seed,
         )
-
-        # Filter the buffer for supported task types to avoid unnecessary parsing
-        # (only if we have supported types and no specific type)
-        self._filter_buffer_by_task_type()
-
-        # Parse the filtered buffer samples
         self._parse_samples()
 
-        # If we need more data to reach target_size, fetch more pages
-        if self.target_size is not None and len(self.questions) < self.target_size:
-            self._fetch_more_data_until_target_size()
-
-    def _filter_buffer_by_task_type(self):
-        """Filter the buffer to keep only samples with supported task types before parsing."""
-        # No filtering needed if supported_task_types is empty (support all types)
-        # or if we're only looking for a specific type (handled separately)
-        if not self.supported_task_types and not self.specific_task_type:
-            return
-
-        filtered_buffer = []
-        original_size = len(self.buffer)
-
-        for sample in self.buffer:
-            # Extract task type without parsing the entire sample
-            if isinstance(sample, dict):
-                task_type = sample.get("task_type", "unknown")
-            else:
-                # Skip legacy string format if filtering
-                continue
-
-            # Keep only samples with supported task types
-            if self.specific_task_type and task_type == self.specific_task_type:
-                filtered_buffer.append(sample)
-            elif (
-                self.supported_task_types
-                and task_type in self.supported_task_types
-                and not self.specific_task_type
-            ):
-                filtered_buffer.append(sample)
-
-        # Replace the buffer with the filtered version
-        self.buffer = filtered_buffer
-        logging.info(
-            f"Filtered buffer from {original_size} to {len(self.buffer)} samples based on task type criteria"
-        )
-
-    def _fetch_more_data_until_target_size(self):
-        """Fetch more data pages until reaching the target size."""
-        original_num_pages = self.num_pages
-        additional_pages = 1
-        max_attempts = 10  # Limit the number of fetch attempts
-        attempts = 0
-
-        while len(self.questions) < self.target_size and attempts < max_attempts:
-            attempts += 1
-            logging.info(
-                f"Fetching {additional_pages} more page(s) to reach target size {self.target_size}. Current size: {len(self.questions)}"
-            )
-
-            # Fetch additional pages
-            self._fetch_data_to_buffer(additional_pages)
-
-            # Filter the newly fetched data
-            self._filter_buffer_by_task_type()
-
-            # Update the number of pages for logging purposes
-            self.num_pages = original_num_pages + additional_pages
-
-            # Parse the newly added samples
-            self._parse_additional_samples()
-
-            # Increase the number of pages to fetch next time if needed
-            additional_pages *= 2
-
-            # Safety check: don't fetch too many pages in a single request
-            if additional_pages > 16:
-                additional_pages = 16
-
-        if len(self.questions) < self.target_size:
-            logging.warning(
-                f"Could not reach target size {self.target_size} after {attempts} attempts. Stopping at {len(self.questions)} samples."
-            )
-
     def _parse_samples(self):
-        """Parse all samples to extract question, reasoning trace, and answer based on task type."""
-        self.questions = []
-        self.traces = []
-        self.answers = []
-        self.task_types = []
-        self.buffer_parsed_indices = (
-            set()
-        )  # Keep track of which indices we've already parsed
-
-        # Parse all samples in the buffer
         self._parse_additional_samples()
-
-        # If we have a target size, trim the dataset if needed
-        if self.target_size is not None and len(self.questions) > self.target_size:
-            # Randomly select target_size indices
-            selected_indices = random.sample(
-                range(len(self.questions)), self.target_size
-            )
-
-            logging.info(
-                f"Selected indices for target_size trimming: {selected_indices}"
-            )
-
-            # Keep only the selected samples
-            self.questions = [self.questions[i] for i in selected_indices]
-            self.traces = [self.traces[i] for i in selected_indices]
-            self.answers = [self.answers[i] for i in selected_indices]
-            self.task_types = [self.task_types[i] for i in selected_indices]
+        logging.info(f"Successfully parsed {len(self.questions)} samples")
+        if len(self.questions) == 0:
+            logging.warning("No samples successfully parsed.")
 
     def _parse_additional_samples(self):
-        """Parse newly added samples that haven't been parsed yet."""
         filtered_count = 0
         for i, sample in enumerate(self.buffer):
-            # Skip already parsed samples
             if i in self.buffer_parsed_indices:
                 continue
-
-            # Mark this index as parsed
             self.buffer_parsed_indices.add(i)
-
-            # Extract the content and task type from the sample
-            if isinstance(sample, dict):
-                task_type = sample.get("task_type", "unknown")
-                messages = sample.get("messages", "")
-            else:
-                # Handle legacy string format
-                messages = sample
-                task_type = "unknown"
-
-            # We already filtered by task type, so we can directly parse
             try:
-                # Determine the parsing method based on task type
-                if task_type == "verifiable_math":
-                    question, trace, answer = self._parse_verifiable_math(messages)
-                elif task_type == "code_output_prediction":
-                    question, trace, answer = self._parse_code_output_prediction(
-                        messages
-                    )
-                else:
-                    # This should not happen after filtering
-                    logging.warning(
-                        f"Unexpected task type after filtering: {task_type}"
-                    )
-                    continue
-
-                # Check if the sample fits within the sequence length limit
-                if not self._fits_sequence_length(question, trace, answer):
+                question, trace = self._extract_messages(sample)
+                if not self._fits_sequence_length(question, trace):
                     filtered_count += 1
                     continue
-
-                # Add the parsed components
                 self.questions.append(question)
                 self.traces.append(trace)
-                self.answers.append(answer)
-                self.task_types.append(task_type)
-
-                # If we've reached the target size, stop parsing
-                if (
-                    self.target_size is not None
-                    and len(self.questions) >= self.target_size
-                ):
-                    break
-
             except Exception as e:
-                # Log parsing errors but continue with next sample
-                logging.warning(
-                    f"Error parsing sample {i} with task type {task_type}: {e}"
-                )
+                logging.warning(f"Error parsing sample {i}: {e}")
                 continue
-
         if filtered_count > 0 and self.max_sequence_length is not None:
             logging.info(
                 f"Filtered out {filtered_count} samples exceeding the max sequence length of {self.max_sequence_length} tokens"
             )
 
-    def _parse_verifiable_math(self, messages):
-        """Parse verifiable math tasks with <think> tags and \boxed{} format."""
-        question = messages[0]["content"]
-        assistant_message = messages[1]["content"]
+    def _extract_messages(self, sample):
+        raise NotImplementedError
 
-        # Extract the answer from the last \boxed{} occurrence
-        boxed_matches = re.findall(r"\\boxed\{(.*?)\}", assistant_message)
-        answer = boxed_matches[-1] if boxed_matches else ""
-
-        # The trace is everything before the last occurrence of \boxed{answer}
-        if boxed_matches and answer:
-            last_boxed_index = assistant_message.rfind(f"\\boxed{{{answer}}}")
-            if last_boxed_index > -1:
-                trace = assistant_message[:last_boxed_index].strip()
-            else:
-                trace = assistant_message
-        else:
-            trace = assistant_message
-
-        return question, trace, answer
-
-    def _parse_code_output_prediction(self, messages):
-        question = messages[0]["content"]
-        assistant_message = messages[1]["content"]
-
-        # Extract the answer from the last {"output": "..."} occurrence
-        output_matches = re.findall(r'{"output": "(.*?)"}', assistant_message)
-        answer = output_matches[-1] if output_matches else ""
-
-        # The trace is everything except the answer
-        if output_matches and answer:
-            # Replace the last occurrence of {"output": "answer"} with an empty string to get the trace
-            last_output = f'{{"output": "{answer}"}}'
-            trace = assistant_message.replace(last_output, "", 1)
-        else:
-            trace = assistant_message
-
-        return question, trace, answer
-
-    def get_sample_with_components(self) -> dict:
-        """Get a random sample with its components separated.
-
-        Returns:
-            dict: {
-                'question': The question/prompt,
-                'trace': The reasoning trace,
-                'answer': The final answer,
-                'task_type': The task type
-            }
-        """
-        idx = random.randint(0, len(self.questions) - 1)
-        return {
-            "question": self.questions[idx],
-            "trace": self.traces[idx],
-            "answer": self.answers[idx],
-            "task_type": self.task_types[idx],
-        }
-
-    def tokenize(
-        self,
-        tokenizer: PreTrainedTokenizerBase,
-        sequence_length: int,
-    ) -> typing.List[typing.Tuple[np.array, np.array]]:
-        """Tokenize samples for reference loss evaluation.
-
-        Args:
-            tokenizer: The tokenizer to use
-            sequence_length: Maximum sequence length for tokenization
-
-        Returns:
-            List of (context, reference) tuples where:
-            - context is the question formatted with chat template
-            - reference is the trace+answer in their original format
-        """
-        result = []
-
-        # question, trace, answer, task_type
-        for q, t, a, tt in zip(
-            self.questions, self.traces, self.answers, self.task_types
-        ):
-            # Only include samples from supported task types
-            if tt not in self.supported_task_types:
-                continue
-
-            formatted_question = tokenizer.apply_chat_template(
-                [
-                    {
-                        "role": "system",
-                        "content": "You are a reflective AI capable of using extended chains of thought to consider the problem thoroughly and deliberate through systematic reasoning to arrive at a correct solution before answering. Enclose your internal monologue in <think> ... </think> tags, then provide your final answer in the format that the user requests.",
-                    },
-                    {"role": "user", "content": q},
-                ],
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-
-            # Format trace and answer according to task type
-            if tt == "verifiable_math":
-                trace_with_answer = t.strip() + " \\boxed{" + a + "}"
-            elif tt == "code_output_prediction":
-                trace_with_answer = t.strip() + ' {"output": "' + a + '"}'
-            else:
-                # Fallback for other task types - add a space between
-                trace_with_answer = t.strip() + " " + a
-
-            # Tokenize question (context) and trace+answer (reference)
-            context_tokens = np.array(
-                tokenizer.encode(
-                    formatted_question,
-                    truncation=False,
-                )
-            )
-
-            reference_tokens = np.array(
-                tokenizer.encode(
-                    trace_with_answer,
-                    truncation=False,
-                )
-            )
-
-            result.append((context_tokens, reference_tokens))
-
-        return result
-
-    @property
-    def samples(self):
-        """
-        Return samples in the format expected by the parent tokenize method.
-        """
-        return [
-            {"question": q, "trace": t, "answer": a, "task_type": tt}
-            for q, t, a, tt in zip(
-                self.questions, self.traces, self.answers, self.task_types
-            )
-        ]
+    def _fits_sequence_length(self, question: str, trace: str) -> bool:
+        if self.max_sequence_length is None:
+            return True
+        total_length = self._estimate_token_length(question) + self._estimate_token_length(trace)
+        total_length += 10
+        return total_length <= self.max_sequence_length
 
     def _estimate_token_length(self, text: str) -> int:
-        """Estimate the number of tokens in a text using the characters per token heuristic.
-
-        Args:
-            text: Text to estimate token length for
-
-        Returns:
-            Estimated number of tokens
-        """
         if not text:
             return 0
         return len(text) // self.chars_per_token
 
-    def _fits_sequence_length(self, question: str, trace: str, answer: str) -> bool:
-        """Check if the combined length of question, trace, and answer fits within the sequence length.
-
-        Args:
-            question: The question text
-            trace: The reasoning trace text
-            answer: The answer text
-
-        Returns:
-            True if the combined estimated token length fits within max_sequence_length
-        """
-        if self.max_sequence_length is None:
-            return True
-
-        # Estimate token lengths
-        question_length = self._estimate_token_length(question)
-        trace_length = self._estimate_token_length(trace)
-        answer_length = self._estimate_token_length(answer)
-
-        # We need to account for the combined length
-        total_length = question_length + trace_length + answer_length
-
-        # Add a small buffer for special tokens and tokenization differences
-        total_length += 10
-
-        return total_length <= self.max_sequence_length
-
-
-class CodeforcesCOTSLoader(HuggingFaceLoader):
-    """Loader for the codeforces-cots dataset with reasoning traces."""
-
-    def __init__(
-        self,
-        name: str = CODEFORCES_COTS_NAME,
-        num_pages: int = 1,
-        num_rows_per_page: int = 100,
-        random_seed: typing.Optional[int] = None,
-        max_sequence_length: typing.Optional[int] = 16384,
-        chars_per_token: int = 4,  # Heuristic: 4 characters per token
-    ):
-        """Initialize the codeforces dataset loader.
-
-        Args:
-            name: Name of the dataset from Hugging Face
-            num_pages: Number of pages to fetch
-            num_rows_per_page: Number of rows per page
-            random_seed: Random seed for reproducibility
-            max_sequence_length: Maximum sequence length to allow (None for no limit)
-            chars_per_token: Characters per token heuristic for length estimation
-        """
-        self.max_sequence_length = max_sequence_length
-        self.chars_per_token = chars_per_token
-
-        # Load initial data
-        super().__init__(
-            name=name,
-            num_pages=num_pages,
-            num_rows_per_page=num_rows_per_page,
-            random_seed=random_seed,
-        )
-
-        # Parse the samples
-        self._parse_samples()
-
-    def _parse_samples(self):
-        """Parse all samples to extract question and reasoning trace + answer."""
-        self.questions = []
-        self.traces = []
-        self.buffer_parsed_indices = set()
-
-        # Parse all samples in the buffer
-        self._parse_additional_samples()
-
-        # Log how many samples were successfully parsed
-        logging.info(f"Successfully parsed {len(self.questions)} Codeforces samples")
-        if len(self.questions) == 0:
-            logging.warning("No Codeforces samples successfully parsed.")
-
-    def _parse_additional_samples(self):
-        """Parse newly added samples that haven't been parsed yet."""
-        filtered_count = 0
-        for i, sample in enumerate(self.buffer):
-            # Skip already parsed samples
-            if i in self.buffer_parsed_indices:
-                continue
-
-            # Mark this index as parsed
-            self.buffer_parsed_indices.add(i)
-
-            try:
-                messages = sample.get("messages", [])
-                if len(messages) != 2:
-                    continue
-
-                question = messages[0]["content"]
-                trace = messages[1]["content"]
-
-                # Check if the sample fits within the sequence length limit
-                if not self._fits_sequence_length(question, trace):
-                    filtered_count += 1
-                    continue
-
-                # Add the parsed components
-                self.questions.append(question)
-                self.traces.append(trace)
-
-            except Exception as e:
-                logging.warning(f"Error parsing sample {i}: {e}")
-                continue
-
-        if filtered_count > 0 and self.max_sequence_length is not None:
-            logging.info(
-                f"Filtered out {filtered_count} samples exceeding the max sequence length of {self.max_sequence_length} tokens"
-            )
-
     def tokenize(
         self,
         tokenizer: PreTrainedTokenizerBase,
         sequence_length: int,
     ) -> typing.List[typing.Tuple[np.array, np.array]]:
-        """Tokenize samples for reference loss evaluation.
-
-        Args:
-            tokenizer: The tokenizer to use
-            sequence_length: Maximum sequence length for tokenization
-
-        Returns:
-            List of (context, reference) tuples where:
-            - context is the question formatted with chat template
-            - reference is the trace+answer
-        """
         result = []
-
-        # Handle the case where no samples were successfully parsed
         if len(self.questions) == 0:
-            logging.warning(
-                "No samples available for tokenization in CodeforcesCOTSLoader"
-            )
+            logging.warning("No samples available for tokenization")
             return result
-
         for q, t in zip(self.questions, self.traces):
             formatted_question = tokenizer.apply_chat_template(
                 [
@@ -869,48 +421,188 @@ class CodeforcesCOTSLoader(HuggingFaceLoader):
                 add_generation_prompt=True,
                 tokenize=False,
             )
-
-            # Tokenize question (context) and trace (reference)
             context_tokens = np.array(
                 tokenizer.encode(
                     formatted_question,
                     truncation=False,
                 )
             )
-
             reference_tokens = np.array(
                 tokenizer.encode(
                     t.strip(),
                     truncation=False,
                 )
             )
-
             result.append((context_tokens, reference_tokens))
-
         return result
-
-    def _fits_sequence_length(self, question: str, trace: str) -> bool:
-        """Check if the combined length of question and trace fits within the sequence length."""
-        if self.max_sequence_length is None:
-            return True
-
-        total_length = self._estimate_token_length(
-            question
-        ) + self._estimate_token_length(trace)
-        total_length += 10  # Buffer for special tokens
-        return total_length <= self.max_sequence_length
-
-    def _estimate_token_length(self, text: str) -> int:
-        """Estimate the number of tokens in a text using the characters per token heuristic."""
-        if not text:
-            return 0
-        return len(text) // self.chars_per_token
 
     @property
     def samples(self):
-        """
-        Return samples in the format expected by the parent tokenize method.
-        """
+        return [{"question": q, "trace": t} for q, t in zip(self.questions, self.traces)]
+
+
+class CodeforcesCOTSLoader(BaseReasoningLoader):
+    """Loader for the codeforces-cots dataset with reasoning traces."""
+    def __init__(
+        self,
+        name: str = CODEFORCES_COTS_NAME,
+        num_pages: int = 1,
+        num_rows_per_page: int = 100,
+        random_seed: typing.Optional[int] = None,
+        max_sequence_length: typing.Optional[int] = 16384,
+        chars_per_token: int = 4,
+    ):
+        super().__init__(
+            name=name,
+            num_pages=num_pages,
+            num_rows_per_page=num_rows_per_page,
+            random_seed=random_seed,
+            max_sequence_length=max_sequence_length,
+            chars_per_token=chars_per_token,
+        )
+    def _extract_messages(self, sample):
+        messages = sample.get("messages", [])
+        if len(messages) != 2:
+            raise ValueError("Invalid message format")
+        return messages[0]["content"], messages[1]["content"]
+
+
+class Synthetic1SFTLoader(BaseReasoningLoader):
+    """Loader for the synthetic-1-sft dataset with structured thinking traces."""
+    supported_task_types: List[str] = ["verifiable_math", "code_output_prediction"]
+    def __init__(
+        self,
+        name: str = SYNTHETIC_1_SFT_NAME,
+        num_pages: int = 1,
+        num_rows_per_page: int = 100,
+        random_seed: typing.Optional[int] = None,
+        target_size: typing.Optional[int] = None,
+        supported_task_types: typing.Optional[List[str]] = None,
+        specific_task_type: typing.Optional[str] = None,
+        max_sequence_length: typing.Optional[int] = None,
+        chars_per_token: int = 4,
+    ):
+        self.target_size = target_size
+        if supported_task_types is not None:
+            self.supported_task_types = supported_task_types
+        self.specific_task_type = specific_task_type
+        self.answers = []
+        self.task_types = []
+        if (
+            specific_task_type
+            and self.supported_task_types
+            and specific_task_type not in self.supported_task_types
+        ):
+            raise ValueError(
+                f"Task type '{specific_task_type}' is not in supported task types: {self.supported_task_types}"
+            )
+        super().__init__(
+            name=name,
+            num_pages=num_pages,
+            num_rows_per_page=num_rows_per_page,
+            random_seed=random_seed,
+            max_sequence_length=max_sequence_length,
+            chars_per_token=chars_per_token,
+        )
+        self._filter_buffer_by_task_type()
+        self._parse_samples()
+        if self.target_size is not None and len(self.questions) < self.target_size:
+            self._fetch_more_data_until_target_size()
+
+    def _filter_buffer_by_task_type(self):
+        if not self.supported_task_types and not self.specific_task_type:
+            return
+        filtered_buffer = []
+        original_size = len(self.buffer)
+        for sample in self.buffer:
+            if isinstance(sample, dict):
+                task_type = sample.get("task_type", "unknown")
+            else:
+                continue
+            if self.specific_task_type and task_type == self.specific_task_type:
+                filtered_buffer.append(sample)
+            elif (
+                self.supported_task_types
+                and task_type in self.supported_task_types
+                and not self.specific_task_type
+            ):
+                filtered_buffer.append(sample)
+        self.buffer = filtered_buffer
+        logging.info(
+            f"Filtered buffer from {original_size} to {len(self.buffer)} samples based on task type criteria"
+        )
+
+    def _fetch_more_data_until_target_size(self):
+        original_num_pages = self.num_pages
+        additional_pages = 1
+        max_attempts = 10
+        attempts = 0
+        while len(self.questions) < self.target_size and attempts < max_attempts:
+            attempts += 1
+            logging.info(
+                f"Fetching {additional_pages} more page(s) to reach target size {self.target_size}. Current size: {len(self.questions)}"
+            )
+            self._fetch_data_to_buffer(additional_pages)
+            self._filter_buffer_by_task_type()
+            self._parse_samples()
+            self.num_pages = original_num_pages + additional_pages
+            additional_pages *= 2
+            if additional_pages > 16:
+                additional_pages = 16
+        if len(self.questions) < self.target_size:
+            logging.warning(
+                f"Could not reach target size {self.target_size} after {attempts} attempts. Stopping at {len(self.questions)} samples."
+            )
+
+    def _extract_messages(self, sample):
+        if isinstance(sample, dict):
+            task_type = sample.get("task_type", "unknown")
+            messages = sample.get("messages", "")
+        else:
+            messages = sample
+            task_type = "unknown"
+        if task_type == "verifiable_math":
+            question, trace, answer = self._parse_verifiable_math(messages)
+        elif task_type == "code_output_prediction":
+            question, trace, answer = self._parse_code_output_prediction(messages)
+        else:
+            raise ValueError(f"Unsupported task type: {task_type}")
+        self.answers.append(answer)
+        self.task_types.append(task_type)
+        return question, trace
+
+    def _parse_verifiable_math(self, messages):
+        question = messages[0]["content"]
+        assistant_message = messages[1]["content"]
+        boxed_matches = re.findall(r"\\boxed\{(.*?)\}", assistant_message)
+        answer = boxed_matches[-1] if boxed_matches else ""
+        if boxed_matches and answer:
+            last_boxed_index = assistant_message.rfind(f"\\boxed{{{answer}}}")
+            if last_boxed_index > -1:
+                trace = assistant_message[:last_boxed_index].strip()
+            else:
+                trace = assistant_message
+        else:
+            trace = assistant_message
+        return question, trace, answer
+
+    def _parse_code_output_prediction(self, messages):
+        question = messages[0]["content"]
+        assistant_message = messages[1]["content"]
+        output_matches = re.findall(r'{"output": "(.*?)"}', assistant_message)
+        answer = output_matches[-1] if output_matches else ""
+        if output_matches and answer:
+            last_output = f'{{"output": "{answer}"}}'
+            trace = assistant_message.replace(last_output, "", 1)
+        else:
+            trace = assistant_message
+        return question, trace, answer
+
+    @property
+    def samples(self):
         return [
-            {"question": q, "trace": t} for q, t in zip(self.questions, self.traces)
+            {"question": q, "trace": t, "answer": a, "task_type": tt}
+            for q, t, a, tt in zip(
+                self.questions, self.traces, self.answers, self.task_types
+            )
         ]

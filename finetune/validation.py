@@ -124,15 +124,15 @@ def score_model(
     device: str,
 ) -> Tuple[float, Dict[str, ScoreDetails]]:
     """Score a model on a set of evaluation tasks.
-    
+
     This function evaluates a model on multiple evaluation tasks, computes raw scores,
     normalizes them according to task-specific normalization methods, and returns
     both the combined weighted score and detailed scores for each task.
-    
+
     Args:
         model (Model): The model to evaluate, containing a PyTorch model and tokenizer.
         eval_tasks (List[EvalTask]): List of evaluation task definitions.
-        samples (List[Union[List[np.ndarray], Dict[str, List]]]): List of tokenized samples 
+        samples (List[Union[List[np.ndarray], Dict[str, List]]]): List of tokenized samples
             corresponding to each eval task.
         competition (Competition): Competition configuration containing constraints.
         device (str): Device to run evaluation on (e.g., 'cuda', 'cpu').
@@ -141,10 +141,10 @@ def score_model(
         Tuple[float, Dict[str, ScoreDetails]]: A tuple containing:
             - float: The combined weighted score across all tasks.
             - Dict[str, ScoreDetails]: Detailed scoring information for each task.
-              
+
     Raises:
         ValueError: If the number of eval tasks doesn't match the number of samples,
-                   if the model doesn't have a tokenizer, or if an unsupported 
+                   if the model doesn't have a tokenizer, or if an unsupported
                    evaluation method is specified.
         RuntimeError: If all evaluation tasks failed to load data, indicating the model
                      should remain in the queue for retry.
@@ -226,7 +226,7 @@ def score_model(
             normalized_score = normalize_score(
                 raw_score, task.normalization_id, task.normalization_kwargs
             )
-            
+
             # Apply renormalized weight if necessary
             task_weight = task.weight / total_weight if not math.isclose(total_weight, 1.0) and total_weight > 0 else task.weight
             weighted_norm_score = normalized_score * task_weight

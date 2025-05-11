@@ -332,6 +332,7 @@ COMPETITION_SCHEDULE_BY_BLOCK: List[Tuple[int, List[Competition]]] = [
                         normalization_id=NormalizationId.NONE,
                         weight=0.5,
                     ),
+                    # New Eval Task goes here sooo soon
                 ],
             ),
         ],
