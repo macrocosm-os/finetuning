@@ -33,7 +33,7 @@ from finetune.eval.method import EvalMethodId
 # Project Constants.
 # ---------------------------------
 
-__version__ = "3.0.5"
+__version__ = "3.1.0"
 
 version_split = __version__.split(".")
 __spec_version__ = (
@@ -44,7 +44,7 @@ __spec_version__ = (
 
 # The version of the validator state. When incremented, causes validators
 # to start from a fresh state.
-VALIDATOR_STATE_VERSION = 12
+VALIDATOR_STATE_VERSION = 13
 
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
