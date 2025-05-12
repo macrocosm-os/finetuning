@@ -49,12 +49,12 @@ VALIDATOR_STATE_VERSION = 12
 # Block the subnet was registered.
 GENESIS_BLOCK = 3138611
 # Define the number of blocks per vali "sync". This cadence is used to align validator behavior for better vtrust.
-SYNC_BLOCK_CADENCE = 270
+SYNC_BLOCK_CADENCE = 360
 # Rough estimate of the number of seconds per block.
 SECONDS_PER_BLOCK = 12
 # Validator weight moving average term.
 # At 0.85 a model will go from 0 -> 0.278 in 2 cycles and from 0 -> 0.833 in 11 cycles.
-ALPHA = 0.85
+ALPHA = 0.90
 # Any miners with a combined competition weight below this threshold will instead receive 0 weight.
 # This is intended to help vtrust in conjunction with a low alpha by handling the tail ends.
 # At 1 eval per 270 blocks, newly winning models will start recieving weight after ~540 blocks.
