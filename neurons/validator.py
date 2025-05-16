@@ -1295,7 +1295,7 @@ class Validator:
         tracker_competition_weights = self.competition_tracker.get_competition_weights(
             competition.id
         )
-        models_to_keep = self.calculate_models_to_keep(win_rate, tracker_competition_weights)
+        models_to_keep = self._calculate_models_to_keep(win_rate, tracker_competition_weights)
         self._update_uids_to_eval(
             competition.id, models_to_keep, active_competition_ids
         )
@@ -1333,19 +1333,19 @@ class Validator:
     def _calculate_models_to_keep(self, win_rate, tracker_competition_weights):
         model_prioritization = {
             uid: (
-                # Add 1 to ensure it is always greater than a win rate.
-                1 + tracker_competition_weights[uid].item()
-                if tracker_competition_weights[uid].item() >= 0.001
-                else wr
+                # Priority should be base on current win rate + historical weight.
+                wr + (tracker_competition_weights[uid].item()
+                if tracker_competition_weights[uid].item() >= 0.001 
+                else 0.0)
             )
             for uid, wr in win_rate.items()
         }
+        
         models_to_keep = set(
             sorted(model_prioritization, key=model_prioritization.get, reverse=True)[
                 : self.config.sample_min
             ]
         )
-        
         return models_to_keep
 
     def _update_uids_to_eval(
