@@ -13,66 +13,113 @@
 # **Finetuning Subnet** <!-- omit in toc -->
 [![Bittensor](/docs/taologo.png)](https://bittensor.com/)
 
----
-
-[Bittensor Discord](https://discord.gg/bittensor) • [Network](https://x.taostats.io/subnet/37) • [Research](https://bittensor.com/whitepaper) 
-
----
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
-
 </div>
 
+# Subnet 37: Finetuning Reasoning Models
 
-# Introduction
+## Introduction
 
-> **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
+**Subnet 37** is an LLM finetuning subnet, owned by **Macrocosmos**. Its focus lies in finetuning reasoning models—a critical aspect as these models are increasingly outperforming traditional LLMs on numerous benchmarks. Finetuning determines how an LLM presents itself and provides the polish necessary for commercial use. Subnet 37 connects businesses to affordable finetuning solutions.
 
+## Product
 
-The Finetuning subnet 37 rewards miners for **fine-tuning Large Language Models (LLMs)**. At launch the first competition is evaluated with data generated from a continuous stream of synthetic data provided by [subnet 18](https://github.com/corcel-api/cortex.t/). It is a continuous fine-tuning benchmark, with new data generated daily.
+Our vision is to build a **decentralized AI stack** that enables people to build and finetune LLMs. **Subnet 37** is the final step in this stack, offering decentralized and cost-effective finetuning. Users can bring pretrained models to Subnet 37 for low-cost finetuning or pre-train foundation models on **Subnet 9** (also owned by Macrocosmos) before transferring them to Subnet 37.
 
-The mechanism works like this:
+## Team
 
-    1. Miners train and periodically publish models to 🤗 Hugging Face and commit the metadata for that model to the Bittensor chain to sign up for a specific competition and prove the time of training.
-    2. Validators download the models from 🤗 Hugging Face for each miner based on the Bittensor chain metadata and continuously evaluate them against the synthetic data. For each competition, only the top model will receive nonzero weights. They also log results to [wandb](https://wandb.ai/opentensor-dev/finetuning).
-    3. The Bittensor chain aggregates weights from all active validators using Yuma Consensus to determine the proportion of TAO emission rewarded to miners and validators.
+The key figures behind Subnet 37 are:
 
-See the [Miner](docs/miner.md) and [Validator](docs/validator.md) docs for more information about how they work, as well as setup instructions.
+- **Will Squires, Co-Founder and CEO**  
+  Entrepreneur and AI startup builder with a Master of Engineering from the University of Warwick.
 
----
+- **Steffen Cruz, Co-Founder and CTO**  
+  Former CTO at OpenTensor Foundation and original architect of Subnet 1 (Apex). Holds a PhD in Experimental Nuclear Physics.
 
-## Incentive Mechanism
+- **Alan Aboudib, Machine Learning Lead**  
+  Subnet designer with a PhD and Postdoc in Deep Learning and Computer Vision from the Collège de France.
 
-Bittensor hosts multiple incentive mechanism through which miners are evaluated by validators for performing actions well. Validators perform the process of evaluation and 'set weights', which are transactions into Bittensor's blockchain. Each incentive mechanism in Bittensor is called a 'subnet'. Weights and the amount of TAO held by the validators become inputs to Bittensor's consensus mechanism called Yuma Consensus. YC drives validators towards a consensus, agreement about the value of the work done by miners. The miners with the highest agreed upon scores are minted TAO, the network digital currency.
+- **Rodrigo Lopez Portillo Alcocer, Machine Learning Engineer**  
+  Maintains subnet quality. Brings a decade of experience in physics, mathematics, and machine learning.
 
-Miners within this subnet are evaluated based on the number of times the model they have hosted has a lower loss than another model on the network within the context of a competition. To perform well, miners must attain the lowest loss on the largest number of random batches. For each competition, finding the best model and delta at the earliest block ensures the most incentive.
+## Market
 
-Note that competitions are specified independently [here](./constants/__init__.py) with a defined split of emissions from the subnet. Competitions each have unique parameters that define which model(s), tokenizer(s), size(s), sequence length(s) and more that miners will be evaluated against.
+Subnet 37 operates within the **LLM finetuning market**. As of 2025, over 300 million companies are exploring LLM integration. The global LLM market is projected to reach **$259.8 million USD by 2030**.
 
----
+Subnet 37 offers:
+- A decentralized, low-cost alternative to closed-source models.
+- Finetuned reasoning models which are often too costly via APIs like ChatGPT or Claude.
 
-## Getting Started
+This positions Subnet 37 as a compelling option for businesses aiming to integrate LLMs without incurring long-term API costs.
 
-TL;DR:
-1. [Chat](https://discord.gg/bittensor)
-2. [Leaderboard](https://huggingface.co/spaces/macrocosm-os/finetuning-leaderboard)
+## Indicators of Value Growth
 
-This repo's main conversation is carried out in the Bittensor [Discord](https://discord.gg/bittensor). Visit the [subnet 37 channel](https://discord.com/channels/799672011265015819/1253448873305964626) to ask questions and get real time feedback. You can view the ongoing running of the incentive mechanism, the best miners (see 'incentive'), the most in-consensus validators (see 'vtrust') using this [taostats link](https://x.taostats.io/subnet/37). The table shows all 256 participant UIDs with corresponding YC stats and earnings. 
+- Demand for commercial LLMs is growing.
+- Subnet 37 undercuts centralized services.
+- Finetuning powers the best-performing reasoning models in the field.
 
-See [Miner Setup](docs/miner.md#getting-started) to learn how to setup a Miner.
+## Long-Term Value Potential
 
-See [Validator Setup](docs/validator.md#getting-started) to learn how to setup a Validator.
+In 2025, Subnet 37 evolved to support **3B reasoning models**. Macrocosmos actively monitors trends and updates Subnet 37 to stay ahead, ensuring businesses receive cutting-edge finetuning capabilities.
 
----
+## Community & Customer Interest
 
-## Feedback
+- Active **miners** and **validators** contribute to model development.
+- A vibrant community helps develop and benchmark models for commercial applications.
 
-We welcome feedback!
+## Use-Cases and Potential
 
-If you have a suggestion, please reach out on the Discord channel, or create an Issue in this repo.
+Subnet 37 supports:
 
----
+- Building **affordable finetuned LLMs** for commercial use.
+- Distributing reasoning models to businesses or other subnets.
+- **Benchmarking open-source models** for quality and performance.
 
+LLMs are rarely deployed without finetuning, making Subnet 37 a core component of modern AI pipelines.
+
+## Dashboards, Tools, and Resources
+
+- **Dashboard**: [macrocosmos.ai/sn37/dashboard](https://macrocosmos.ai/sn37/dashboard)
+- **Technical Documentation**: [docs.macrocosmos.ai/subnet-37-finetuning](https://docs.macrocosmos.ai/subnet-37-finetuning)
+- **GitHub Repository**: [github.com/macrocosm-os/finetuning](https://github.com/macrocosm-os/finetuning)
+
+## Incentive Overview
+
+Subnet 37 rewards miners through a **continuous benchmarking competition**:
+
+1. **Miners** train models and publish them to HuggingFace with metadata on the Bittensor chain.
+2. **Validators** evaluate the models using the metadata, awarding the top-performing model per competition.
+3. Evaluation results are logged on WandB.
+
+Each competition:
+- Has specific emission splits.
+- Defines model/tokenizer specs, sequence lengths, and evaluation tasks.
+- Supports weighted multi-task evaluation and normalization.
+- Allows validator-funded public and user-defined competitions.
+
+We now use **Subnet 1** for evaluation data due to its superior quality compared to synthetic data from **Subnet 18**. Hash-based synchronization ensures secure and fair evaluation.
+
+## Resources
+
+- **Website**: [macrocosmos.ai/sn37](https://macrocosmos.ai/sn37)
+- **Dashboard**: [macrocosmos.ai/sn37/dashboard](https://macrocosmos.ai/sn37/dashboard)
+- **GitHub**: [github.com/macrocosm-os/finetuning](https://github.com/macrocosm-os/finetuning)
+- **Documentation**: [docs.macrocosmos.ai/subnet-37-finetuning](https://docs.macrocosmos.ai/subnet-37-finetuning)
+- **Miner Setup**: See the [miner docs](docs/miner.md#getting-started) to learn how to setup a Miner.
+- **Validator Setup**: See the [validator docs](docs/validator.md#getting-started) to learn how to setup a Validator.
+
+### Articles
+
+- [Fine-tuning, finely tuned: How SN37 is delivering SOTA fine-tuning on Bittensor](#)
+- [Fine-tuning, harmonized: Taoverse and Macrocosmos team up on SN37](#)
+
+### Community
+
+- **Bittensor Discord**: [Join Channel](https://discord.com/channels/1238450997848707082/1238453186768011275)
+- **Macrocosmos Discord**: [Join Channel](https://discord.com/channels/799672011265015819/1253448873305964626)
+- **Telegram (Cosmonauts)**: [t.me/macrocosmosai](https://t.me/macrocosmosai)
+- **X (formerly Twitter)**: [@MacrocosmosAI](https://x.com/MacrocosmosAI)
+
+--- 
 ## License
 This repository is licensed under the MIT License.
 ```text
